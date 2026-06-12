@@ -1,0 +1,536 @@
+{
+ "arcs": [],
+ "footprints": [
+  {
+   "at": [
+    0.0,
+    0.0,
+    90.0
+   ],
+   "layer": "F.Cu",
+   "name": "UNI_ROYAL_0402WGF1001TCE:R0402",
+   "pads": [
+    {
+     "at": [
+      -0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "unnamed[0]"
+    },
+    {
+     "at": [
+      0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "sub_chains[0]-unnamed[0]"
+    }
+   ],
+   "reference": "R1"
+  },
+  {
+   "at": [
+    0.0,
+    -6.0,
+    90.0
+   ],
+   "layer": "F.Cu",
+   "name": "UNI_ROYAL_0402WGF1001TCE:R0402",
+   "pads": [
+    {
+     "at": [
+      -0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "sub_chains[0]-unnamed[0]"
+    },
+    {
+     "at": [
+      0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "sub_chains[0]-unnamed[0]-1"
+    }
+   ],
+   "reference": "R2"
+  },
+  {
+   "at": [
+    0.0,
+    -12.0,
+    90.0
+   ],
+   "layer": "F.Cu",
+   "name": "UNI_ROYAL_0402WGF1001TCE:R0402",
+   "pads": [
+    {
+     "at": [
+      -0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "sub_chains[0]-unnamed[0]-1"
+    },
+    {
+     "at": [
+      0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "unnamed[0]-1"
+    }
+   ],
+   "reference": "R3"
+  },
+  {
+   "at": [
+    0.0,
+    -30.0,
+    90.0
+   ],
+   "layer": "F.Cu",
+   "name": "UNI_ROYAL_0402WGF1001TCE:R0402",
+   "pads": [
+    {
+     "at": [
+      -0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "unnamed[0]-1"
+    },
+    {
+     "at": [
+      0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "sub_chains[1]-unnamed[0]"
+    }
+   ],
+   "reference": "R4"
+  },
+  {
+   "at": [
+    0.0,
+    -36.0,
+    90.0
+   ],
+   "layer": "F.Cu",
+   "name": "UNI_ROYAL_0402WGF1001TCE:R0402",
+   "pads": [
+    {
+     "at": [
+      -0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "sub_chains[1]-unnamed[0]"
+    },
+    {
+     "at": [
+      0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "sub_chains[1]-unnamed[0]-1"
+    }
+   ],
+   "reference": "R5"
+  },
+  {
+   "at": [
+    0.0,
+    -42.0,
+    90.0
+   ],
+   "layer": "F.Cu",
+   "name": "UNI_ROYAL_0402WGF1001TCE:R0402",
+   "pads": [
+    {
+     "at": [
+      -0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "sub_chains[1]-unnamed[0]-1"
+    },
+    {
+     "at": [
+      0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "unnamed[0]-2"
+    }
+   ],
+   "reference": "R6"
+  },
+  {
+   "at": [
+    0.0,
+    -60.0,
+    90.0
+   ],
+   "layer": "F.Cu",
+   "name": "UNI_ROYAL_0402WGF1001TCE:R0402",
+   "pads": [
+    {
+     "at": [
+      -0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "unnamed[0]-2"
+    },
+    {
+     "at": [
+      0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "sub_chains[2]-unnamed[0]"
+    }
+   ],
+   "reference": "R7"
+  },
+  {
+   "at": [
+    0.0,
+    -66.0,
+    90.0
+   ],
+   "layer": "F.Cu",
+   "name": "UNI_ROYAL_0402WGF1001TCE:R0402",
+   "pads": [
+    {
+     "at": [
+      -0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "sub_chains[2]-unnamed[0]"
+    },
+    {
+     "at": [
+      0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "sub_chains[2]-unnamed[0]-1"
+    }
+   ],
+   "reference": "R8"
+  },
+  {
+   "at": [
+    0.0,
+    -72.0,
+    90.0
+   ],
+   "layer": "F.Cu",
+   "name": "UNI_ROYAL_0402WGF1001TCE:R0402",
+   "pads": [
+    {
+     "at": [
+      -0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "sub_chains[2]-unnamed[0]-1"
+    },
+    {
+     "at": [
+      0.43,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "unnamed[0]"
+    }
+   ],
+   "reference": "R9"
+  }
+ ],
+ "groups": [
+  {
+   "members": [
+    "11111111-2222-3333-4444-555555555555"
+   ],
+   "name": "manual_human_group"
+  },
+  {
+   "members": [
+    "11ee59f5-6c77-4297-966b-ca914be95bd4",
+    "34256171-af84-4c63-be6b-401d6b137fb0",
+    "a0599d9e-0457-4de8-b5cf-79184642524b",
+    "a6ceb1e1-630f-46cf-9b99-de174642524b",
+    "efc3e779-7ba1-405a-8522-7a3a4642524b"
+   ],
+   "name": "sub_chains[0]"
+  },
+  {
+   "members": [
+    "32e53871-f509-4338-8722-342e4642524b",
+    "5a84ccff-b4da-41ae-bc7b-18404642524b",
+    "ab30f566-8368-4838-9d9d-32bd4642524b",
+    "c014b439-6308-4ebf-b005-a71982f813a8",
+    "ee3db337-1a5c-48f8-88a5-eb2edf530edd"
+   ],
+   "name": "sub_chains[1]"
+  },
+  {
+   "members": [
+    "5ba19ffe-076f-4e36-a715-110d4642524b",
+    "5bc5c3c7-530f-4dc6-b84e-a1bb4642524b",
+    "88e23f4d-cfc3-4a06-a37c-c0234642524b",
+    "8fb1b824-24ba-4c87-8746-4a2bcaf952b9",
+    "9f063cc1-2e7b-44f7-b004-0a2c738d65a0"
+   ],
+   "name": "sub_chains[2]"
+  }
+ ],
+ "nets": [
+  "sub_chains[0]-unnamed[0]",
+  "sub_chains[0]-unnamed[0]-1",
+  "sub_chains[1]-unnamed[0]",
+  "sub_chains[1]-unnamed[0]-1",
+  "sub_chains[2]-unnamed[0]",
+  "sub_chains[2]-unnamed[0]-1",
+  "unnamed[0]",
+  "unnamed[0]-1",
+  "unnamed[0]-2"
+ ],
+ "segments": [
+  {
+   "end": [
+    0.0,
+    -5.57
+   ],
+   "layer": "F.Cu",
+   "net": "sub_chains[0]-unnamed[0]",
+   "start": [
+    0.0,
+    -0.43
+   ],
+   "width": 0.2
+  },
+  {
+   "end": [
+    0.0,
+    -6.43
+   ],
+   "layer": "F.Cu",
+   "net": "sub_chains[0]-unnamed[0]-1",
+   "start": [
+    0.0,
+    -11.57
+   ],
+   "width": 0.2
+  },
+  {
+   "end": [
+    0.0,
+    -35.57
+   ],
+   "layer": "F.Cu",
+   "net": "sub_chains[1]-unnamed[0]",
+   "start": [
+    0.0,
+    -30.43
+   ],
+   "width": 0.2
+  },
+  {
+   "end": [
+    0.0,
+    -36.43
+   ],
+   "layer": "F.Cu",
+   "net": "sub_chains[1]-unnamed[0]-1",
+   "start": [
+    0.0,
+    -41.57
+   ],
+   "width": 0.2
+  },
+  {
+   "end": [
+    0.0,
+    -65.57
+   ],
+   "layer": "F.Cu",
+   "net": "sub_chains[2]-unnamed[0]",
+   "start": [
+    0.0,
+    -60.43
+   ],
+   "width": 0.2
+  },
+  {
+   "end": [
+    0.0,
+    -66.43
+   ],
+   "layer": "F.Cu",
+   "net": "sub_chains[2]-unnamed[0]-1",
+   "start": [
+    0.0,
+    -71.57
+   ],
+   "width": 0.2
+  }
+ ],
+ "semantic_view_version": 1,
+ "vias": [],
+ "zones": [
+  {
+   "keepout": {
+    "copperpour": "not_allowed",
+    "footprints": "allowed",
+    "pads": "allowed",
+    "tracks": "allowed",
+    "vias": "allowed"
+   },
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "name": "room_sub_chains_0",
+   "net": "",
+   "placement": {
+    "enabled": true,
+    "source": null,
+    "source_type": null
+   },
+   "polygon": [
+    [
+     90.0,
+     90.0
+    ],
+    [
+     130.0,
+     90.0
+    ],
+    [
+     130.0,
+     120.0
+    ],
+    [
+     90.0,
+     120.0
+    ]
+   ]
+  }
+ ]
+}

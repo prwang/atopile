@@ -60,6 +60,21 @@ def _PCB_DIR(version: int = DEFAULT_VERSION) -> Path:
     return _VERSION_DIR(version) / "pcb"
 
 
+def all_pcb_fixtures() -> list[tuple[int, Path]]:
+    """All board fixtures across format versions, as (version, path).
+
+    Non-recursive on purpose: special-purpose sub-corpora (e.g. v9/pcb/modular)
+    are owned by their own tests.
+    """
+    out: list[tuple[int, Path]] = []
+    for vdir in sorted(FILEFORMATS_PATH.glob("v*"), key=lambda p: int(p.name[1:])):
+        pcb_dir = vdir / "pcb"
+        if pcb_dir.is_dir():
+            version = int(vdir.name[1:])
+            out.extend((version, p) for p in sorted(pcb_dir.glob("*.kicad_pcb")))
+    return out
+
+
 PRJFILE = _PRJ_DIR() / "test.kicad_pro"
 PCBFILE = _PCB_DIR() / "test.kicad_pcb"
 FPFILE = _FP_DIR() / "test.kicad_mod"
