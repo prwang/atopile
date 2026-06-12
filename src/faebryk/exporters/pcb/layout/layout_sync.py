@@ -149,10 +149,24 @@ class LayoutSync:
                 group, "members", group.members, sorted(current_members)
             )
 
-        # Clean up groups that no longer have footprints assigned to them
-        removed_groups = set(self._old_groups.keys()) - set(self.groups.keys())
+        # Clean up groups that no longer have footprints assigned to them.
+        # Only atopile-managed groups: manual user groups (and their contents)
+        # must survive rebuilds.
+        removed_groups = {
+            name
+            for name, group in self._old_groups.items()
+            if self._is_managed_group(group)
+        } - set(self.groups.keys())
         for group_name in removed_groups:
             self._clean_group(group_name)
+
+    @staticmethod
+    def _is_managed_group(group: kicad.pcb.Group) -> bool:
+        """Groups created by atopile carry the hex-encoded group name as the
+        uuid suffix (see kicad.gen_uuid)."""
+        if not group.name or not group.uuid:
+            return False
+        return group.uuid.replace("-", "").endswith(group.name.encode().hex())
 
     def _generate_net_map(
         self, source_pcb: PCB, target_pcb: PCB, addr_map: dict[str, str]
@@ -475,9 +489,15 @@ class LayoutSync:
             )
             new_elements_out.append(new_element_out)
 
-        new_group_uuids = set(e.uuid for e in new_elements_out) - set(group.members)
-        for new_group_uuid in new_group_uuids:
-            group.members.append(new_group_uuid)
+        new_member_uuids = {e.uuid for e in new_elements_out if e.uuid is not None}
+        # keep members fully sorted so this build's output matches the re-sort
+        # sync_groups performs on the next build (byte-level determinism)
+        kicad.clear_and_set(
+            group,
+            "members",
+            group.members,
+            sorted(set(group.members) | new_member_uuids),
+        )
 
     def _get_net_number(self, pcb: PCB, net_name: str) -> int:
         """Get the net number for a given net name."""
