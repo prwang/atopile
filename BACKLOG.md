@@ -189,55 +189,80 @@ PCB 布局布线工作流：`.ato` 描述电路（电路事实来源），`layou
 **P0.1 期间新发现**（已并入上方事实清单）：事实 2① net 表整体消失（修正原
 "去编号"认知）；事实 4b pyzig use-after-free 与 Path 缓存互锁。
 
-## P0.2 — v10 方言迁移本体（依赖 P0.1 全绿）
+## P0.2 — v10 方言迁移本体（2026-06-12 依 P0.1 结果重排为阶梯式）
 
 **写方言目标 = v10（20260206）**；读侧兼容 v5–v10。**flag day**：仓库内全部
 examples/fixtures/probe 工程的 `.kicad_pcb` 一次性升级提交。迁移完成后
 "单向门"约束解除——KiCad 10 GUI 保存不再损坏管理中的板子（迁移的最大收益之一）。
 
-- [ ] **M0. NetRef 模型决策**（动手前定案）。推荐：双字段
-  `NetRef{number: ?int, name: str}`——编号降级为进程内句柄；v9 读侧沿用文件编号，
-  **v10 读侧没有 net 表可依**（事实 2①）：`pcb.nets` 由引用扫描合成，合成顺序
-  自定义且必须与容器迭代顺序无关（T4 已钉死：引用序无关 + 跨进程字节一致；
-  建议规则：名字排序，"" 恒为 0——与文件布局解耦，最易论证）。
-  v9 写出编号（pad 处 编号+名）、v10 只写名字、不写表。
-  理由：21 个消费方中直接用编号的集中在 transformer（16 处）、pcb_manager（4）、
-  app/pcb（2）、layout_sync（2），保留编号字段可让"只传递编号"的代码零改动；
-  `get_net`/`bind_fbrk_nets` 已按名（`transformer.py:430`），半径有限。
-  备选（名字单键 + 外置句柄表）改动更纯但爆破半径全量，不推荐。
-- [ ] **M1. zig：net 模型重构**（断裂点①）：pad/segment/via/zone 四处引用语法的
-  读写双方言；v10 读侧 nets 合成（按 M0 规则）、写侧省略表与 zone net_name、
-  无网 zone 省略 net 子句。验收 = T4 的 2 个 strict-xfail 转绿 +
-  corpus parse/幂等闸门 v10 转绿。
-- [ ] **M2. zig：tenting 族嵌套化**（断裂点②）：via/pad padstack 的
-  tenting/covering/plugging 等字段，读双形状（v9 裸 token / v10 嵌套），写 v10 形状。
-- [ ] **M3. zig：静默丢弃键补全**（断裂点③）：以 T2 "无数据丢失"闸门的逐字段
-  清单为完整需求逐项补 schema（已知 v10 侧含 plot 参数、
-  `duplicate_pad_numbers_are_jumpers`、`locked` 移除、层 id 重编；
-  **v9 侧也有实测缺口**：pad `pintype`/`pinfunction`、footprint `sheetfile`、
-  setup `aux_axis_origin`、title_block `rev`——见 interf_u 的 strict-xfail）。
-  完成信号 = corpus 全部 no-data-loss xfail 转绿。
-- [ ] **M3b. pyzig 所有权 + loads 缓存联修**（事实 4b）：子对象持有 owner 引用
-  （消除 use-after-free）与 `kicad.loads` Path 缓存失效（mtime/内容指纹）必须
-  同一提交落地——单独修任何一个都会暴露另一个。补回归测试：load A 弃包装→
-  load B→A 数据仍正确；重写文件后重读拿到新内容。
-- [ ] **M4. 版本号 bump + version 守卫**：写出 `(version 20260206)`；读侧对
-  > 支持上限的文件给出可读报错（替代现在不可懂的 tenting 解析错，见事实 5）。
-- [ ] **M5. Python 消费方迁移**：按 M0 决策改 24 处编号直用点；`kicad.loads` 缓存
-  地雷（事实 4）在涉及模块顺手排掉（进程内改用 text 读或加失效）。
-- [ ] **M6. flag-day 升级 + 文档收尾**：examples/fixtures/probe 全部升 v10 一次性提交
-  （A1 的增量稳态逻辑依赖回读，升级提交后跑一轮 build→build→diff 确认稳态成立）；
-  改写 CLAUDE.md/KicadDecisions.md 中"单向门"约束为"已迁移，v9 只读兼容"。
-- [ ] **M7. 验收差分**：
-  - 同板 (v9, v10) 双解析 → 语义视图相等（T1+T3 复用）；
-  - kicad-cli oracle：迁移产物 DRC 正常运行、`pcb upgrade` 幂等（已是 v10，应无 diff）、
-    KiCad 10 重存后回读语义视图不变——"KiCad 认不认"从猜测变成 CI 断言；
-  - 4 个 group-determinism E2E 绿（序列化整体强约束）；
-  - 消费方回归：pcb_manager 补 net 断言、BOM/制造产物/DRC smoke；
-    KiCadRoutingTools 不动（事实 13）。
+**执行纪律（本次重排的原因——验收不许压到最后）**：
+1. 每步自带两张清单：**本步转绿**（strict-xfail 棘轮：转绿没摘标记 → XPASS 报错，
+   机制上防"忘了收敛"）与**本步保持绿**（全量既有套件）。两张清单写进 commit message。
+2. **带着红灯不得进下一步**；没有现成开关可翻的步骤（S1/S2/S3）必须在同一
+   commit 自带新测试。
+3. 26 个 P0.1 开关的归属账（S0 后还会新增 oracle 开关）：
+   S4 翻 19（parse×4 + 幂等×4 + 快照×4 + 跨方言×3 + T4 契约×4），
+   S5 翻 7（no-data-loss×5 + 字节保真 v10×2），S6 反转 2 个钉死怪癖，S7 翻 oracle。
 
-**工作量**：周级（M1+M5 为主）。**回滚策略**：P0.1 底座全部以名字为基准，
-对 v9/v10 双方言对称——迁移分支若需中止，底座资产无一作废。
+- [ ] **S0. 验收测试先行**（写任何迁移代码之前，把原 M7 的"最后验收"前置为开关）：
+  - kicad-cli oracle 测试（strict-xfail + skipif 无 kicad-cli）：我们写出的 v10 产物
+    `kicad-cli pcb drc` 跑通；KiCad 10 重存（upgrade --force 幂等）→ 我们回读语义
+    视图不变——"KiCad 认不认"从第一天起就是看得见的红灯而不是最后的惊喜；
+  - M0 合成编号规则契约单测（按名排序、"" 恒 0，strict-xfail）——规则先于实现钉死；
+  - 列出 S6 要**反转**的两个 T6/T7 钉死测试（zone 双键、未知名→0），反转动作
+    与对应迁移改动同 commit。
+- [ ] **S1. M3b：pyzig 所有权 + loads 缓存联修**（第一个动 zig 的步骤，与方言无关，
+  先修它是因为不修则后续每一步的调试都暴露在静默数据混淆下——P0.1 已两次被坑）：
+  子对象持有 owner 引用（消除 use-after-free）+ `kicad.loads` Path 缓存失效
+  （mtime/内容指纹），**必须同一提交**（事实 4b：互锁）。
+  *本步转绿*：无（无现成开关）→ *同 commit 自带*：弃包装读子对象不悬空、
+  重写文件后重读取新内容、缓存对象身份语义保持（"shared object"文档行为）。
+  *保持绿*：全量 88 + E2E。
+- [ ] **S2. M4a：version 守卫**（小步热身）：读侧对 > 支持上限的版本给出含版本号
+  与指引的可读报错（替代不可懂的 tenting 解析错，事实 5）。
+  *自带*：守卫单测（v10 语料触发，断言报错文案）；同步把 corpus v10 xfail 的
+  reason 更新为守卫报错（仍 xfail）。*保持绿*：全量。
+- [ ] **S3. M2：tenting 族嵌套化**（断裂点②）：via/pad padstack 的 tenting 等字段
+  读双形状（v9 裸 token / v10 嵌套）、写 v10 形状。
+  *本步转绿*：无 corpus 开关（v10 parse 仍卡在 net）→ *同 commit 自带*：
+  内联 sexp 单测覆盖两种形状的读写 + v9 corpus 字节保真不回归（写出形状变化
+  只影响 v10 写路径）。*保持绿*：全量。
+- [ ] **S4. M0+M1：net 模型重构**（断裂点①，最大一步；M0 决策按上文推荐已定：
+  双字段 `NetRef{number: ?int, name: str}`，编号 = 进程内句柄；v10 读侧无表
+  （事实 2①），`pcb.nets` 由引用扫描合成，规则 = 按名排序、"" 恒 0；
+  v9 写编号（pad 处 编号+名）、v10 只写名、不写表、无网 zone 省略 net 子句）。
+  *本步转绿（19 个，一次性）*：corpus parse×4 + 幂等×4 + 语义快照×4
+  （REGEN 补 v10 快照，含无 v9 配对的 lvds）+ 跨方言等价×3 + T4 v10 契约×4
+  （引用序无关×2、跨进程确定性×2）+ S0 的合成规则单测。
+  *保持绿*：T5 property、T6/T7、corrupter v9 全部、E2E ×4。
+  *本步末尾*：**重做一轮 T8 变异自检**——net 模型重写后安全网要再证明一次
+  （在新合成路径植入 set 序 bug，T4 必须红）。
+- [ ] **S5. M3：静默丢弃键补全**（断裂点③，file-by-file burndown）：以
+  no-data-loss 闸门的逐字段清单驱动（已知 v10 侧：plot 参数、
+  `duplicate_pad_numbers_are_jumpers`、`locked` 移除、层 id 重编；v9 侧：
+  pad `pintype`/`pinfunction`、`sheetfile`、`aux_axis_origin`、`rev`）。
+  *本步转绿（7 个，可逐文件分 commit）*：no-data-loss×5（v9-interf_u 可先行，
+  与 v10 无依赖）+ 字节保真 v10×2——**注意**：v10 fixture 现为 kicad-cli 写出，
+  逐字节对齐其排版是非目标；转绿方式 = schema 补全后用**我们的 writer 重新生成**
+  这两份 v10 fixture（oracle 确认 KiCad 10 读取无损后替换），raw==dump 即自然成立。
+  *保持绿*：全量(此时 corpus 应零 xfail)。
+- [ ] **S6. M5：Python 消费方迁移**（拆三个子步，每子步全量绿才进下一个）：
+  - S6a transformer（16 处编号直用点）：移除 remove_net 的 zone 双键怪癖 →
+    **同 commit 反转** `test_remove_net_skips_zone_with_stale_name`；
+  - S6b layout_sync（2 处）：`_get_net_number` 未知名改响亮失败 →
+    **同 commit 反转** `test_get_net_number_silently_maps_unknown_to_zero`；
+  - S6c pcb_manager（4 处）+ app/pcb（2 处）：既有 15+ 测试保持绿 + 补 net 断言。
+  *保持绿*：全量 + E2E（仍在 v9 例子上跑，确认双方言期一切正常）。
+- [ ] **S7. M4b+M6：版本号 bump + flag day + 终验**：写出 `(version 20260206)`；
+  examples/fixtures/probe 一次性升级提交（A1 增量稳态依赖回读，升级后跑
+  build→build→diff 确认 v10 稳态成立）；E2E ×4 在 v10 上绿；
+  S0 的 oracle 开关全部转绿；BOM/制造产物/DRC smoke；KiCadRoutingTools 不动
+  （事实 13）；改写 CLAUDE.md/KicadDecisions.md"单向门"约束为
+  "已迁移，v9 只读兼容"。
+
+**工作量**：周级（S4+S6 为主）。**回滚策略**：P0.1 底座全部以名字为基准，对
+v9/v10 双方言对称——迁移分支若需中止，底座资产无一作废；S1/S2 与方言无关，
+无论如何保留。
 
 ---
 
