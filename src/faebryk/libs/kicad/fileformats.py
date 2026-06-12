@@ -35,9 +35,9 @@ class Named(Protocol):
 
 # namespace
 class kicad:
-    # Highest .kicad_pcb format version the Zig schema can parse (v9 dialect).
-    # Bumped to the v10 dialect (20260206) by the P0.2 S4 net-model migration.
-    PCB_MAX_SUPPORTED_VERSION = 20241229
+    # Highest .kicad_pcb format version the Zig schema can parse.
+    # 20260206 = the KiCad 10 (v10) dialect, readable since P0.2 S4.
+    PCB_MAX_SUPPORTED_VERSION = 20260206
 
     class UnsupportedKicadVersion(ValueError):
         """The file's (version ...) is newer than the Zig schema supports."""

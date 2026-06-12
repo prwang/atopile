@@ -1,0 +1,5411 @@
+{
+ "arcs": [],
+ "footprints": [
+  {
+   "at": [
+    131.445,
+    138.43,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:BUS_PC",
+   "pads": [
+    {
+     "at": [
+      38.1,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "1",
+     "net": "GND"
+    },
+    {
+     "at": [
+      15.24,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "10",
+     "net": "unconnected-(BUS1-GND-Pad10)"
+    },
+    {
+     "at": [
+      12.7,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "11",
+     "net": "unconnected-(BUS1-MEM-Pad11)"
+    },
+    {
+     "at": [
+      10.16,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "12",
+     "net": "unconnected-(BUS1-MEM-Pad12)"
+    },
+    {
+     "at": [
+      7.62,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "13",
+     "net": "/PC-IOW"
+    },
+    {
+     "at": [
+      5.08,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "14",
+     "net": "/PC-IOR"
+    },
+    {
+     "at": [
+      2.54,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "15",
+     "net": "unconnected-(BUS1-DACK3-Pad15)"
+    },
+    {
+     "at": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "16",
+     "net": "unconnected-(BUS1-DRQ3-Pad16)"
+    },
+    {
+     "at": [
+      -2.54,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "17",
+     "net": "unconnected-(BUS1-DACK1-Pad17)"
+    },
+    {
+     "at": [
+      -5.08,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "18",
+     "net": "unconnected-(BUS1-DRQ1-Pad18)"
+    },
+    {
+     "at": [
+      -7.62,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "19",
+     "net": "unconnected-(BUS1-DACK0-Pad19)"
+    },
+    {
+     "at": [
+      35.56,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "2",
+     "net": "/PC-RST"
+    },
+    {
+     "at": [
+      -10.16,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "20",
+     "net": "unconnected-(BUS1-CLK-Pad20)"
+    },
+    {
+     "at": [
+      -12.7,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "21",
+     "net": "unconnected-(BUS1-IRQ7-Pad21)"
+    },
+    {
+     "at": [
+      -15.24,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "22",
+     "net": "unconnected-(BUS1-IRQ6-Pad22)"
+    },
+    {
+     "at": [
+      -17.78,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "23",
+     "net": "unconnected-(BUS1-IRQ5-Pad23)"
+    },
+    {
+     "at": [
+      -20.32,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "24",
+     "net": "unconnected-(BUS1-IRQ4-Pad24)"
+    },
+    {
+     "at": [
+      -22.86,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "25",
+     "net": "unconnected-(BUS1-IRQ3-Pad25)"
+    },
+    {
+     "at": [
+      -25.4,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "26",
+     "net": "unconnected-(BUS1-DACK2-Pad26)"
+    },
+    {
+     "at": [
+      -27.94,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "27",
+     "net": "unconnected-(BUS1-TC-Pad27)"
+    },
+    {
+     "at": [
+      -30.48,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "28",
+     "net": "unconnected-(BUS1-ALE-Pad28)"
+    },
+    {
+     "at": [
+      -33.02,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "29",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      33.02,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "3",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      -35.56,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "30",
+     "net": "unconnected-(BUS1-OSC-Pad30)"
+    },
+    {
+     "at": [
+      -38.1,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "31",
+     "net": "GND"
+    },
+    {
+     "at": [
+      38.1,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "32",
+     "net": "unconnected-(BUS1-IO-Pad32)"
+    },
+    {
+     "at": [
+      35.56,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "33",
+     "net": "/PC-DB7"
+    },
+    {
+     "at": [
+      33.02,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "34",
+     "net": "/PC-DB6"
+    },
+    {
+     "at": [
+      30.48,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "35",
+     "net": "/PC-DB5"
+    },
+    {
+     "at": [
+      27.94,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "36",
+     "net": "/PC-DB4"
+    },
+    {
+     "at": [
+      25.4,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "37",
+     "net": "/PC-DB3"
+    },
+    {
+     "at": [
+      22.86,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "38",
+     "net": "/PC-DB2"
+    },
+    {
+     "at": [
+      20.32,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "39",
+     "net": "/PC-DB1"
+    },
+    {
+     "at": [
+      30.48,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "4",
+     "net": "unconnected-(BUS1-INQ2-Pad4)"
+    },
+    {
+     "at": [
+      17.78,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "40",
+     "net": "/PC-DB0"
+    },
+    {
+     "at": [
+      15.24,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "41",
+     "net": "unconnected-(BUS1-IO_READY-Pad41)"
+    },
+    {
+     "at": [
+      12.7,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "42",
+     "net": "/PC-AEN"
+    },
+    {
+     "at": [
+      10.16,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "43",
+     "net": "unconnected-(BUS1-BA19-Pad43)"
+    },
+    {
+     "at": [
+      7.62,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "44",
+     "net": "unconnected-(BUS1-BA18-Pad44)"
+    },
+    {
+     "at": [
+      5.08,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "45",
+     "net": "unconnected-(BUS1-BA17-Pad45)"
+    },
+    {
+     "at": [
+      2.54,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "46",
+     "net": "unconnected-(BUS1-BA16-Pad46)"
+    },
+    {
+     "at": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "47",
+     "net": "unconnected-(BUS1-BA15-Pad47)"
+    },
+    {
+     "at": [
+      -2.54,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "48",
+     "net": "unconnected-(BUS1-BA14-Pad48)"
+    },
+    {
+     "at": [
+      -5.08,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "49",
+     "net": "unconnected-(BUS1-BA13-Pad49)"
+    },
+    {
+     "at": [
+      27.94,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "5",
+     "net": "unconnected-(BUS1--5V-Pad5)"
+    },
+    {
+     "at": [
+      -7.62,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "50",
+     "net": "unconnected-(BUS1-BA12-Pad50)"
+    },
+    {
+     "at": [
+      -10.16,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "51",
+     "net": "/PC-A11"
+    },
+    {
+     "at": [
+      -12.7,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "52",
+     "net": "/PC-A10"
+    },
+    {
+     "at": [
+      -15.24,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "53",
+     "net": "/PC-A9"
+    },
+    {
+     "at": [
+      -17.78,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "54",
+     "net": "/PC-A8"
+    },
+    {
+     "at": [
+      -20.32,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "55",
+     "net": "/PC-A7"
+    },
+    {
+     "at": [
+      -22.86,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "56",
+     "net": "/PC-A6"
+    },
+    {
+     "at": [
+      -25.4,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "57",
+     "net": "/PC-A5"
+    },
+    {
+     "at": [
+      -27.94,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "58",
+     "net": "/PC-A4"
+    },
+    {
+     "at": [
+      -30.48,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "59",
+     "net": "/PC-A3"
+    },
+    {
+     "at": [
+      25.4,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "6",
+     "net": "unconnected-(BUS1-DRQ2-Pad6)"
+    },
+    {
+     "at": [
+      -33.02,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "60",
+     "net": "/PC-A2"
+    },
+    {
+     "at": [
+      -35.56,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "61",
+     "net": "/PC-A1"
+    },
+    {
+     "at": [
+      -38.1,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "62",
+     "net": "/PC-A0"
+    },
+    {
+     "at": [
+      22.86,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "7",
+     "net": "unconnected-(BUS1--12V-Pad7)"
+    },
+    {
+     "at": [
+      20.32,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "8",
+     "net": "unconnected-(BUS1-UNUSED-Pad8)"
+    },
+    {
+     "at": [
+      17.78,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "B.Cu",
+      "B.Mask"
+     ],
+     "name": "9",
+     "net": "unconnected-(BUS1-+12V-Pad9)"
+    }
+   ],
+   "reference": "BUS1"
+  },
+  {
+   "at": [
+    83.185,
+    83.82,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:CP_Axial_L10.0mm_D4.5mm_P15.00mm_Horizontal",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      15.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "GND"
+    }
+   ],
+   "reference": "C1"
+  },
+  {
+   "at": [
+    121.305,
+    91.44,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:C_Disc_D3.0mm_W2.0mm_P2.50mm",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "Net-(U9-P{slash}A3)"
+    },
+    {
+     "at": [
+      2.5,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "GND"
+    }
+   ],
+   "reference": "C2"
+  },
+  {
+   "at": [
+    121.305,
+    99.06,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:C_Disc_D3.0mm_W2.0mm_P2.50mm",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "Net-(C3-Pad1)"
+    },
+    {
+     "at": [
+      2.5,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "GND"
+    }
+   ],
+   "reference": "C3"
+  },
+  {
+   "at": [
+    170.688,
+    52.197,
+    180.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:CP_Axial_L10.0mm_D4.5mm_P15.00mm_Horizontal",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      15.0,
+      0.0,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "GND"
+    }
+   ],
+   "reference": "C4"
+  },
+  {
+   "at": [
+    86.995,
+    113.03,
+    -90.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:CP_Axial_L10.0mm_D4.5mm_P15.00mm_Horizontal",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      15.0,
+      0.0,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "GND"
+    }
+   ],
+   "reference": "C5"
+  },
+  {
+   "at": [
+    159.385,
+    111.76,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:CP_Axial_L10.0mm_D4.5mm_P15.00mm_Horizontal",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      15.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "GND"
+    }
+   ],
+   "reference": "C6"
+  },
+  {
+   "at": [
+    155.58,
+    38.06,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:LED_D5.0mm",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "GND"
+    },
+    {
+     "at": [
+      2.54,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "Net-(D1-A)"
+    }
+   ],
+   "reference": "D1"
+  },
+  {
+   "at": [
+    165.71,
+    38.08,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:LED_D5.0mm",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "GND"
+    },
+    {
+     "at": [
+      2.54,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "Net-(D2-A)"
+    }
+   ],
+   "reference": "D2"
+  },
+  {
+   "at": [
+    134.0,
+    47.0,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:tux",
+   "pads": [],
+   "reference": "G1"
+  },
+  {
+   "at": [
+    116.205,
+    105.41,
+    -90.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:PinHeader_2x08_P2.54mm_Vertical",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "GND"
+    },
+    {
+     "at": [
+      2.54,
+      10.16,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "10",
+     "net": "/REF6"
+    },
+    {
+     "at": [
+      0.0,
+      12.7,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "11",
+     "net": "GND"
+    },
+    {
+     "at": [
+      2.54,
+      12.7,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "12",
+     "net": "/REF8"
+    },
+    {
+     "at": [
+      0.0,
+      15.24,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "13",
+     "net": "GND"
+    },
+    {
+     "at": [
+      2.54,
+      15.24,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "14",
+     "net": "/REF4"
+    },
+    {
+     "at": [
+      0.0,
+      17.78,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "15",
+     "net": "GND"
+    },
+    {
+     "at": [
+      2.54,
+      17.78,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "16",
+     "net": "/REF5"
+    },
+    {
+     "at": [
+      2.54,
+      0.0,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "/REF10"
+    },
+    {
+     "at": [
+      0.0,
+      2.54,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "3",
+     "net": "GND"
+    },
+    {
+     "at": [
+      2.54,
+      2.54,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "4",
+     "net": "/REF11"
+    },
+    {
+     "at": [
+      0.0,
+      5.08,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "5",
+     "net": "GND"
+    },
+    {
+     "at": [
+      2.54,
+      5.08,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "6",
+     "net": "/REF7"
+    },
+    {
+     "at": [
+      0.0,
+      7.62,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "7",
+     "net": "GND"
+    },
+    {
+     "at": [
+      2.54,
+      7.62,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "8",
+     "net": "/REF9"
+    },
+    {
+     "at": [
+      0.0,
+      10.16,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "9",
+     "net": "GND"
+    }
+   ],
+   "reference": "JP1"
+  },
+  {
+   "at": [
+    182.1,
+    72.4,
+    90.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:DSUB-25_Female_Horizontal_P2.77x2.84mm_EdgePinOffset9.90mm_Housed_MountingHolesOffset11.32mm",
+   "pads": [
+    {
+     "at": [
+      -40.17,
+      1.42,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "0",
+     "net": ""
+    },
+    {
+     "at": [
+      6.93,
+      1.42,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "0",
+     "net": ""
+    },
+    {
+     "at": [
+      0.0,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "/STROBE"
+    },
+    {
+     "at": [
+      -24.93,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "10",
+     "net": "/ACK"
+    },
+    {
+     "at": [
+      -27.7,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "11",
+     "net": "/BUST+"
+    },
+    {
+     "at": [
+      -30.47,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "12",
+     "net": "/PE+"
+    },
+    {
+     "at": [
+      -33.24,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "13",
+     "net": "/SLCT+"
+    },
+    {
+     "at": [
+      -1.385,
+      2.84,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "14",
+     "net": "/AUTOFD-"
+    },
+    {
+     "at": [
+      -4.155,
+      2.84,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "15",
+     "net": "/ERROR-"
+    },
+    {
+     "at": [
+      -6.925,
+      2.84,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "16",
+     "net": "/INIT-"
+    },
+    {
+     "at": [
+      -9.695,
+      2.84,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "17",
+     "net": "/SLCTIN-"
+    },
+    {
+     "at": [
+      -12.465,
+      2.84,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "18",
+     "net": "GND"
+    },
+    {
+     "at": [
+      -15.235,
+      2.84,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "19",
+     "net": "GND"
+    },
+    {
+     "at": [
+      -2.77,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "/BIT0"
+    },
+    {
+     "at": [
+      -18.005,
+      2.84,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "20",
+     "net": "GND"
+    },
+    {
+     "at": [
+      -20.775,
+      2.84,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "21",
+     "net": "GND"
+    },
+    {
+     "at": [
+      -23.545,
+      2.84,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "22",
+     "net": "GND"
+    },
+    {
+     "at": [
+      -26.315,
+      2.84,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "23",
+     "net": "GND"
+    },
+    {
+     "at": [
+      -29.085,
+      2.84,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "24",
+     "net": "GND"
+    },
+    {
+     "at": [
+      -31.855,
+      2.84,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "25",
+     "net": "GND"
+    },
+    {
+     "at": [
+      -5.54,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "3",
+     "net": "/BIT1"
+    },
+    {
+     "at": [
+      -8.31,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "4",
+     "net": "/BIT2"
+    },
+    {
+     "at": [
+      -11.08,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "5",
+     "net": "/BIT3"
+    },
+    {
+     "at": [
+      -13.85,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "6",
+     "net": "/BIT4"
+    },
+    {
+     "at": [
+      -16.62,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "7",
+     "net": "/BIT5"
+    },
+    {
+     "at": [
+      -19.39,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "8",
+     "net": "/BIT6"
+    },
+    {
+     "at": [
+      -22.16,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "9",
+     "net": "/BIT7"
+    }
+   ],
+   "reference": "P1"
+  },
+  {
+   "at": [
+    117.475,
+    99.06,
+    90.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "Net-(C3-Pad1)"
+    },
+    {
+     "at": [
+      7.62,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "Net-(U9-P{slash}A3)"
+    }
+   ],
+   "reference": "R1"
+  },
+  {
+   "at": [
+    127.635,
+    91.44,
+    -90.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "/8MH-OUT"
+    },
+    {
+     "at": [
+      7.62,
+      0.0,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "Net-(C3-Pad1)"
+    }
+   ],
+   "reference": "R2"
+  },
+  {
+   "at": [
+    92.075,
+    57.15,
+    180.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "Net-(U5-CS2)"
+    },
+    {
+     "at": [
+      7.62,
+      0.0,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "VCC"
+    }
+   ],
+   "reference": "R3"
+  },
+  {
+   "at": [
+    151.765,
+    41.91,
+    180.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "Net-(D1-A)"
+    },
+    {
+     "at": [
+      7.62,
+      0.0,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "/LED1"
+    }
+   ],
+   "reference": "R4"
+  },
+  {
+   "at": [
+    171.958,
+    42.037,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "Net-(D2-A)"
+    },
+    {
+     "at": [
+      7.62,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "/LED2"
+    }
+   ],
+   "reference": "R5"
+  },
+  {
+   "at": [
+    95.885,
+    113.03,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:R_Array_SIP10",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      22.86,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "10",
+     "net": "unconnected-(RR1-Pad10)"
+    },
+    {
+     "at": [
+      2.54,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "/REF5"
+    },
+    {
+     "at": [
+      5.08,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "3",
+     "net": "/REF4"
+    },
+    {
+     "at": [
+      7.62,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "4",
+     "net": "/REF8"
+    },
+    {
+     "at": [
+      10.16,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "5",
+     "net": "/REF6"
+    },
+    {
+     "at": [
+      12.7,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "6",
+     "net": "/REF9"
+    },
+    {
+     "at": [
+      15.24,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "7",
+     "net": "/REF7"
+    },
+    {
+     "at": [
+      17.78,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "8",
+     "net": "/REF11"
+    },
+    {
+     "at": [
+      20.32,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "9",
+     "net": "/REF10"
+    }
+   ],
+   "reference": "RR1"
+  },
+  {
+   "at": [
+    151.765,
+    124.46,
+    90.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:DIP-20_W7.62mm",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "/DIR"
+    },
+    {
+     "at": [
+      0.0,
+      22.86,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "10",
+     "net": "GND"
+    },
+    {
+     "at": [
+      7.62,
+      22.86,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "11",
+     "net": "/D7"
+    },
+    {
+     "at": [
+      7.62,
+      20.32,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "12",
+     "net": "/D6"
+    },
+    {
+     "at": [
+      7.62,
+      17.78,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "13",
+     "net": "/D5"
+    },
+    {
+     "at": [
+      7.62,
+      15.24,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "14",
+     "net": "/D4"
+    },
+    {
+     "at": [
+      7.62,
+      12.7,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "15",
+     "net": "/D3"
+    },
+    {
+     "at": [
+      7.62,
+      10.16,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "16",
+     "net": "/D2"
+    },
+    {
+     "at": [
+      7.62,
+      7.62,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "17",
+     "net": "/D1"
+    },
+    {
+     "at": [
+      7.62,
+      5.08,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "18",
+     "net": "/D0"
+    },
+    {
+     "at": [
+      7.62,
+      2.54,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "19",
+     "net": "/ENBBUF"
+    },
+    {
+     "at": [
+      0.0,
+      2.54,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "/PC-DB0"
+    },
+    {
+     "at": [
+      7.62,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "20",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      0.0,
+      5.08,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "3",
+     "net": "/PC-DB1"
+    },
+    {
+     "at": [
+      0.0,
+      7.62,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "4",
+     "net": "/PC-DB2"
+    },
+    {
+     "at": [
+      0.0,
+      10.16,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "5",
+     "net": "/PC-DB3"
+    },
+    {
+     "at": [
+      0.0,
+      12.7,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "6",
+     "net": "/PC-DB4"
+    },
+    {
+     "at": [
+      0.0,
+      15.24,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "7",
+     "net": "/PC-DB5"
+    },
+    {
+     "at": [
+      0.0,
+      17.78,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "8",
+     "net": "/PC-DB6"
+    },
+    {
+     "at": [
+      0.0,
+      20.32,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "9",
+     "net": "/PC-DB7"
+    }
+   ],
+   "reference": "U1"
+  },
+  {
+   "at": [
+    95.885,
+    124.46,
+    90.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:DIP-20_W7.62mm",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "/PC-AEN"
+    },
+    {
+     "at": [
+      0.0,
+      22.86,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "10",
+     "net": "GND"
+    },
+    {
+     "at": [
+      7.62,
+      22.86,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "11",
+     "net": "/PC-A10"
+    },
+    {
+     "at": [
+      7.62,
+      20.32,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "12",
+     "net": "/REF10"
+    },
+    {
+     "at": [
+      7.62,
+      17.78,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "13",
+     "net": "/PC-A7"
+    },
+    {
+     "at": [
+      7.62,
+      15.24,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "14",
+     "net": "/REF7"
+    },
+    {
+     "at": [
+      7.62,
+      12.7,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "15",
+     "net": "/PC-A6"
+    },
+    {
+     "at": [
+      7.62,
+      10.16,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "16",
+     "net": "/REF6"
+    },
+    {
+     "at": [
+      7.62,
+      7.62,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "17",
+     "net": "/PC-A4"
+    },
+    {
+     "at": [
+      7.62,
+      5.08,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "18",
+     "net": "/REF4"
+    },
+    {
+     "at": [
+      7.62,
+      2.54,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "19",
+     "net": "/MATCHL"
+    },
+    {
+     "at": [
+      0.0,
+      2.54,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "/PC-A5"
+    },
+    {
+     "at": [
+      7.62,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "20",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      0.0,
+      5.08,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "3",
+     "net": "/REF5"
+    },
+    {
+     "at": [
+      0.0,
+      7.62,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "4",
+     "net": "/PC-A8"
+    },
+    {
+     "at": [
+      0.0,
+      10.16,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "5",
+     "net": "/REF8"
+    },
+    {
+     "at": [
+      0.0,
+      12.7,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "6",
+     "net": "/PC-A9"
+    },
+    {
+     "at": [
+      0.0,
+      15.24,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "7",
+     "net": "/REF9"
+    },
+    {
+     "at": [
+      0.0,
+      17.78,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "8",
+     "net": "/PC-A11"
+    },
+    {
+     "at": [
+      0.0,
+      20.32,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "9",
+     "net": "/REF11"
+    }
+   ],
+   "reference": "U2"
+  },
+  {
+   "at": [
+    123.825,
+    124.46,
+    90.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:DIP-20_W7.62mm",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "GND"
+    },
+    {
+     "at": [
+      0.0,
+      22.86,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "10",
+     "net": "GND"
+    },
+    {
+     "at": [
+      7.62,
+      22.86,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "11",
+     "net": "unconnected-(U3-Y7-Pad11)"
+    },
+    {
+     "at": [
+      7.62,
+      20.32,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "12",
+     "net": "/RSTL"
+    },
+    {
+     "at": [
+      7.62,
+      17.78,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "13",
+     "net": "/PC-RD"
+    },
+    {
+     "at": [
+      7.62,
+      15.24,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "14",
+     "net": "/PC-WR"
+    },
+    {
+     "at": [
+      7.62,
+      12.7,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "15",
+     "net": "Net-(U3-Y3)"
+    },
+    {
+     "at": [
+      7.62,
+      10.16,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "16",
+     "net": "Net-(U3-Y2)"
+    },
+    {
+     "at": [
+      7.62,
+      7.62,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "17",
+     "net": "Net-(U3-Y1)"
+    },
+    {
+     "at": [
+      7.62,
+      5.08,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "18",
+     "net": "Net-(U3-Y0)"
+    },
+    {
+     "at": [
+      7.62,
+      2.54,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "19",
+     "net": "GND"
+    },
+    {
+     "at": [
+      0.0,
+      2.54,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "/PC-A1"
+    },
+    {
+     "at": [
+      7.62,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "20",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      0.0,
+      5.08,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "3",
+     "net": "/PC-A0"
+    },
+    {
+     "at": [
+      0.0,
+      7.62,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "4",
+     "net": "/PC-A2"
+    },
+    {
+     "at": [
+      0.0,
+      10.16,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "5",
+     "net": "/PC-A3"
+    },
+    {
+     "at": [
+      0.0,
+      12.7,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "6",
+     "net": "/PC-IOW"
+    },
+    {
+     "at": [
+      0.0,
+      15.24,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "7",
+     "net": "/PC-IOR"
+    },
+    {
+     "at": [
+      0.0,
+      17.78,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "8",
+     "net": "/PC-RST"
+    },
+    {
+     "at": [
+      0.0,
+      20.32,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "9",
+     "net": "/PC-RST"
+    }
+   ],
+   "reference": "U3"
+  },
+  {
+   "at": [
+    86.995,
+    76.2,
+    90.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:DIP-32_W15.24mm",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": ""
+    },
+    {
+     "at": [
+      0.0,
+      22.86,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "10",
+     "net": "/MA2"
+    },
+    {
+     "at": [
+      0.0,
+      25.4,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "11",
+     "net": "/MA1"
+    },
+    {
+     "at": [
+      0.0,
+      27.94,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "12",
+     "net": "/MA0"
+    },
+    {
+     "at": [
+      0.0,
+      30.48,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "13",
+     "net": "/MD0"
+    },
+    {
+     "at": [
+      0.0,
+      33.02,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "14",
+     "net": "/MD1"
+    },
+    {
+     "at": [
+      0.0,
+      35.56,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "15",
+     "net": "/MD2"
+    },
+    {
+     "at": [
+      0.0,
+      38.1,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "16",
+     "net": "GND"
+    },
+    {
+     "at": [
+      15.24,
+      38.1,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "17",
+     "net": "/MD3"
+    },
+    {
+     "at": [
+      15.24,
+      35.56,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "18",
+     "net": "/MD4"
+    },
+    {
+     "at": [
+      15.24,
+      33.02,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "19",
+     "net": "/MD5"
+    },
+    {
+     "at": [
+      0.0,
+      2.54,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "/MA16"
+    },
+    {
+     "at": [
+      15.24,
+      30.48,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "20",
+     "net": "/MD6"
+    },
+    {
+     "at": [
+      15.24,
+      27.94,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "21",
+     "net": "/MD7"
+    },
+    {
+     "at": [
+      15.24,
+      25.4,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "22",
+     "net": "/CS1-"
+    },
+    {
+     "at": [
+      15.24,
+      22.86,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "23",
+     "net": "/MA10"
+    },
+    {
+     "at": [
+      15.24,
+      20.32,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "24",
+     "net": "/OE-"
+    },
+    {
+     "at": [
+      15.24,
+      17.78,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "25",
+     "net": "/MA11"
+    },
+    {
+     "at": [
+      15.24,
+      15.24,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "26",
+     "net": "/MA9"
+    },
+    {
+     "at": [
+      15.24,
+      12.7,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "27",
+     "net": "/MA8"
+    },
+    {
+     "at": [
+      15.24,
+      10.16,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "28",
+     "net": "/MA13"
+    },
+    {
+     "at": [
+      15.24,
+      7.62,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "29",
+     "net": "/WR-"
+    },
+    {
+     "at": [
+      0.0,
+      5.08,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "3",
+     "net": "/MA14"
+    },
+    {
+     "at": [
+      15.24,
+      5.08,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "30",
+     "net": "Net-(U5-CS2)"
+    },
+    {
+     "at": [
+      15.24,
+      2.54,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "31",
+     "net": "/MA15"
+    },
+    {
+     "at": [
+      15.24,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "32",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      0.0,
+      7.62,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "4",
+     "net": "/MA12"
+    },
+    {
+     "at": [
+      0.0,
+      10.16,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "5",
+     "net": "/MA7"
+    },
+    {
+     "at": [
+      0.0,
+      12.7,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "6",
+     "net": "/MA6"
+    },
+    {
+     "at": [
+      0.0,
+      15.24,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "7",
+     "net": "/MA5"
+    },
+    {
+     "at": [
+      0.0,
+      17.78,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "8",
+     "net": "/MA4"
+    },
+    {
+     "at": [
+      0.0,
+      20.32,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "9",
+     "net": "/MA3"
+    }
+   ],
+   "reference": "U5"
+  },
+  {
+   "at": [
+    123.825,
+    112.903,
+    90.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:DIP-24_W7.62mm",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "GND"
+    },
+    {
+     "at": [
+      0.0,
+      22.86,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "10",
+     "net": "unconnected-(U8-I{slash}O10-Pad10)"
+    },
+    {
+     "at": [
+      0.0,
+      25.4,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "11",
+     "net": "/RSTL"
+    },
+    {
+     "at": [
+      0.0,
+      27.94,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "12",
+     "net": "GND"
+    },
+    {
+     "at": [
+      7.62,
+      27.94,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "13",
+     "net": "/WR_REG"
+    },
+    {
+     "at": [
+      7.62,
+      25.4,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "14",
+     "net": "/PC-RD"
+    },
+    {
+     "at": [
+      7.62,
+      22.86,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "15",
+     "net": "/WR_REG"
+    },
+    {
+     "at": [
+      7.62,
+      20.32,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "16",
+     "net": "/CLKLCA"
+    },
+    {
+     "at": [
+      7.62,
+      17.78,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "17",
+     "net": "/DIR"
+    },
+    {
+     "at": [
+      7.62,
+      15.24,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "18",
+     "net": "/SEL_LPT"
+    },
+    {
+     "at": [
+      7.62,
+      12.7,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "19",
+     "net": "/PROG-"
+    },
+    {
+     "at": [
+      0.0,
+      2.54,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "/MATCHL"
+    },
+    {
+     "at": [
+      7.62,
+      10.16,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "20",
+     "net": "/DONE"
+    },
+    {
+     "at": [
+      7.62,
+      7.62,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "21",
+     "net": "/D0"
+    },
+    {
+     "at": [
+      7.62,
+      5.08,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "22",
+     "net": "/ENBBUF"
+    },
+    {
+     "at": [
+      7.62,
+      2.54,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "23",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      7.62,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "24",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      0.0,
+      5.08,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "3",
+     "net": "Net-(U3-Y0)"
+    },
+    {
+     "at": [
+      0.0,
+      7.62,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "4",
+     "net": "Net-(U3-Y1)"
+    },
+    {
+     "at": [
+      0.0,
+      10.16,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "5",
+     "net": "Net-(U3-Y2)"
+    },
+    {
+     "at": [
+      0.0,
+      12.7,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "6",
+     "net": "Net-(U3-Y3)"
+    },
+    {
+     "at": [
+      0.0,
+      15.24,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "7",
+     "net": "/PC-WR"
+    },
+    {
+     "at": [
+      0.0,
+      17.78,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "8",
+     "net": "unconnected-(U8-I{slash}O8-Pad8)"
+    },
+    {
+     "at": [
+      0.0,
+      20.32,
+      90.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "9",
+     "net": "unconnected-(U8-I{slash}O9-Pad9)"
+    }
+   ],
+   "reference": "U8"
+  },
+  {
+   "at": [
+    158.115,
+    82.55,
+    180.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:PGA120",
+   "pads": [
+    {
+     "at": [
+      15.24,
+      15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "A1",
+     "net": "unconnected-(U9-NC-PadA1)"
+    },
+    {
+     "at": [
+      -7.62,
+      15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "A10",
+     "net": "/CS1-"
+    },
+    {
+     "at": [
+      -10.16,
+      15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "A11",
+     "net": "/MA0"
+    },
+    {
+     "at": [
+      -12.7,
+      15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "A12",
+     "net": "/STROBE"
+    },
+    {
+     "at": [
+      -15.24,
+      15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "A13",
+     "net": "/WR-"
+    },
+    {
+     "at": [
+      12.7,
+      15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "A2",
+     "net": "unconnected-(U9-NC-PadA2)"
+    },
+    {
+     "at": [
+      10.16,
+      15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "A3",
+     "net": "unconnected-(U9-NC-PadA3)"
+    },
+    {
+     "at": [
+      7.62,
+      15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "A4",
+     "net": "/MA9"
+    },
+    {
+     "at": [
+      5.08,
+      15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "A5",
+     "net": "/MD1"
+    },
+    {
+     "at": [
+      2.54,
+      15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "A6",
+     "net": "/MD3"
+    },
+    {
+     "at": [
+      0.0,
+      15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "A7",
+     "net": "/MD4"
+    },
+    {
+     "at": [
+      -2.54,
+      15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "A8",
+     "net": "/MD5"
+    },
+    {
+     "at": [
+      -5.08,
+      15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "A9",
+     "net": "/MD6"
+    },
+    {
+     "at": [
+      15.24,
+      12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "B1",
+     "net": "unconnected-(U9-NC-PadB1)"
+    },
+    {
+     "at": [
+      -7.62,
+      12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "B10",
+     "net": "unconnected-(U9-NC-PadB10)"
+    },
+    {
+     "at": [
+      -10.16,
+      12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "B11",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      -12.7,
+      12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "B12",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      -15.24,
+      12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "B13",
+     "net": "unconnected-(U9-NC-PadB13)"
+    },
+    {
+     "at": [
+      12.7,
+      12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "B2",
+     "net": "/MA1"
+    },
+    {
+     "at": [
+      10.16,
+      12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "B3",
+     "net": "/MA7"
+    },
+    {
+     "at": [
+      7.62,
+      12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "B4",
+     "net": "unconnected-(U9-TCK-PadB4)"
+    },
+    {
+     "at": [
+      5.08,
+      12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "B5",
+     "net": "unconnected-(U9-TMS-PadB5)"
+    },
+    {
+     "at": [
+      2.54,
+      12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "B6",
+     "net": "/MD2"
+    },
+    {
+     "at": [
+      0.0,
+      12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "B7",
+     "net": "GND"
+    },
+    {
+     "at": [
+      -2.54,
+      12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "B8",
+     "net": "/MD7"
+    },
+    {
+     "at": [
+      -5.08,
+      12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "B9",
+     "net": "/OE-"
+    },
+    {
+     "at": [
+      15.24,
+      10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "C1",
+     "net": "/MA13"
+    },
+    {
+     "at": [
+      -7.62,
+      10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "C10",
+     "net": "GND"
+    },
+    {
+     "at": [
+      -10.16,
+      10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "C11",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      -12.7,
+      10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "C12",
+     "net": "/AUTOFD-"
+    },
+    {
+     "at": [
+      -15.24,
+      10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "C13",
+     "net": "/MA5"
+    },
+    {
+     "at": [
+      12.7,
+      10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "C2",
+     "net": "/MA3"
+    },
+    {
+     "at": [
+      10.16,
+      10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "C3",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      7.62,
+      10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "C4",
+     "net": "GND"
+    },
+    {
+     "at": [
+      5.08,
+      10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "C5",
+     "net": "unconnected-(U9-TDI-PadC5)"
+    },
+    {
+     "at": [
+      2.54,
+      10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "C6",
+     "net": "/MD0"
+    },
+    {
+     "at": [
+      0.0,
+      10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "C7",
+     "net": ""
+    },
+    {
+     "at": [
+      -2.54,
+      10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "C8",
+     "net": "/MA16"
+    },
+    {
+     "at": [
+      -5.08,
+      10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "C9",
+     "net": "/MA10"
+    },
+    {
+     "at": [
+      15.24,
+      7.62,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "D1",
+     "net": "/MA14"
+    },
+    {
+     "at": [
+      -10.16,
+      7.62,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "D11",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      -12.7,
+      7.62,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "D12",
+     "net": "/BIT0"
+    },
+    {
+     "at": [
+      -15.24,
+      7.62,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "D13",
+     "net": "/ERROR-"
+    },
+    {
+     "at": [
+      12.7,
+      7.62,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "D2",
+     "net": "/MA11"
+    },
+    {
+     "at": [
+      10.16,
+      7.62,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "D3",
+     "net": "/MA2"
+    },
+    {
+     "at": [
+      15.24,
+      5.08,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "E1",
+     "net": "/MA4"
+    },
+    {
+     "at": [
+      -10.16,
+      5.08,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "E11",
+     "net": "unconnected-(U9-NC-PadE11)"
+    },
+    {
+     "at": [
+      -12.7,
+      5.08,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "E12",
+     "net": "/INIT-"
+    },
+    {
+     "at": [
+      -15.24,
+      5.08,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "E13",
+     "net": "/BIT1"
+    },
+    {
+     "at": [
+      12.7,
+      5.08,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "E2",
+     "net": "unconnected-(U9-NC-PadE2)"
+    },
+    {
+     "at": [
+      10.16,
+      5.08,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "E3",
+     "net": "unconnected-(U9-NC-PadE3)"
+    },
+    {
+     "at": [
+      15.24,
+      2.54,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "F1",
+     "net": "/MA15"
+    },
+    {
+     "at": [
+      -10.16,
+      2.54,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "F11",
+     "net": "/SLCTIN-"
+    },
+    {
+     "at": [
+      -12.7,
+      2.54,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "F12",
+     "net": "/BIT2"
+    },
+    {
+     "at": [
+      -15.24,
+      2.54,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "F13",
+     "net": "/LED2"
+    },
+    {
+     "at": [
+      12.7,
+      2.54,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "F2",
+     "net": "/MA6"
+    },
+    {
+     "at": [
+      10.16,
+      2.54,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "F3",
+     "net": "/MA12"
+    },
+    {
+     "at": [
+      15.24,
+      0.0,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "G1",
+     "net": "/MA8"
+    },
+    {
+     "at": [
+      -10.16,
+      0.0,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "G11",
+     "net": "GND"
+    },
+    {
+     "at": [
+      -12.7,
+      0.0,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "G12",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      -15.24,
+      0.0,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "G13",
+     "net": "/BIT3"
+    },
+    {
+     "at": [
+      12.7,
+      0.0,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "G2",
+     "net": "GND"
+    },
+    {
+     "at": [
+      10.16,
+      0.0,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "G3",
+     "net": ""
+    },
+    {
+     "at": [
+      15.24,
+      -2.54,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "H1",
+     "net": "/PC-A8"
+    },
+    {
+     "at": [
+      -10.16,
+      -2.54,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "H11",
+     "net": "/BIT7"
+    },
+    {
+     "at": [
+      -12.7,
+      -2.54,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "H12",
+     "net": "/BIT5"
+    },
+    {
+     "at": [
+      -15.24,
+      -2.54,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "H13",
+     "net": "/BIT4"
+    },
+    {
+     "at": [
+      12.7,
+      -2.54,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "H2",
+     "net": "/PC-A7"
+    },
+    {
+     "at": [
+      10.16,
+      -2.54,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "H3",
+     "net": "/PC-A4"
+    },
+    {
+     "at": [
+      15.24,
+      -5.08,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "J1",
+     "net": "/PC-A6"
+    },
+    {
+     "at": [
+      -10.16,
+      -5.08,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "J11",
+     "net": "unconnected-(U9-NC-PadJ11)"
+    },
+    {
+     "at": [
+      -12.7,
+      -5.08,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "J12",
+     "net": "/BUST+"
+    },
+    {
+     "at": [
+      -15.24,
+      -5.08,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "J13",
+     "net": "/BIT6"
+    },
+    {
+     "at": [
+      12.7,
+      -5.08,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "J2",
+     "net": "/PC-A5"
+    },
+    {
+     "at": [
+      10.16,
+      -5.08,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "J3",
+     "net": "unconnected-(U9-NC-PadJ3)"
+    },
+    {
+     "at": [
+      15.24,
+      -7.62,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "K1",
+     "net": "/8MH-OUT"
+    },
+    {
+     "at": [
+      -10.16,
+      -7.62,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "K11",
+     "net": "GND"
+    },
+    {
+     "at": [
+      -12.7,
+      -7.62,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "K12",
+     "net": "unconnected-(U9-NC-PadK12)"
+    },
+    {
+     "at": [
+      -15.24,
+      -7.62,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "K13",
+     "net": "/ACK"
+    },
+    {
+     "at": [
+      12.7,
+      -7.62,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "K2",
+     "net": "/PC-A3"
+    },
+    {
+     "at": [
+      10.16,
+      -7.62,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "K3",
+     "net": "GND"
+    },
+    {
+     "at": [
+      15.24,
+      -10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "L1",
+     "net": "Net-(U9-P{slash}A3)"
+    },
+    {
+     "at": [
+      -7.62,
+      -10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "L10",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      -10.16,
+      -10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "L11",
+     "net": "/DONE"
+    },
+    {
+     "at": [
+      -12.7,
+      -10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "L12",
+     "net": "/D7"
+    },
+    {
+     "at": [
+      -15.24,
+      -10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "L13",
+     "net": "/PE+"
+    },
+    {
+     "at": [
+      12.7,
+      -10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "L2",
+     "net": "/SEL_LPT"
+    },
+    {
+     "at": [
+      10.16,
+      -10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "L3",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      7.62,
+      -10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "L4",
+     "net": "/CLKLCA"
+    },
+    {
+     "at": [
+      5.08,
+      -10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "L5",
+     "net": "unconnected-(U9-NC-PadL5)"
+    },
+    {
+     "at": [
+      2.54,
+      -10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "L6",
+     "net": "unconnected-(U9-P{slash}D2-PadL6)"
+    },
+    {
+     "at": [
+      0.0,
+      -10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "L7",
+     "net": "GND"
+    },
+    {
+     "at": [
+      -2.54,
+      -10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "L8",
+     "net": "/PC-A10"
+    },
+    {
+     "at": [
+      -5.08,
+      -10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "L9",
+     "net": "unconnected-(U9-NC-PadL9)"
+    },
+    {
+     "at": [
+      15.24,
+      -12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "M1",
+     "net": "unconnected-(U9-NC-PadM1)"
+    },
+    {
+     "at": [
+      -7.62,
+      -12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "M10",
+     "net": "/D4"
+    },
+    {
+     "at": [
+      -10.16,
+      -12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "M11",
+     "net": "/D6"
+    },
+    {
+     "at": [
+      -12.7,
+      -12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "M12",
+     "net": "/PROG-"
+    },
+    {
+     "at": [
+      -15.24,
+      -12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "M13",
+     "net": ""
+    },
+    {
+     "at": [
+      12.7,
+      -12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "M2",
+     "net": "unconnected-(U9-TDO-PadM2)"
+    },
+    {
+     "at": [
+      10.16,
+      -12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "M3",
+     "net": "/LED1"
+    },
+    {
+     "at": [
+      7.62,
+      -12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "M4",
+     "net": "/CLKLCA"
+    },
+    {
+     "at": [
+      5.08,
+      -12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "M5",
+     "net": "/PC-A2"
+    },
+    {
+     "at": [
+      2.54,
+      -12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "M6",
+     "net": "/PC-A0"
+    },
+    {
+     "at": [
+      0.0,
+      -12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "M7",
+     "net": "VCC"
+    },
+    {
+     "at": [
+      -2.54,
+      -12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "M8",
+     "net": "/PC-RD"
+    },
+    {
+     "at": [
+      -5.08,
+      -12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "M9",
+     "net": "/D3"
+    },
+    {
+     "at": [
+      15.24,
+      -15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "N1",
+     "net": "unconnected-(U9-PGCK4{slash}A1-PadN1)"
+    },
+    {
+     "at": [
+      -7.62,
+      -15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "N10",
+     "net": "/PC-AEN"
+    },
+    {
+     "at": [
+      -10.16,
+      -15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "N11",
+     "net": "/D5"
+    },
+    {
+     "at": [
+      -12.7,
+      -15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "N12",
+     "net": "unconnected-(U9-NC-PadN12)"
+    },
+    {
+     "at": [
+      -15.24,
+      -15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "N13",
+     "net": "/SLCT+"
+    },
+    {
+     "at": [
+      12.7,
+      -15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "N2",
+     "net": "/D0"
+    },
+    {
+     "at": [
+      10.16,
+      -15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "N3",
+     "net": "unconnected-(U9-P{slash}RCLK{slash}BSY{slash}RDY-PadN3)"
+    },
+    {
+     "at": [
+      7.62,
+      -15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "N4",
+     "net": "/PC-A1"
+    },
+    {
+     "at": [
+      5.08,
+      -15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "N5",
+     "net": "unconnected-(U9-P-PadN5)"
+    },
+    {
+     "at": [
+      2.54,
+      -15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "N6",
+     "net": "/PC-WR"
+    },
+    {
+     "at": [
+      0.0,
+      -15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "N7",
+     "net": "/PC-A9"
+    },
+    {
+     "at": [
+      -2.54,
+      -15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "N8",
+     "net": "/D1"
+    },
+    {
+     "at": [
+      -5.08,
+      -15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "N9",
+     "net": "/D2"
+    }
+   ],
+   "reference": "U9"
+  },
+  {
+   "at": [
+    113.665,
+    92.71,
+    -90.0
+   ],
+   "layer": "F.Cu",
+   "name": "interf_u:Crystal_HC18-U_Horizontal",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "Net-(U9-P{slash}A3)"
+    },
+    {
+     "at": [
+      4.9,
+      0.0,
+      270.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "Net-(C3-Pad1)"
+    }
+   ],
+   "reference": "X1"
+  }
+ ],
+ "groups": [],
+ "nets": [
+  "/8MH-OUT",
+  "/ACK",
+  "/AUTOFD-",
+  "/BIT0",
+  "/BIT1",
+  "/BIT2",
+  "/BIT3",
+  "/BIT4",
+  "/BIT5",
+  "/BIT6",
+  "/BIT7",
+  "/BUST+",
+  "/CLKLCA",
+  "/CS1-",
+  "/D0",
+  "/D1",
+  "/D2",
+  "/D3",
+  "/D4",
+  "/D5",
+  "/D6",
+  "/D7",
+  "/DIR",
+  "/DONE",
+  "/ENBBUF",
+  "/ERROR-",
+  "/INIT-",
+  "/LED1",
+  "/LED2",
+  "/MA0",
+  "/MA1",
+  "/MA10",
+  "/MA11",
+  "/MA12",
+  "/MA13",
+  "/MA14",
+  "/MA15",
+  "/MA16",
+  "/MA2",
+  "/MA3",
+  "/MA4",
+  "/MA5",
+  "/MA6",
+  "/MA7",
+  "/MA8",
+  "/MA9",
+  "/MATCHL",
+  "/MD0",
+  "/MD1",
+  "/MD2",
+  "/MD3",
+  "/MD4",
+  "/MD5",
+  "/MD6",
+  "/MD7",
+  "/OE-",
+  "/PC-A0",
+  "/PC-A1",
+  "/PC-A10",
+  "/PC-A11",
+  "/PC-A2",
+  "/PC-A3",
+  "/PC-A4",
+  "/PC-A5",
+  "/PC-A6",
+  "/PC-A7",
+  "/PC-A8",
+  "/PC-A9",
+  "/PC-AEN",
+  "/PC-DB0",
+  "/PC-DB1",
+  "/PC-DB2",
+  "/PC-DB3",
+  "/PC-DB4",
+  "/PC-DB5",
+  "/PC-DB6",
+  "/PC-DB7",
+  "/PC-IOR",
+  "/PC-IOW",
+  "/PC-RD",
+  "/PC-RST",
+  "/PC-WR",
+  "/PE+",
+  "/PROG-",
+  "/REF10",
+  "/REF11",
+  "/REF4",
+  "/REF5",
+  "/REF6",
+  "/REF7",
+  "/REF8",
+  "/REF9",
+  "/RSTL",
+  "/SEL_LPT",
+  "/SLCT+",
+  "/SLCTIN-",
+  "/STROBE",
+  "/WR-",
+  "/WR_REG",
+  "GND",
+  "Net-(C3-Pad1)",
+  "Net-(D1-A)",
+  "Net-(D2-A)",
+  "Net-(U3-Y0)",
+  "Net-(U3-Y1)",
+  "Net-(U3-Y2)",
+  "Net-(U3-Y3)",
+  "Net-(U5-CS2)",
+  "Net-(U9-P{slash}A3)",
+  "VCC",
+  "unconnected-(BUS1-+12V-Pad9)",
+  "unconnected-(BUS1--12V-Pad7)",
+  "unconnected-(BUS1--5V-Pad5)",
+  "unconnected-(BUS1-ALE-Pad28)",
+  "unconnected-(BUS1-BA12-Pad50)",
+  "unconnected-(BUS1-BA13-Pad49)",
+  "unconnected-(BUS1-BA14-Pad48)",
+  "unconnected-(BUS1-BA15-Pad47)",
+  "unconnected-(BUS1-BA16-Pad46)",
+  "unconnected-(BUS1-BA17-Pad45)",
+  "unconnected-(BUS1-BA18-Pad44)",
+  "unconnected-(BUS1-BA19-Pad43)",
+  "unconnected-(BUS1-CLK-Pad20)",
+  "unconnected-(BUS1-DACK0-Pad19)",
+  "unconnected-(BUS1-DACK1-Pad17)",
+  "unconnected-(BUS1-DACK2-Pad26)",
+  "unconnected-(BUS1-DACK3-Pad15)",
+  "unconnected-(BUS1-DRQ1-Pad18)",
+  "unconnected-(BUS1-DRQ2-Pad6)",
+  "unconnected-(BUS1-DRQ3-Pad16)",
+  "unconnected-(BUS1-GND-Pad10)",
+  "unconnected-(BUS1-INQ2-Pad4)",
+  "unconnected-(BUS1-IO-Pad32)",
+  "unconnected-(BUS1-IO_READY-Pad41)",
+  "unconnected-(BUS1-IRQ3-Pad25)",
+  "unconnected-(BUS1-IRQ4-Pad24)",
+  "unconnected-(BUS1-IRQ5-Pad23)",
+  "unconnected-(BUS1-IRQ6-Pad22)",
+  "unconnected-(BUS1-IRQ7-Pad21)",
+  "unconnected-(BUS1-MEM-Pad11)",
+  "unconnected-(BUS1-MEM-Pad12)",
+  "unconnected-(BUS1-OSC-Pad30)",
+  "unconnected-(BUS1-TC-Pad27)",
+  "unconnected-(BUS1-UNUSED-Pad8)",
+  "unconnected-(RR1-Pad10)",
+  "unconnected-(U3-Y7-Pad11)",
+  "unconnected-(U8-I{slash}O10-Pad10)",
+  "unconnected-(U8-I{slash}O8-Pad8)",
+  "unconnected-(U8-I{slash}O9-Pad9)",
+  "unconnected-(U9-NC-PadA1)",
+  "unconnected-(U9-NC-PadA2)",
+  "unconnected-(U9-NC-PadA3)",
+  "unconnected-(U9-NC-PadB1)",
+  "unconnected-(U9-NC-PadB10)",
+  "unconnected-(U9-NC-PadB13)",
+  "unconnected-(U9-NC-PadE11)",
+  "unconnected-(U9-NC-PadE2)",
+  "unconnected-(U9-NC-PadE3)",
+  "unconnected-(U9-NC-PadJ11)",
+  "unconnected-(U9-NC-PadJ3)",
+  "unconnected-(U9-NC-PadK12)",
+  "unconnected-(U9-NC-PadL5)",
+  "unconnected-(U9-NC-PadL9)",
+  "unconnected-(U9-NC-PadM1)",
+  "unconnected-(U9-NC-PadN12)",
+  "unconnected-(U9-P-PadN5)",
+  "unconnected-(U9-PGCK4{slash}A1-PadN1)",
+  "unconnected-(U9-P{slash}D2-PadL6)",
+  "unconnected-(U9-P{slash}RCLK{slash}BSY{slash}RDY-PadN3)",
+  "unconnected-(U9-TCK-PadB4)",
+  "unconnected-(U9-TDI-PadC5)",
+  "unconnected-(U9-TDO-PadM2)",
+  "unconnected-(U9-TMS-PadB5)"
+ ],
+ "segments": [],
+ "semantic_view_version": 1,
+ "vias": [],
+ "zones": []
+}

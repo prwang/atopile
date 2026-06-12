@@ -111,11 +111,6 @@ class E_pad_drill_shape(str, Enum):
     CIRCLE = "circle"
     OVAL = "oval"
 
-class E_pad_tenting(str, Enum):
-    FRONT = "front"
-    BACK = "back"
-    NONE = "none"
-
 class E_zone_connection(IntEnum):
     INHERITED = -1
     NONE = 0
@@ -216,10 +211,6 @@ class E_Attr(str, Enum):
 
 class E_zone_fill_enable(str, Enum):
     YES = "yes"
-
-class E_tenting(str, Enum):
-    FRONT = "front"
-    BACK = "back"
 
 class Xy:
     x: float
@@ -323,6 +314,17 @@ class TextLayer:
     knockout: str | None
 
     def __init__(self, *, layer: str, knockout: str | None) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
+class Tenting:
+    front: bool
+    back: bool
+    none: bool
+
+    def __init__(self, *, front: bool, back: bool, none: bool) -> None: ...
     def __repr__(self) -> str: ...
     @staticmethod
     def __field_names__() -> list[str]: ...
@@ -593,15 +595,6 @@ class PadOptions:
     def __field_names__() -> list[str]: ...
     def __zig_address__(self) -> int: ...
 
-class PadTenting:
-    type: str
-
-    def __init__(self, *, type: str) -> None: ...
-    def __repr__(self) -> str: ...
-    @staticmethod
-    def __field_names__() -> list[str]: ...
-    def __zig_address__(self) -> int: ...
-
 class Pad:
     name: str
     type: str
@@ -624,7 +617,7 @@ class Pad:
     chamfer: str | None
     properties: str | None
     options: PadOptions | None
-    tenting: PadTenting | None
+    tenting: Tenting | None
     uuid: str | None
     primitives: PadPrimitives | None
 
@@ -652,7 +645,7 @@ class Pad:
         chamfer: str | None,
         properties: str | None,
         options: PadOptions | None,
-        tenting: PadTenting | None,
+        tenting: Tenting | None,
         uuid: str | None,
         primitives: PadPrimitives | None,
     ) -> None: ...
@@ -674,9 +667,9 @@ class Net:
 class Property:
     name: str
     value: str
-    at: Xyr
+    at: Xyr | None
     unlocked: bool | None
-    layer: str
+    layer: str | None
     hide: bool | None
     uuid: str | None
     effects: Effects | None
@@ -686,9 +679,9 @@ class Property:
         *,
         name: str,
         value: str,
-        at: Xyr,
+        at: Xyr | None,
         unlocked: bool | None,
-        layer: str,
+        layer: str | None,
         hide: bool | None,
         uuid: str | None,
         effects: Effects | None,
@@ -797,16 +790,6 @@ class ViaPadstack:
     def __field_names__() -> list[str]: ...
     def __zig_address__(self) -> int: ...
 
-class ViaTenting:
-    front: bool
-    back: bool
-
-    def __init__(self, *, front: bool, back: bool) -> None: ...
-    def __repr__(self) -> str: ...
-    @staticmethod
-    def __field_names__() -> list[str]: ...
-    def __zig_address__(self) -> int: ...
-
 class Via:
     at: Xy
     size: float
@@ -818,7 +801,7 @@ class Via:
     zone_layer_connections: list[str]
     padstack: ViaPadstack | None
     teardrops: Teardrop | None
-    tenting: ViaTenting | None
+    tenting: Tenting | None
     free: bool | None
     locked: bool | None
     uuid: str | None
@@ -836,7 +819,7 @@ class Via:
         zone_layer_connections: list[str],
         padstack: ViaPadstack | None,
         teardrops: Teardrop | None,
-        tenting: ViaTenting | None,
+        tenting: Tenting | None,
         free: bool | None,
         locked: bool | None,
         uuid: str | None,
@@ -973,7 +956,7 @@ class ZoneAttr:
 
 class Zone:
     net: int
-    net_name: str
+    net_name: str | None
     layer: str | None
     layers: list[str]
     uuid: str | None
@@ -994,7 +977,7 @@ class Zone:
         self,
         *,
         net: int,
-        net_name: str,
+        net_name: str | None,
         layer: str | None,
         layers: list[str],
         uuid: str | None,
@@ -1336,7 +1319,7 @@ class Setup:
     stackup: Stackup | None
     pad_to_mask_clearance: int
     allow_soldermask_bridges_in_footprints: bool
-    tenting: list[str]
+    tenting: Tenting | None
     pcbplotparams: PcbPlotParams
     rules: Rules | None
 
@@ -1346,7 +1329,7 @@ class Setup:
         stackup: Stackup | None,
         pad_to_mask_clearance: int,
         allow_soldermask_bridges_in_footprints: bool,
-        tenting: list[str],
+        tenting: Tenting | None,
         pcbplotparams: PcbPlotParams,
         rules: Rules | None,
     ) -> None: ...

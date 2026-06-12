@@ -38,11 +38,11 @@ PCB 布局布线工作流：`.ato` 描述电路（电路事实来源），`layou
 
 ### 文件方言与解析器
 
-1. **`kicad-cli pcb upgrade` / KiCad 10 重存是单向门**：重存后文件为 v10 方言
-   （`(version 20260206)`），atopile 的 Zig schema（钉在 20241229）无法解析。
-   P0.2 完成前：atopile 管理中的板子**禁跑 upgrade、禁在 KiCad 10 GUI 中保存**
-   （KiCad 10 直接读 v9，无须升级；placement rule area/groups/User 层都能在 v9 表达，
-   实测 KiCad 10 读取且保留）。
+1. **方言门现状（S4 后更新）**：v10（`(version 20260206)`）读侧已支持（S4），
+   "单向门"的"读不回"半边已拆除；但 atopile 写方言仍 = v9（S7 flag day 才切），
+   v10 板重写会保持 v10。纪律维持到 S7：管理中的板子**仍不跑 upgrade、不在
+   KiCad 10 GUI 中保存**——混方言管理（增量稳态、E2E）未在 v10 上验证，
+   S7 一次性切换并终验。
 2. **v9→v10 断裂点实测完整清单**（逐错误迭代修补至整文件可解析，2026-06-12）——
    这是 P0.2 的需求清单：
    - ① **net 模型彻底重构（比"去编号"更彻底，2026-06-12 语料生成时实测修正）**：
@@ -69,8 +69,9 @@ PCB 布局布线工作流：`.ato` 描述电路（电路事实来源），`layou
    现子对象包装持 owner 强引用链（child→parent→root），`loads(...).kicad_pcb`
    写法安全；两件事按互锁要求同一提交修复，回归测试
    `test/libs/kicad/test_pyzig_ownership.py`（含变异自检记录）。
-5. **缺 version 守卫**：读 v10 文件的报错是不可懂的 tenting 解析错（且 Zig 错误归因
-   有时指错类、缺位置信息）——P0.2 的 M4 补可读报错。
+5. **version 守卫【✅ S2 已补】**：`kicad.loads` 对超过 `PCB_MAX_SUPPORTED_VERSION`
+   （现 20260206）的板子抛 `kicad.UnsupportedKicadVersion` 可读报错（含双版本号
+   与指引）。Zig 错误归因仍偶有指错类/缺位置（遗留，未挡路）。
 
 ### 确定性边界
 
@@ -231,16 +232,26 @@ examples/fixtures/probe 工程的 `.kicad_pcb` 一次性升级提交。迁移完
   自带 `test/libs/kicad/test_tenting_dialect.py`（10 用例）；v9 corpus 字节
   保真不回归实测通过。S4 复用同一套方言基建（v9_only 即 net 表/net_name 的
   抑制机制）。
-- [ ] **S4. M0+M1：net 模型重构**（断裂点①，最大一步；M0 决策按上文推荐已定：
-  双字段 `NetRef{number: ?int, name: str}`，编号 = 进程内句柄；v10 读侧无表
-  （事实 2①），`pcb.nets` 由引用扫描合成，规则 = 按名排序、"" 恒 0；
-  v9 写编号（pad 处 编号+名）、v10 只写名、不写表、无网 zone 省略 net 子句）。
-  *本步转绿（19 个，一次性）*：corpus parse×4 + 幂等×4 + 语义快照×4
-  （REGEN 补 v10 快照，含无 v9 配对的 lvds）+ 跨方言等价×3 + T4 v10 契约×4
-  （引用序无关×2、跨进程确定性×2）+ S0 的合成规则单测。
-  *保持绿*：T5 property、T6/T7、corrupter v9 全部、E2E ×4。
-  *本步末尾*：**重做一轮 T8 变异自检**——net 模型重写后安全网要再证明一次
-  （在新合成路径植入 set 序 bug，T4 必须红）。
+- [x] **S4. M0+M1：net 模型重构**【✅ 2026-06-12】。实现形态（与原计划的差异）：
+  - Python 可见模型**不变**（`segment.net` 仍 int、`pad.net` 仍 `Net{number,name}`）
+    ——编号 = 进程内句柄由 zig 层兑现，21 个 Python 消费方在 S6 前零改动；
+  - 读侧：`PcbFile.loads` 对 v10（version sniff ≥20250000）预扫描全部
+    `(net "名")` 引用 → 按名排序合成编号（"" 恒 0、1..n 稠密）→ decode 时
+    `net_ref` 标记字段经 `structure.read_net_names` 把名解析回编号 →
+    `pcb.nets` 合成表落地；v9 路径零开销不变；
+  - 写侧：`net_ref` 字段在 v10 方言写解析名（永不写编号）、net 0 整条省略
+    （keepout zone）；net 表/`net_name`/pad net 名第二位 = `v9_only` 抑制；
+  - 连带修复：`Property.at/layer` 可选（KiCad 10 写裸 `(property ki_fp_filters …)`，
+    曾挡住 lvds 解析）；v9 layout_reuse fixture 补回悬空的 manual segment 并
+    重新生成 v10 配对（原 fixture 的 group 成员悬空，upgrade 时被 KiCad 清掉）。
+  *已转绿（21 个）*：corpus parse×4 + 幂等×4 + 语义快照×4（v10 REGEN，test
+  板 v9/v10 快照逐字节相同）+ 跨方言等价×3 + T4 v10 契约×4 + S0 合成规则
+  契约 + S0 KiCad 重存语义回环 oracle（提前于预期转绿，棘轮捕获 XPASS 后摘标）。
+  *保持绿*：libs/kicad+exporters 133 通过 + 8 xfail（= S5 的 7 + S7 的 DRC
+  oracle，账目精确）；core graph/zig 85；E2E ×4。
+  *T8 变异自检（已做）*：植入"按出现序编号"（去排序+线性查找）→ **唯一**报警的
+  是 S0 合成规则契约（语义视图按名解析，对一致重编号天然失明）——印证"规则先于
+  实现钉死"的必要性；恢复后全绿。
 - [ ] **S5. M3：静默丢弃键补全**（断裂点③，file-by-file burndown）：以
   no-data-loss 闸门的逐字段清单驱动（已知 v10 侧：plot 参数、
   `duplicate_pad_numbers_are_jumpers`、`locked` 移除、层 id 重编；v9 侧：

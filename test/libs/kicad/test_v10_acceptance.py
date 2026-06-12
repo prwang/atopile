@@ -3,20 +3,22 @@
 """
 P0.2 S0 — acceptance gates written BEFORE any migration code (BACKLOG §P0.2).
 
-Three strict-xfail switches that define "done" for the v10 dialect migration:
+Three switches that define "done" for the v10 dialect migration:
 
 1. M0 net-numbering synthesis contract — v10 files have no net table, so the
-   in-memory numbering rule is ours to define and must be pinned before the
-   implementation exists: numbers are assigned by byte-wise sorted net name,
-   1..n, with net 0 always "" (the implicit no-net). Flips in S4.
+   in-memory numbering rule is ours to define and was pinned before the
+   implementation existed: numbers are assigned by byte-wise sorted net name,
+   1..n, with net 0 always "" (the implicit no-net). [flipped in S4 — and the
+   S4 mutation self-check proved this is the ONLY test that catches a
+   consistent encounter-order renumbering: the semantic views are name-based
+   and therefore blind to it by design]
 
 2. kicad-cli DRC oracle — a board loaded and re-written by us must be a v10
    file that KiCad 10 can read (DRC runs at all). Red until the write dialect
    flips at S7 (version bump + flag day).
 
 3. KiCad re-save round-trip oracle — KiCad 10 re-saving our output must not
-   change the semantic view when we read it back. Flips once v10 read+write
-   survive a KiCad re-save (S4/S5 — the strict-xfail ratchet will say when).
+   change the semantic view when we read it back. [flipped in S4]
 
 S6 inversion ledger (per the S0 discipline checklist, these two pinned-quirk
 tests get *inverted* together with the consumer migration commits):
@@ -98,9 +100,6 @@ def _reorder_segments(text: str) -> str:
     return out[:closing] + "".join(reversed(blocks)) + out[closing:]
 
 
-@pytest.mark.xfail(
-    strict=True, reason="P0.2 S4: v10 net model / numbering synthesis not implemented"
-)
 def test_net_numbering_synthesis_rule():
     pcb_file = kicad.loads(kicad.pcb.PcbFile, _V10_SYNTHESIS_BOARD)
     pcb = pcb_file.kicad_pcb
@@ -178,11 +177,6 @@ def test_oracle_written_board_is_v10_and_drc_runs(tmp_path: Path):
 
 
 @NEEDS_KICAD_CLI
-@pytest.mark.xfail(
-    strict=True,
-    reason="P0.2 S4/S5: v10 dialect not readable; flips once our v10 output "
-    "survives a KiCad 10 re-save with the semantic view unchanged",
-)
 def test_oracle_kicad_resave_keeps_semantics(tmp_path: Path):
     raw = (V10_PCB_DIR / "test.kicad_pcb").read_text()
     ours = kicad.loads(kicad.pcb.PcbFile, raw)

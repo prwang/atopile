@@ -1,0 +1,1266 @@
+{
+ "arcs": [],
+ "footprints": [
+  {
+   "at": [
+    114.75,
+    63.0,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "Capacitor_SMD:C_0805_2012Metric",
+   "pads": [
+    {
+     "at": [
+      -0.95,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      0.95,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "/GND"
+    }
+   ],
+   "reference": "C2"
+  },
+  {
+   "at": [
+    114.75,
+    72.85,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "Capacitor_SMD:C_0805_2012Metric",
+   "pads": [
+    {
+     "at": [
+      -0.95,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      0.95,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "/GND"
+    }
+   ],
+   "reference": "C3"
+  },
+  {
+   "at": [
+    93.0,
+    70.0,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "Capacitor_SMD:C_0805_2012Metric",
+   "pads": [
+    {
+     "at": [
+      -0.95,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      0.95,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "/GND"
+    }
+   ],
+   "reference": "C4"
+  },
+  {
+   "at": [
+    92.825,
+    76.175,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "Capacitor_SMD:C_1206_3216Metric",
+   "pads": [
+    {
+     "at": [
+      -1.475,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      1.475,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "/GND"
+    }
+   ],
+   "reference": "C5"
+  },
+  {
+   "at": [
+    106.75,
+    65.35,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "Samacsys:SOP65P780X200-14N",
+   "pads": [
+    {
+     "at": [
+      -3.55,
+      -1.95,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      3.55,
+      0.65,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "10",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      3.55,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "11",
+     "net": "/CLK_N"
+    },
+    {
+     "at": [
+      3.55,
+      -0.65,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "12",
+     "net": "/Q1"
+    },
+    {
+     "at": [
+      3.55,
+      -1.3,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "13",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      3.55,
+      -1.95,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "14",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      -3.55,
+      -1.3,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "/DATA"
+    },
+    {
+     "at": [
+      -3.55,
+      -0.65,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "3",
+     "net": "/CLK_N"
+    },
+    {
+     "at": [
+      -3.55,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "4",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      -3.55,
+      0.65,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "5",
+     "net": "/OUT_B"
+    },
+    {
+     "at": [
+      -3.55,
+      1.3,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "6",
+     "net": "unconnected-(IC2-1~{Q}-Pad6)"
+    },
+    {
+     "at": [
+      -3.55,
+      1.95,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "7",
+     "net": "/GND"
+    },
+    {
+     "at": [
+      3.55,
+      1.95,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "8",
+     "net": "unconnected-(IC2-2~{Q}-Pad8)"
+    },
+    {
+     "at": [
+      3.55,
+      1.3,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "9",
+     "net": "/OUT_A"
+    }
+   ],
+   "reference": "IC2"
+  },
+  {
+   "at": [
+    106.75,
+    74.85,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "Samacsys:SOP65P780X200-14N",
+   "pads": [
+    {
+     "at": [
+      -3.55,
+      -1.95,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      3.55,
+      0.65,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "10",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      3.55,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "11",
+     "net": "/GND"
+    },
+    {
+     "at": [
+      3.55,
+      -0.65,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "12",
+     "net": "/GND"
+    },
+    {
+     "at": [
+      3.55,
+      -1.3,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "13",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      3.55,
+      -1.95,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "14",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      -3.55,
+      -1.3,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "/DATA"
+    },
+    {
+     "at": [
+      -3.55,
+      -0.65,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "3",
+     "net": "/CLK"
+    },
+    {
+     "at": [
+      -3.55,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "4",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      -3.55,
+      0.65,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "5",
+     "net": "/Q1"
+    },
+    {
+     "at": [
+      -3.55,
+      1.3,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "6",
+     "net": "unconnected-(IC3-1~{Q}-Pad6)"
+    },
+    {
+     "at": [
+      -3.55,
+      1.95,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "7",
+     "net": "/GND"
+    },
+    {
+     "at": [
+      3.55,
+      1.95,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "8",
+     "net": "unconnected-(IC3-2~{Q}-Pad8)"
+    },
+    {
+     "at": [
+      3.55,
+      1.3,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "9",
+     "net": "unconnected-(IC3-2Q-Pad9)"
+    }
+   ],
+   "reference": "IC3"
+  },
+  {
+   "at": [
+    94.75,
+    64.85,
+    180.0
+   ],
+   "layer": "F.Cu",
+   "name": "Samacsys:SOP65P640X120-16N",
+   "pads": [
+    {
+     "at": [
+      -2.938,
+      -2.275,
+      270.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "/CLK-"
+    },
+    {
+     "at": [
+      2.938,
+      1.625,
+      270.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "10",
+     "net": "/DATA+"
+    },
+    {
+     "at": [
+      2.938,
+      0.975,
+      270.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "11",
+     "net": "/DATA"
+    },
+    {
+     "at": [
+      2.938,
+      0.325,
+      270.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "12",
+     "net": "/GND"
+    },
+    {
+     "at": [
+      2.938,
+      -0.325,
+      270.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "13",
+     "net": "unconnected-(IC4-ROUT4-Pad13)"
+    },
+    {
+     "at": [
+      2.938,
+      -0.975,
+      270.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "14",
+     "net": "unconnected-(IC4-RIN4+-Pad14)"
+    },
+    {
+     "at": [
+      2.938,
+      -1.625,
+      270.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "15",
+     "net": "unconnected-(IC4-RIN4--Pad15)"
+    },
+    {
+     "at": [
+      2.938,
+      -2.275,
+      270.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "16",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      -2.938,
+      -1.625,
+      270.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "/CLK+"
+    },
+    {
+     "at": [
+      -2.938,
+      -0.975,
+      270.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "3",
+     "net": "/CLK"
+    },
+    {
+     "at": [
+      -2.938,
+      -0.325,
+      270.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "4",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      -2.938,
+      0.325,
+      270.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "5",
+     "net": "/CLK_N"
+    },
+    {
+     "at": [
+      -2.938,
+      0.975,
+      270.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "6",
+     "net": "/CLK-"
+    },
+    {
+     "at": [
+      -2.938,
+      1.625,
+      270.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "7",
+     "net": "/CLK+"
+    },
+    {
+     "at": [
+      -2.938,
+      2.275,
+      270.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "8",
+     "net": "/GND"
+    },
+    {
+     "at": [
+      2.938,
+      2.275,
+      270.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "9",
+     "net": "/DATA-"
+    }
+   ],
+   "reference": "IC4"
+  },
+  {
+   "at": [
+    83.75,
+    57.96,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "Connector_PinHeader_2.54mm:PinHeader_1x08_P2.54mm_Vertical",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "/CLK-"
+    },
+    {
+     "at": [
+      0.0,
+      2.54,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "/CLK+"
+    },
+    {
+     "at": [
+      0.0,
+      5.08,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "3",
+     "net": "/GND"
+    },
+    {
+     "at": [
+      0.0,
+      7.62,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "4",
+     "net": "/DATA-"
+    },
+    {
+     "at": [
+      0.0,
+      10.16,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "5",
+     "net": "/DATA+"
+    },
+    {
+     "at": [
+      0.0,
+      12.7,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "6",
+     "net": "/GND"
+    },
+    {
+     "at": [
+      0.0,
+      15.24,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "7",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      0.0,
+      17.78,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "8",
+     "net": "/GND"
+    }
+   ],
+   "reference": "J1"
+  },
+  {
+   "at": [
+    125.75,
+    76.51,
+    180.0
+   ],
+   "layer": "F.Cu",
+   "name": "Connector_PinHeader_2.54mm:PinHeader_1x08_P2.54mm_Vertical",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "/GND"
+    },
+    {
+     "at": [
+      0.0,
+      2.54,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "/VCC"
+    },
+    {
+     "at": [
+      0.0,
+      5.08,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "3",
+     "net": "/Q1"
+    },
+    {
+     "at": [
+      0.0,
+      7.62,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "4",
+     "net": "/OUT_B_R"
+    },
+    {
+     "at": [
+      0.0,
+      10.16,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "5",
+     "net": "/OUT_A_R"
+    },
+    {
+     "at": [
+      0.0,
+      12.7,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "6",
+     "net": "/CLK_N"
+    },
+    {
+     "at": [
+      0.0,
+      15.24,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "7",
+     "net": "/DATA"
+    },
+    {
+     "at": [
+      0.0,
+      17.78,
+      180.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "8",
+     "net": "/CLK"
+    }
+   ],
+   "reference": "J2"
+  },
+  {
+   "at": [
+    114.0,
+    68.0,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "Resistor_SMD:R_0805_2012Metric",
+   "pads": [
+    {
+     "at": [
+      -0.9125,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "/OUT_B"
+    },
+    {
+     "at": [
+      0.9125,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "/OUT_B_R"
+    }
+   ],
+   "reference": "R1"
+  },
+  {
+   "at": [
+    117.5,
+    68.0,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "Resistor_SMD:R_0805_2012Metric",
+   "pads": [
+    {
+     "at": [
+      -0.9125,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "/OUT_A"
+    },
+    {
+     "at": [
+      0.9125,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "/OUT_A_R"
+    }
+   ],
+   "reference": "R2"
+  },
+  {
+   "at": [
+    97.0,
+    59.5,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "Resistor_SMD:R_0805_2012Metric",
+   "pads": [
+    {
+     "at": [
+      -0.9125,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "/CLK+"
+    },
+    {
+     "at": [
+      0.9125,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "/CLK-"
+    }
+   ],
+   "reference": "R3"
+  },
+  {
+   "at": [
+    92.5,
+    59.5,
+    180.0
+   ],
+   "layer": "F.Cu",
+   "name": "Resistor_SMD:R_0805_2012Metric",
+   "pads": [
+    {
+     "at": [
+      -0.9125,
+      0.0,
+      180.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "/DATA+"
+    },
+    {
+     "at": [
+      0.9125,
+      0.0,
+      180.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "/DATA-"
+    }
+   ],
+   "reference": "R4"
+  }
+ ],
+ "groups": [],
+ "nets": [
+  "/CLK",
+  "/CLK+",
+  "/CLK-",
+  "/CLK_N",
+  "/DATA",
+  "/DATA+",
+  "/DATA-",
+  "/GND",
+  "/OUT_A",
+  "/OUT_A_R",
+  "/OUT_B",
+  "/OUT_B_R",
+  "/Q1",
+  "/VCC",
+  "unconnected-(IC2-1~{Q}-Pad6)",
+  "unconnected-(IC2-2~{Q}-Pad8)",
+  "unconnected-(IC3-1~{Q}-Pad6)",
+  "unconnected-(IC3-2Q-Pad9)",
+  "unconnected-(IC3-2~{Q}-Pad8)",
+  "unconnected-(IC4-RIN4+-Pad14)",
+  "unconnected-(IC4-RIN4--Pad15)",
+  "unconnected-(IC4-ROUT4-Pad13)"
+ ],
+ "segments": [],
+ "semantic_view_version": 1,
+ "vias": [],
+ "zones": [
+  {
+   "keepout": null,
+   "layers": [
+    "B.Cu"
+   ],
+   "name": null,
+   "net": "",
+   "placement": null,
+   "polygon": [
+    [
+     0.3,
+     0.3
+    ],
+    [
+     -0.3,
+     0.3
+    ],
+    [
+     -0.3,
+     -0.3
+    ],
+    [
+     0.3,
+     -0.3
+    ]
+   ]
+  }
+ ]
+}

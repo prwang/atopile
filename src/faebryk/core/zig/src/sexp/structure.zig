@@ -43,6 +43,11 @@ pub const SexpField = struct {
     // dual_bool: v9 writes the field as a bare presence symbol when true
     // ("(tenting front back)"); v10 always writes "(name yes|no)".
     dual_bool: bool = false,
+    // net_ref: integer field is a net handle. v9 serializes the number;
+    // v10 has no net numbers at all — reading resolves '(net "name")' via
+    // read_net_names, writing emits the resolved name (clause omitted for
+    // net 0, the implicit no-net).
+    net_ref: bool = false,
 };
 
 // Write dialect for the streamed encoder. Set by the file-level dumps()
@@ -51,6 +56,36 @@ pub const SexpField = struct {
 // callers hold the GIL across a dumps call.
 pub const WriteDialect = enum { v9, v10 };
 pub var write_dialect: WriteDialect = .v9;
+
+// Net-name <-> number context for net_ref fields. Owned and (re)set by the
+// file-level loads()/dumps() (see pcb.zig); same GIL caveat as above.
+//
+// Read: v10 files carry only names at the point of use. The numbering is
+// synthesized before decode with a self-defined, order-independent rule:
+// sorted unique names get 1..n, "" is always 0 (BACKLOG P0.2 M0).
+pub const NetNameTable = struct {
+    // sorted unique names, "" excluded; number = index + 1
+    names: []const []const u8,
+
+    pub fn lookup(self: NetNameTable, name: []const u8) ?i32 {
+        if (name.len == 0) return 0;
+        var lo: usize = 0;
+        var hi: usize = self.names.len;
+        while (lo < hi) {
+            const mid = lo + (hi - lo) / 2;
+            switch (std.mem.order(u8, name, self.names[mid])) {
+                .eq => return @intCast(mid + 1),
+                .lt => hi = mid,
+                .gt => lo = mid + 1,
+            }
+        }
+        return null;
+    }
+};
+pub var read_net_names: ?*const NetNameTable = null;
+
+// Write: number -> name resolution for the v10 dialect.
+pub var write_net_names: ?*const std.AutoHashMap(i32, []const u8) = null;
 
 fn _print_indent(writer: anytype, indent: usize) !void {
     var k: usize = 0;
@@ -326,6 +361,7 @@ fn getSexpMetadata(comptime T: type, comptime field_name: []const u8) SexpField 
             if (@hasField(@TypeOf(meta), "boolean_encoding")) result.boolean_encoding = meta.boolean_encoding;
             if (@hasField(@TypeOf(meta), "v9_only")) result.v9_only = meta.v9_only;
             if (@hasField(@TypeOf(meta), "dual_bool")) result.dual_bool = meta.dual_bool;
+            if (@hasField(@TypeOf(meta), "net_ref")) result.net_ref = meta.net_ref;
             return result;
         }
     }
@@ -798,11 +834,22 @@ fn decodeSlice(comptime T: type, allocator: std.mem.Allocator, sexp: SExp, metad
 }
 
 fn decodeInt(comptime T: type, sexp: SExp, metadata: SexpField) DecodeError!T {
-    _ = metadata; // metadata not used for basic types
-
     const str = switch (sexp.value) {
         .number => |n| n,
         .string => |s| {
+            // v10 net references carry the name instead of a number;
+            // resolve against the synthesized numbering table
+            if (metadata.net_ref) {
+                if (read_net_names) |table| {
+                    if (table.lookup(s)) |number| {
+                        return @intCast(number);
+                    }
+                    setCtx(T, sexp, null, std.fmt.allocPrint(std.heap.page_allocator, "net name \"{s}\" not found by the pre-scan (parser bug?)", .{s}) catch "unknown net name");
+                    return error.InvalidValue;
+                }
+                setCtx(T, sexp, null, "name-only net reference but no net table in scope");
+                return error.UnexpectedType;
+            }
             // More helpful error for common mistake of quoting numbers
             setCtx(T, sexp, null, std.fmt.allocPrint(std.heap.page_allocator, "got string \"{s}\" but expected unquoted number", .{s}) catch "string instead of number");
             return error.UnexpectedType;
@@ -1270,6 +1317,11 @@ fn listWouldWriteAnyItems(value: anytype, metadata: SexpField, name: []const u8)
 
 fn keyValueWouldWrite(value: anytype, metadata: SexpField, name: []const u8) bool {
     if (metadata.v9_only and write_dialect == .v10) return false;
+    if (comptime @typeInfo(@TypeOf(value)) == .int) {
+        // v10 omits the net clause entirely for net 0 (implicit no-net),
+        // e.g. keepout zones carry no (net ...) at all
+        if (metadata.net_ref and write_dialect == .v10 and value == 0) return false;
+    }
     if (valueEncodesAsList(value, metadata, name)) {
         return listWouldWriteAnyItems(value, metadata, name);
     }
@@ -1460,6 +1512,17 @@ fn writeEncodedValueToWriter(
             }
         },
         .int => {
+            if (metadata.net_ref and write_dialect == .v10) {
+                // v10: net references are written by name, never by number
+                if (write_net_names) |map| {
+                    if (map.get(@intCast(value))) |net_name| {
+                        try ast.writeEscapedString(net_name, writer);
+                        return;
+                    }
+                }
+                // a net handle with no table entry cannot be serialized
+                return error.InvalidType;
+            }
             var int_buf: [32]u8 = undefined;
             const int_str = std.fmt.bufPrint(&int_buf, "{d}", .{value}) catch return error.OutOfMemory;
             try writer.writeAll(int_str);

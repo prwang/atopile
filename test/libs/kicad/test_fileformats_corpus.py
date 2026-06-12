@@ -22,8 +22,9 @@ view of every parseable board must match its committed snapshot byte-for-byte.
 Regenerate snapshots with REGEN_SEMANTIC_SNAPSHOTS=1 after an *intentional*
 semantic change — never to silence an unexplained diff.
 
-v10 boards are strict-xfail until the dialect migration (P0.2) lands; the
-moment they parse, these tests start enforcing the same gates there.
+v10 boards parse and round-trip since P0.2 S4 (net model); gates 3 and 4
+stay strict-xfail on them until S5 completes the schema and re-derives the
+v10 byte-fidelity fixtures from our own writer.
 """
 
 import os
@@ -37,33 +38,35 @@ from faebryk.libs.kicad.semantic_view import semantic_view_json
 from faebryk.libs.test import sexp_tree
 from faebryk.libs.test.fileformats import FILEFORMATS_PATH, all_pcb_fixtures
 
-# The zig schema is pinned to the v9 dialect (version 20241229). Bump alongside
-# the P0.2 migration.
-MAX_PARSE_VERSION = 9
-
 # Boards whose bytes were last written by atopile/our fixtures (not KiCad).
 ATOPILE_AUTHORED_STEMS = {"test", "layout_reuse_top"}
 
 # Real-world KiCad-authored v9 boards currently lose data through the schema
 # (pintype/pinfunction/sheetfile/rev/aux_axis_origin, ...). Inventory lives in
-# the test failure output; fixing them is BACKLOG P0.2 M3 scope.
+# the test failure output; fixing them is BACKLOG P0.2 S5 scope.
 KNOWN_V9_DATA_LOSS_STEMS = {"interf_u_unrouted"}
 
 SNAPSHOT_DIR = FILEFORMATS_PATH / "snapshots"
 REGEN = os.environ.get("REGEN_SEMANTIC_SNAPSHOTS") == "1"
 
-V10_XFAIL = pytest.mark.xfail(
+# v10 boards parse since S4 (net model), but the schema does not yet cover
+# every v10 key (covering/plugging/..., units, sheetname, ...) — S5 burns
+# this down field-by-field, then regenerates the v10 byte-fidelity fixtures
+# from our own writer (matching kicad-cli's formatting is a non-goal).
+S5_DATA_LOSS_XFAIL = pytest.mark.xfail(
     strict=True,
-    reason="v10 dialect rejected by the version guard (readable "
-    "UnsupportedKicadVersion) until the P0.2 S4 net-model migration",
+    reason="schema drops v10-only keys (P0.2 S5 scope) — run for the inventory",
+)
+S5_BYTE_FIDELITY_XFAIL = pytest.mark.xfail(
+    strict=True,
+    reason="v10 fixture bytes are kicad-cli-authored; S5 re-derives them from "
+    "our writer once the schema is complete",
 )
 
 
 def _params(extra_marks=lambda version, path: []):
     for version, path in all_pcb_fixtures():
         marks = list(extra_marks(version, path))
-        if version > MAX_PARSE_VERSION:
-            marks.append(V10_XFAIL)
         yield pytest.param(version, path, id=f"v{version}-{path.stem}", marks=marks)
 
 
@@ -89,14 +92,8 @@ def test_dump_load_idempotent(version: int, path: Path):
 @pytest.mark.parametrize(
     ("version", "path"),
     _params(
-        lambda version, path: [
-            pytest.mark.xfail(
-                strict=True,
-                reason="schema drops fields on this KiCad-authored board "
-                "(P0.2 M3 scope) — run the test to see the inventory",
-            )
-        ]
-        if version <= MAX_PARSE_VERSION and path.stem in KNOWN_V9_DATA_LOSS_STEMS
+        lambda version, path: [S5_DATA_LOSS_XFAIL]
+        if version >= 10 or path.stem in KNOWN_V9_DATA_LOSS_STEMS
         else []
     ),
 )
@@ -114,7 +111,9 @@ def test_no_data_loss(version: int, path: Path):
     ("version", "path"),
     [
         p
-        for p in _params()
+        for p in _params(
+            lambda version, path: [S5_BYTE_FIDELITY_XFAIL] if version >= 10 else []
+        )
         if Path(str(p.values[1])).stem in ATOPILE_AUTHORED_STEMS
     ],
 )
@@ -153,9 +152,6 @@ def _paired_stems() -> list[str]:
 
 
 @pytest.mark.parametrize("stem", _paired_stems())
-@pytest.mark.xfail(
-    strict=True, reason="v10 dialect not parseable until P0.2 migration"
-)
 def test_cross_dialect_equivalence(stem: str):
     """The same board expressed in v9 and v10 must have identical semantic
     views (numbers are file-local handles; names are the semantics)."""

@@ -183,18 +183,13 @@ def test_duplicate_net_names_raise(board):
         _view_of_tree(root)
 
 
-# --- v10: synthesized-number contracts (strict-xfail until P0.2 M1) -----------
-
-V10_XFAIL = pytest.mark.xfail(
-    strict=True, reason="v10 dialect not parseable until P0.2 migration"
-)
+# --- v10: synthesized-number contracts (enforced since P0.2 S4) ---------------
 
 
 def _v10_path(stem: str) -> Path:
     return FILEFORMATS_PATH / "v10" / "pcb" / f"{stem}.kicad_pcb"
 
 
-@V10_XFAIL
 @pytest.mark.parametrize("stem", ["test", "lvds_converter_dualclk"])
 def test_v10_section_reordering_is_view_neutral(stem: str):
     """v10 has no net table: numbers are synthesized from references. The view
@@ -209,7 +204,6 @@ def test_v10_section_reordering_is_view_neutral(stem: str):
     assert _view_of_tree(root) == baseline
 
 
-@V10_XFAIL
 @pytest.mark.parametrize("stem", ["test", "lvds_converter_dualclk"])
 def test_v10_synthesized_numbers_deterministic(stem: str):
     """Same v10 file, two processes with different hash seeds → byte-identical

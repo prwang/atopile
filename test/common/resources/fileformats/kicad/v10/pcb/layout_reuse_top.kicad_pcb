@@ -181,7 +181,7 @@
 			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "b0ceba32-808d-4a64-a576-d60f419ea8c0")
+			(uuid "7c4ab5a0-e081-4117-afda-0846230a0d6e")
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -486,7 +486,7 @@
 			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "d82833c5-c01c-4bc3-a815-3502cf1f7023")
+			(uuid "9bff872a-aa35-4f8a-a6ec-0cd498e0c154")
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -791,7 +791,7 @@
 			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "bdf67078-11fe-4fa0-b737-8751ca94896c")
+			(uuid "b9484c1d-27d4-49e9-a0d6-550445986647")
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -1096,7 +1096,7 @@
 			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "34df77dc-c122-4d6a-b01b-033bb6bd5fa5")
+			(uuid "183451b0-15b0-4db5-8473-11c589befc6e")
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -1401,7 +1401,7 @@
 			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "dba7e0ce-7f4e-4f65-9c95-118a58784354")
+			(uuid "44acdfed-56d2-4e15-afc1-3e7dd60a8736")
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -1706,7 +1706,7 @@
 			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "a417312e-8993-4574-97c4-042fb81fd011")
+			(uuid "a54cfeb4-2a06-423e-8b85-11179a8f1ba0")
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2011,7 +2011,7 @@
 			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "64db867c-0ec8-4fd3-bf91-8bedca20d20e")
+			(uuid "2b820874-5de3-4e12-b648-5960840f5045")
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2316,7 +2316,7 @@
 			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "d12bb290-9f9a-435b-ad03-821851996b8d")
+			(uuid "fd2ba89b-44a1-435a-907f-dc0fff3bad32")
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2621,7 +2621,7 @@
 			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
-			(uuid "964aa76c-a611-4f03-91a8-095fb0696b51")
+			(uuid "69041580-aeea-4109-92b1-67afade4192a")
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2885,6 +2885,14 @@
 		)
 	)
 	(segment
+		(start 95 95)
+		(end 100 95)
+		(width 0.2)
+		(layer "F.Cu")
+		(net "unnamed[0]")
+		(uuid "11111111-2222-3333-4444-555555555555")
+	)
+	(segment
 		(start 0 -0.43)
 		(end 0 -5.57)
 		(width 0.2)
@@ -2976,6 +2984,10 @@
 			"ab30f566-8368-4838-9d9d-32bd4642524b" "c014b439-6308-4ebf-b005-a71982f813a8"
 			"ee3db337-1a5c-48f8-88a5-eb2edf530edd"
 		)
+	)
+	(group "manual_human_group"
+		(uuid "99999999-8888-7777-6666-555555555555")
+		(members "11111111-2222-3333-4444-555555555555")
 	)
 	(group "sub_chains[0]"
 		(uuid "b0790473-7562-5f63-6861-696e735b305d")

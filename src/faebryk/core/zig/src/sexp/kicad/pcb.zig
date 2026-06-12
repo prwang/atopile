@@ -595,24 +595,28 @@ pub const Pad = struct {
     };
 };
 
-// Net structure
+// Net structure. Numbers are process-internal handles: v9 files carry
+// (net <number> "<name>"), v10 files carry (net "<name>") only — reading a
+// v10 file synthesizes the numbering (see PcbFile.loads), writing the v10
+// dialect emits the resolved name and never the number.
 pub const Net = struct {
     number: i32,
     name: ?str = null,
 
     pub const fields_meta = .{
-        .number = structure.SexpField{ .positional = true },
-        .name = structure.SexpField{ .positional = true },
+        .number = structure.SexpField{ .positional = true, .net_ref = true },
+        .name = structure.SexpField{ .positional = true, .v9_only = true },
     };
 };
 
-// Property structure
+// Property structure. at/layer are optional: KiCad 10 writes bare metadata
+// properties like (property ki_fp_filters "C_*") without placement.
 pub const Property = struct {
     name: str,
     value: str,
-    at: Xyr,
+    at: ?Xyr = null,
     unlocked: ?bool = null,
-    layer: str,
+    layer: ?str = null,
     hide: ?bool = null,
     uuid: ?str = null,
     effects: ?Effects = null,
@@ -708,7 +712,7 @@ pub const Via = struct {
     size: f64,
     drill: f64,
     layers: list(str) = .{},
-    net: i32,
+    net: i32 = 0,
     remove_unused_layers: ?bool = null,
     keep_end_layers: ?bool = null,
     zone_layer_connections: list(str) = .{},
@@ -718,6 +722,10 @@ pub const Via = struct {
     free: ?bool = null,
     locked: ?bool = null,
     uuid: ?str = null,
+
+    pub const fields_meta = .{
+        .net = structure.SexpField{ .net_ref = true },
+    };
 };
 
 // Zone structures
@@ -797,8 +805,8 @@ pub const ZoneAttr = struct {
 };
 
 pub const Zone = struct {
-    net: i32,
-    net_name: str,
+    net: i32 = 0,
+    net_name: ?str = null,
     layer: ?str = null,
     layers: list(str) = .{},
     uuid: ?str = null,
@@ -816,6 +824,8 @@ pub const Zone = struct {
     filled_polygon: list(FilledPolygon) = .{},
 
     pub const fields_meta = .{
+        .net = structure.SexpField{ .net_ref = true },
+        .net_name = structure.SexpField{ .v9_only = true },
         .filled_polygon = structure.SexpField{ .multidict = true },
     };
 };
@@ -826,13 +836,14 @@ pub const Segment = struct {
     end: Xy,
     width: f64,
     layer: ?str = null,
-    net: i32,
+    net: i32 = 0,
     uuid: ?str = null,
 
     pub const fields_meta = .{
         .start = structure.SexpField{ .order = -3 },
         .end = structure.SexpField{ .order = -2 },
         .width = structure.SexpField{ .order = -1 },
+        .net = structure.SexpField{ .net_ref = true },
     };
 };
 
@@ -842,8 +853,12 @@ pub const ArcSegment = struct {
     end: Xy,
     width: f64,
     layer: ?str = null,
-    net: i32,
+    net: i32 = 0,
     uuid: ?str = null,
+
+    pub const fields_meta = .{
+        .net = structure.SexpField{ .net_ref = true },
+    };
 };
 
 // Board setup structures
@@ -1052,7 +1067,8 @@ pub const KicadPcb = struct {
 
     pub const fields_meta = .{
         // Note: layers is NOT multidict - it's a single (layers ...) entry containing multiple Layer items
-        .nets = structure.SexpField{ .multidict = true, .sexp_name = "net" },
+        // nets: the v10 dialect has no top-level net table at all
+        .nets = structure.SexpField{ .multidict = true, .sexp_name = "net", .v9_only = true },
         .footprints = structure.SexpField{ .multidict = true, .sexp_name = "footprint" },
         .vias = structure.SexpField{ .multidict = true, .sexp_name = "via" },
         .zones = structure.SexpField{ .multidict = true, .sexp_name = "zone" },
@@ -1290,6 +1306,35 @@ pub const Target = struct {
     uuid: ?str = null,
 };
 
+// Cheap text sniff of (version N) so the v10 pre-scan only runs when needed.
+fn sniffVersion(content: []const u8) i32 {
+    const window = content[0..@min(content.len, 2048)];
+    const idx = std.mem.indexOf(u8, window, "(version") orelse return 0;
+    var i = idx + "(version".len;
+    while (i < window.len and window[i] == ' ') i += 1;
+    var end = i;
+    while (end < window.len and window[end] >= '0' and window[end] <= '9') end += 1;
+    if (end == i) return 0;
+    return std.fmt.parseInt(i32, window[i..end], 10) catch 0;
+}
+
+fn collectNetNames(sexp: structure.SExp, out: *std.array_list.Managed([]const u8)) !void {
+    const ast = @import("../ast.zig");
+    const items = ast.getList(sexp) orelse return;
+    // a v10 net reference is exactly (net "<name>"); the v9 table entry
+    // (net <number> "<name>") has 3 items and the number is not a string
+    if (items.len == 2) {
+        if (ast.getSymbol(items[0])) |sym| {
+            if (std.mem.eql(u8, sym, "net") and items[1].value == .string) {
+                try out.append(items[1].value.string);
+            }
+        }
+    }
+    for (items) |item| {
+        try collectNetNames(item, out);
+    }
+}
+
 // File structure
 pub const PcbFile = struct {
     kicad_pcb: KicadPcb,
@@ -1297,10 +1342,83 @@ pub const PcbFile = struct {
     const root_symbol = "kicad_pcb";
 
     pub fn loads(allocator: std.mem.Allocator, in: structure.input) !PcbFile {
-        const pcb = try structure.loads(KicadPcb, allocator, in, root_symbol);
-        return PcbFile{
-            .kicad_pcb = pcb,
-        };
+        switch (in) {
+            .string => |content| return loadsFromContent(allocator, content),
+            .path => |p| {
+                const content = try std.fs.cwd().readFileAlloc(allocator, p, 200 * 1024 * 1024);
+                defer allocator.free(content);
+                return loadsFromContent(allocator, content);
+            },
+            // pre-parsed input: no raw text to pre-scan, so name-only (v10)
+            // net references cannot be resolved on this path
+            .sexp => {
+                const pcb = try structure.loads(KicadPcb, allocator, in, root_symbol);
+                return PcbFile{ .kicad_pcb = pcb };
+            },
+        }
+    }
+
+    fn loadsFromContent(allocator: std.mem.Allocator, content: []const u8) !PcbFile {
+        // v9 and older: no name-only references, decode as-is
+        if (sniffVersion(content) < KICAD_PCB_V10_MIN_VERSION) {
+            const pcb = try structure.loads(KicadPcb, allocator, .{ .string = content }, root_symbol);
+            return PcbFile{ .kicad_pcb = pcb };
+        }
+
+        const ast = @import("../ast.zig");
+        const tokenizer = @import("../tokenizer.zig");
+
+        // pre-scan: collect every referenced net name (pads, tracks, vias,
+        // zones) and synthesize the numbering — sorted unique names get
+        // 1..n, "" is always 0. The rule is reference-order independent and
+        // process-deterministic by construction (BACKLOG P0.2 M0).
+        var scan_arena = std.heap.ArenaAllocator.init(allocator);
+        defer scan_arena.deinit();
+        const scan_alloc = scan_arena.allocator();
+
+        const tokens = try tokenizer.tokenize(scan_alloc, content);
+        const root = try ast.parseBorrowedFast(scan_alloc, content, tokens);
+
+        var found = std.array_list.Managed([]const u8).init(scan_alloc);
+        try collectNetNames(root, &found);
+
+        std.mem.sort([]const u8, found.items, {}, struct {
+            fn lessThan(_: void, a: []const u8, b: []const u8) bool {
+                return std.mem.order(u8, a, b) == .lt;
+            }
+        }.lessThan);
+
+        var names = std.array_list.Managed([]const u8).init(scan_alloc);
+        for (found.items) |name| {
+            if (name.len == 0) continue; // "" is the implicit net 0
+            if (names.items.len > 0 and std.mem.eql(u8, names.items[names.items.len - 1], name)) continue;
+            try names.append(name);
+        }
+
+        var table = structure.NetNameTable{ .names = names.items };
+        structure.read_net_names = &table;
+        defer structure.read_net_names = null;
+
+        var pcb = try structure.loads(KicadPcb, allocator, .{ .string = content }, root_symbol);
+
+        // synthesize the in-memory net table the rest of the toolchain
+        // expects (v10 files have none)
+        if (pcb.nets.first == null and names.items.len > 0) {
+            const NodeType = @TypeOf(pcb.nets).Node;
+            const zero = try allocator.create(NodeType);
+            zero.* = NodeType{ .data = Net{ .number = 0, .name = try allocator.dupe(u8, "") } };
+            pcb.nets.append(zero);
+            for (names.items, 1..) |name, number| {
+                const node = try allocator.create(NodeType);
+                node.* = NodeType{ .data = Net{
+                    .number = @intCast(number),
+                    .name = try allocator.dupe(u8, name),
+                } };
+                pcb.nets.append(node);
+            }
+        }
+
+        return PcbFile{ .kicad_pcb = pcb };
     }
 
     pub fn dumps(self: PcbFile, allocator: std.mem.Allocator, out: structure.output) !void {
@@ -1308,6 +1426,18 @@ pub const PcbFile = struct {
         // P0.2 flag day bumps KICAD_PCB_VERSION; v10 for re-written v10 files)
         structure.write_dialect = if (self.kicad_pcb.version >= KICAD_PCB_V10_MIN_VERSION) .v10 else .v9;
         defer structure.write_dialect = .v9;
+
+        var net_names = std.AutoHashMap(i32, []const u8).init(allocator);
+        defer net_names.deinit();
+        if (structure.write_dialect == .v10) {
+            var it = self.kicad_pcb.nets.first;
+            while (it) |node| : (it = node.next) {
+                try net_names.put(node.data.number, node.data.name orelse "");
+            }
+            structure.write_net_names = &net_names;
+        }
+        defer structure.write_net_names = null;
+
         try structure.dumps(self.kicad_pcb, allocator, root_symbol, out);
     }
 

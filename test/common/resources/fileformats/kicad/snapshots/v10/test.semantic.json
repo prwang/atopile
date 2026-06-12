@@ -1,0 +1,211 @@
+{
+ "arcs": [],
+ "footprints": [
+  {
+   "at": [
+    76.5,
+    72.0,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "lcsc:BAT-TH_BS-02-A1AJ010",
+   "pads": [
+    {
+     "at": [
+      -10.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "B1-1-R1-2"
+    },
+    {
+     "at": [
+      10.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": "B1-2-D1-2"
+    }
+   ],
+   "reference": "B1"
+  },
+  {
+   "at": [
+    64.752146,
+    85.022146,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "lcsc:LED0603-RD-YELLOW",
+   "pads": [
+    {
+     "at": [
+      -0.8,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "D1-1-R1-1"
+    },
+    {
+     "at": [
+      0.8,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "B1-2-D1-2"
+    }
+   ],
+   "reference": "D1"
+  },
+  {
+   "at": [
+    32.25,
+    46.75,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "logos:faebryk_logo",
+   "pads": [],
+   "reference": "G***"
+  },
+  {
+   "at": [
+    68.232146,
+    84.772146,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "lcsc:R0402",
+   "pads": [
+    {
+     "at": [
+      -0.43,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "1",
+     "net": "D1-1-R1-1"
+    },
+    {
+     "at": [
+      0.43,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "2",
+     "net": "B1-1-R1-2"
+    }
+   ],
+   "reference": "R1"
+  }
+ ],
+ "groups": [],
+ "nets": [
+  "B1-1-R1-2",
+  "B1-2-D1-2",
+  "D1-1-R1-1",
+  "GND"
+ ],
+ "segments": [],
+ "semantic_view_version": 1,
+ "vias": [],
+ "zones": [
+  {
+   "keepout": {
+    "copperpour": "not_allowed",
+    "footprints": "not_allowed",
+    "pads": "not_allowed",
+    "tracks": "not_allowed",
+    "vias": "not_allowed"
+   },
+   "layers": [
+    "F.Cu"
+   ],
+   "name": "keepout_test",
+   "net": "",
+   "placement": {
+    "enabled": false,
+    "source": null,
+    "source_type": null
+   },
+   "polygon": [
+    [
+     23.0,
+     28.0
+    ],
+    [
+     30.0,
+     28.0
+    ],
+    [
+     30.0,
+     35.0
+    ],
+    [
+     23.0,
+     35.0
+    ]
+   ]
+  },
+  {
+   "keepout": null,
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "name": "layer_fill_GND",
+   "net": "GND",
+   "placement": null,
+   "polygon": [
+    [
+     40.0,
+     5.0
+    ],
+    [
+     20.0,
+     5.0
+    ],
+    [
+     20.0,
+     76.0
+    ],
+    [
+     40.0,
+     76.0
+    ]
+   ]
+  }
+ ]
+}
