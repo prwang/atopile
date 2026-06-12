@@ -34,7 +34,23 @@ pub const SexpField = struct {
     order: i32 = 0,
     symbol: ?bool = null, // If true, encode strings as symbols (no quotes)
     boolean_encoding: BooleanEncoding = .symbol,
+    // Dialect-aware flags (KiCad v9 vs v10 file formats). They only affect
+    // the streamed writer used by dumps(); reading always accepts both
+    // shapes. See `write_dialect` below.
+    // v9_only: field is not written at all in the v10 dialect
+    // (e.g. the top-level net table, zone net_name).
+    v9_only: bool = false,
+    // dual_bool: v9 writes the field as a bare presence symbol when true
+    // ("(tenting front back)"); v10 always writes "(name yes|no)".
+    dual_bool: bool = false,
 };
+
+// Write dialect for the streamed encoder. Set by the file-level dumps()
+// (e.g. PcbFile.dumps derives it from kicad_pcb.version) and reset after.
+// Non-threadlocal for the same Python-3.14 reason as current_error_context;
+// callers hold the GIL across a dumps call.
+pub const WriteDialect = enum { v9, v10 };
+pub var write_dialect: WriteDialect = .v9;
 
 fn _print_indent(writer: anytype, indent: usize) !void {
     var k: usize = 0;
@@ -308,6 +324,8 @@ fn getSexpMetadata(comptime T: type, comptime field_name: []const u8) SexpField 
             if (@hasField(@TypeOf(meta), "order")) result.order = meta.order;
             if (@hasField(@TypeOf(meta), "symbol")) result.symbol = meta.symbol;
             if (@hasField(@TypeOf(meta), "boolean_encoding")) result.boolean_encoding = meta.boolean_encoding;
+            if (@hasField(@TypeOf(meta), "v9_only")) result.v9_only = meta.v9_only;
+            if (@hasField(@TypeOf(meta), "dual_bool")) result.dual_bool = meta.dual_bool;
             return result;
         }
     }
@@ -909,7 +927,10 @@ fn decodeEnum(comptime T: type, sexp: SExp, metadata: SexpField) DecodeError!T {
     }
 }
 
-// Main encode function with metadata
+// Main encode function with metadata.
+// NOTE: the dialect-aware SexpField flags (v9_only/dual_bool/net_ref) are
+// honored only by the streamed writer used by dumps(output.string/.path);
+// this SExp-tree path (output.sexp) always produces the v9 shapes.
 pub fn encode(allocator: std.mem.Allocator, value: anytype, metadata: SexpField, name: []const u8) EncodeError!SExp {
     const T = @TypeOf(value);
     const type_info = @typeInfo(T);
@@ -1248,6 +1269,7 @@ fn listWouldWriteAnyItems(value: anytype, metadata: SexpField, name: []const u8)
 }
 
 fn keyValueWouldWrite(value: anytype, metadata: SexpField, name: []const u8) bool {
+    if (metadata.v9_only and write_dialect == .v10) return false;
     if (valueEncodesAsList(value, metadata, name)) {
         return listWouldWriteAnyItems(value, metadata, name);
     }
@@ -1264,20 +1286,29 @@ fn structBodyWouldWriteAnyItems(value: anytype) bool {
         const fm = comptime getSexpMetadata(T, f.name);
         const fv = @field(value, f.name);
 
+        const skip_v9_only = (comptime fm.v9_only) and write_dialect == .v10;
+
+        if (comptime fm.dual_bool) {
+            if (@TypeOf(fv) == bool) {
+                if (!skip_v9_only and (write_dialect == .v10 or fv)) return true;
+                continue;
+            }
+        }
+
         if (fm.positional) {
             if (comptime isOptional(f.type)) {
-                if (fv != null) return true;
+                if (fv != null and !skip_v9_only) return true;
             } else if (!((comptime isSlice(f.type, false)) and fv.len == 0)) {
-                return true;
+                if (!skip_v9_only) return true;
             }
             continue;
         }
 
         if (fm.multidict) {
             if (comptime isSlice(@TypeOf(fv), false)) {
-                if (fv.len > 0) return true;
+                if (fv.len > 0 and !skip_v9_only) return true;
             } else if (comptime isLinkedList(@TypeOf(fv))) {
-                if (fv.first != null) return true;
+                if (fv.first != null and !skip_v9_only) return true;
             }
             continue;
         }
@@ -1290,7 +1321,7 @@ fn structBodyWouldWriteAnyItems(value: anytype) bool {
         }
 
         if (comptime @TypeOf(fv) == bool and fm.boolean_encoding == .parantheses_symbol) {
-            if (fv) return true;
+            if (fv and !skip_v9_only) return true;
             continue;
         }
 
@@ -1491,16 +1522,19 @@ fn writeStructBodyStreamed(allocator: std.mem.Allocator, writer: anytype, value:
         if (!fm.positional) continue;
         const fv = @field(value, f.name);
 
-        if (comptime isOptional(f.type)) {
-            if (fv) |vv| {
+        const skip_v9_only = (comptime fm.v9_only) and write_dialect == .v10;
+        if (!skip_v9_only) {
+            if (comptime isOptional(f.type)) {
+                if (fv) |vv| {
+                    if (wrote_any or emit_leading_space) try writer.writeByte(' ');
+                    try writeEncodedValueToWriter(allocator, writer, vv, fm, f.name);
+                    wrote_any = true;
+                }
+            } else if (!((comptime isSlice(f.type, false)) and fv.len == 0)) {
                 if (wrote_any or emit_leading_space) try writer.writeByte(' ');
-                try writeEncodedValueToWriter(allocator, writer, vv, fm, f.name);
+                try writeEncodedValueToWriter(allocator, writer, fv, fm, f.name);
                 wrote_any = true;
             }
-        } else if (!((comptime isSlice(f.type, false)) and fv.len == 0)) {
-            if (wrote_any or emit_leading_space) try writer.writeByte(' ');
-            try writeEncodedValueToWriter(allocator, writer, fv, fm, f.name);
-            wrote_any = true;
         }
     }
 
@@ -1510,6 +1544,40 @@ fn writeStructBodyStreamed(allocator: std.mem.Allocator, writer: anytype, value:
         if (fm.positional) continue;
         const fname = fm.sexp_name orelse f.name;
         const fv = @field(value, f.name);
+
+        // NOTE: v9_only suppression for the v10 dialect happens inside
+        // keyValueWouldWrite (every non-positional write funnels through
+        // writeEncodedKeyValueToWriter); the unused combination
+        // v9_only + parantheses_symbol bool is not supported.
+
+        if (comptime fm.dual_bool) {
+            if (@TypeOf(fv) == bool) {
+                if (write_dialect == .v9) {
+                    // bare presence symbol, e.g. "(tenting front back)"
+                    if (fv) {
+                        if (wrote_any or emit_leading_space) try writer.writeByte(' ');
+                        try writer.writeAll(fname);
+                        wrote_any = true;
+                    }
+                } else {
+                    // v10 nested form, e.g. "(tenting (front yes) (back yes))";
+                    // fm is passed through so v9_only fields (pad "none")
+                    // stay suppressed via keyValueWouldWrite
+                    if (try writeEncodedKeyValueToWriter(
+                        allocator,
+                        writer,
+                        fname,
+                        fv,
+                        fm,
+                        f.name,
+                        wrote_any or emit_leading_space,
+                    )) {
+                        wrote_any = true;
+                    }
+                }
+                continue;
+            }
+        }
 
         if (fm.multidict) {
             if (comptime isSlice(@TypeOf(fv), false)) {

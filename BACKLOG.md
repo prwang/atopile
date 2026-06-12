@@ -222,11 +222,15 @@ examples/fixtures/probe 工程的 `.kicad_pcb` 一次性升级提交。迁移完
   指引 + 文件名）。自带 `test/libs/kicad/test_version_guard.py`（7 用例，
   含"v10 语料必须报守卫错而非裸解析错"的口径测试）；corpus v10 xfail reason
   已改指守卫。
-- [ ] **S3. M2：tenting 族嵌套化**（断裂点②）：via/pad padstack 的 tenting 等字段
-  读双形状（v9 裸 token / v10 嵌套）、写 v10 形状。
-  *本步转绿*：无 corpus 开关（v10 parse 仍卡在 net）→ *同 commit 自带*：
-  内联 sexp 单测覆盖两种形状的读写 + v9 corpus 字节保真不回归（写出形状变化
-  只影响 v10 写路径）。*保持绿*：全量。
+- [x] **S3. M2：tenting 族嵌套化**【✅ 2026-06-12】：统一 `Tenting{front,back,none}`
+  模型（setup/pad/via 三处共用，替代 E_tenting/PadTenting/ViaTenting）；读侧
+  双形状免改（裸 token 走 bare-symbol-bool 路径、嵌套走 kv 路径）；写侧新增
+  `SexpField.dual_bool`/`.v9_only` 标记 + `structure.write_dialect` 全局
+  （`PcbFile.dumps` 按 `version >= 20250000` 选方言，defer 复位）——v9 写裸
+  token、v10 写 `(front yes)(back no)` 嵌套、pad 级 "none" 不进 v10。
+  自带 `test/libs/kicad/test_tenting_dialect.py`（10 用例）；v9 corpus 字节
+  保真不回归实测通过。S4 复用同一套方言基建（v9_only 即 net 表/net_name 的
+  抑制机制）。
 - [ ] **S4. M0+M1：net 模型重构**（断裂点①，最大一步；M0 决策按上文推荐已定：
   双字段 `NetRef{number: ?int, name: str}`，编号 = 进程内句柄；v10 读侧无表
   （事实 2①），`pcb.nets` 由引用扫描合成，规则 = 按名排序、"" 恒 0；

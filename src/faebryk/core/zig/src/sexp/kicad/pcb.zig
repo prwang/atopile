@@ -11,6 +11,9 @@ fn list(comptime T: type) type {
 // Constants
 pub const KICAD_PCB_VERSION: i32 = 20241229;
 pub const KICAD_FP_VERSION: i32 = 20241229; // Footprint version - same as PCB version
+// Boards at/after this format version are written in the v10 dialect
+// (nested tenting family, name-only net references, no net table).
+pub const KICAD_PCB_V10_MIN_VERSION: i32 = 20250000;
 
 // Basic geometry types
 pub const Xy = struct {
@@ -232,11 +235,22 @@ pub const E_pad_drill_shape = enum {
     };
 };
 
-// Pad tenting enum
-pub const E_pad_tenting = enum {
-    front,
-    back,
-    none,
+// Tenting (and friends) for setup/pad/via. Two serialized shapes:
+//   v9:  (tenting front back)            — bare presence symbols
+//   v10: (tenting (front yes) (back yes)) — nested key-values
+// Reading accepts both; writing follows structure.write_dialect (dual_bool).
+// "none" is the v9 pad-level explicit opt-out token and is never written in
+// the v10 dialect (v9_only).
+pub const Tenting = struct {
+    front: bool = false,
+    back: bool = false,
+    none: bool = false,
+
+    pub const fields_meta = .{
+        .front = structure.SexpField{ .dual_bool = true },
+        .back = structure.SexpField{ .dual_bool = true },
+        .none = structure.SexpField{ .dual_bool = true, .v9_only = true },
+    };
 };
 
 // Zone connection enum
@@ -547,14 +561,6 @@ pub const PadOptions = struct {
     anchor: ?E_pad_anchor = null,
 };
 
-pub const PadTenting = struct {
-    type: E_pad_tenting,
-
-    pub const fields_meta = .{
-        .type = structure.SexpField{ .positional = true },
-    };
-};
-
 pub const Pad = struct {
     name: str,
     type: E_pad_type,
@@ -577,7 +583,7 @@ pub const Pad = struct {
     chamfer: ?E_pad_chamfer = null,
     properties: ?E_pad_property = null,
     options: ?PadOptions = null,
-    tenting: ?PadTenting = null,
+    tenting: ?Tenting = null,
     uuid: ?str = null,
     primitives: ?PadPrimitives = null,
 
@@ -697,11 +703,6 @@ pub const ViaPadstack = struct {
     };
 };
 
-pub const ViaTenting = struct {
-    front: bool = false,
-    back: bool = false,
-};
-
 pub const Via = struct {
     at: Xy,
     size: f64,
@@ -713,7 +714,7 @@ pub const Via = struct {
     zone_layer_connections: list(str) = .{},
     padstack: ?ViaPadstack = null,
     teardrops: ?Teardrop = null,
-    tenting: ?ViaTenting = null,
+    tenting: ?Tenting = null,
     free: ?bool = null,
     locked: ?bool = null,
     uuid: ?str = null,
@@ -1007,15 +1008,11 @@ pub const PcbPlotParams = struct {
         .plot_on_all_layers_selection = structure.SexpField{ .symbol = true },
     };
 };
-pub const E_tenting = enum {
-    front,
-    back,
-};
 pub const Setup = struct {
     stackup: ?Stackup = null,
     pad_to_mask_clearance: i32 = 0,
     allow_soldermask_bridges_in_footprints: bool = false,
-    tenting: list(E_tenting) = .{},
+    tenting: ?Tenting = null,
     pcbplotparams: PcbPlotParams = .{},
     rules: ?Rules = null,
 };
@@ -1307,6 +1304,10 @@ pub const PcbFile = struct {
     }
 
     pub fn dumps(self: PcbFile, allocator: std.mem.Allocator, out: structure.output) !void {
+        // the board's own version selects the write dialect (v9 until the
+        // P0.2 flag day bumps KICAD_PCB_VERSION; v10 for re-written v10 files)
+        structure.write_dialect = if (self.kicad_pcb.version >= KICAD_PCB_V10_MIN_VERSION) .v10 else .v9;
+        defer structure.write_dialect = .v9;
         try structure.dumps(self.kicad_pcb, allocator, root_symbol, out);
     }
 
