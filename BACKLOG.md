@@ -204,7 +204,9 @@ examples/fixtures/probe 工程的 `.kicad_pcb` 一次性升级提交。迁移完
    S4 翻 19（parse×4 + 幂等×4 + 快照×4 + 跨方言×3 + T4 契约×4），
    S5 翻 7（no-data-loss×5 + 字节保真 v10×2），S6 反转 2 个钉死怪癖，S7 翻 oracle。
 
-- [ ] **S0. 验收测试先行**（写任何迁移代码之前，把原 M7 的"最后验收"前置为开关）：
+- [x] **S0. 验收测试先行**【✅ 2026-06-12，`test/libs/kicad/test_v10_acceptance.py`，
+  3 个 strict-xfail：合成规则契约（S4 翻）、DRC oracle（S7 翻）、KiCad 重存语义
+  回环（S4/S5 翻）；S6 反转清单写进模块 docstring】：
   - kicad-cli oracle 测试（strict-xfail + skipif 无 kicad-cli）：我们写出的 v10 产物
     `kicad-cli pcb drc` 跑通；KiCad 10 重存（upgrade --force 幂等）→ 我们回读语义
     视图不变——"KiCad 认不认"从第一天起就是看得见的红灯而不是最后的惊喜；
