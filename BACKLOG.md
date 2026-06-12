@@ -8,117 +8,240 @@ PCB 布局布线工作流：`.ato` 描述电路（电路事实来源），`layou
 布局/布线工具输出机器可读的结构化诊断（JSON），使自动化的 **PCB Layout SKILL** 能以
 "修改文本 → 重新生成 → 读取诊断 → 再修改"的方式快速迭代。
 
-本清单由前期方案预估经代码级调研修正后得出。调研证据、运行时验证记录与数据格式草案见
-`/kicad_wksp/KicadDecisions.md`（自包含，含文件:行号级引用）。
+调研证据、运行时验证记录、数据格式草案与对前期预估的修正过程见
+`/kicad_wksp/KicadDecisions.md`（自包含，含文件:行号级引用）。本清单只保留**当前有效的
+事实**与**未完成的任务**；已完成项压缩为结论+指针。
 
-**总体决策**：不 fork KiCad 10（所需对象已验证可外部生成并完整往返）；
-fork 本仓库（atopile）与 KiCadRoutingTools。KiCadRoutingTools 侧任务单列在 §E
-（同一计划，不同仓库）。
+## 已定决策
 
-**已定决策**：fork 基线 = 本仓库 HEAD（最近提交为 2026 年 3 月 bugfix，稳定）；
-Python 3.14 开发环境用 miniconda 安装。
+- 不 fork KiCad 10（所需对象已实测可外部生成并完整往返）。
+- fork 基线 = 本仓库 HEAD（最近提交 2026-03 bugfix，稳定）；同时 fork KiCadRoutingTools（§E）。
+- Python 3.14 开发环境用 miniconda 安装。
+- room 来源固定 = KiCad named group（sheet 路线不存在，component class 后置）。
+- **（2026-06-12）v10 方言全面迁移提级为 P0.1/P0.2，高于原 P1**：长痛不如短痛——
+  不做"读 v10 写 v9"的长期 shim，目标写方言 = v10；先补测试底座（P0.1），再动模型（P0.2）。
+  P0.2 完成前维持"v9 方言 + KiCad 10 只读不存"纪律。
 
-## 对前期预估的修正摘要
+## 优先级总览
 
-| 前期预估 | 修正 | 依据（详见 KicadDecisions.md） |
+| 阶段 | 内容 | 状态 |
 |---|---|---|
-| 首选 "ato module → KiCad hierarchical sheet" 映射 | **删除该方案**。atopile 不生成 .kicad_sch 原理图，sheet 路线不存在；多通道布局的来源固定走 **named groups** | 实测构建产物只有 .kicad_pcb |
-| 需要从零实现 group 生成器 | **降级为增强现有机制**。atopile 已写 groups（名称=模块地址；UUID 仅**后缀**由名字派生，前缀是 uuid4 随机数（`fileformats.py:150-165`），稳定性靠从已有 .kicad_pcb 回读，非完全确定性派生） | 代码级复核修正了此前"确定性派生"的误判 |
-| "待验证：布线器是否有结构化结果 API" | **已证实存在**（`return_results=True`，`route.py:212-213`），且标准输出另有 `JSON_SUMMARY` 结构化行（含逐 pad 失败坐标）。诊断层从"新建结果 API"降级为"聚合+地址映射" | 实测运行 `route.py` |
-| 直接在 .kicad_pcb 写自定义字段存元数据 | **禁止**。KiCad 解析器对未知 token 直接报解析错误（`pcb_io_kicad_sexpr_parser.cpp:1388`）。元数据只能走 footprint `(property ...)`（已实测可完整往返）或独立 sidecar 文件 | KiCad 源码 + 往返实测 |
-| 可能依赖 KiCad 的 Repeat Layout（多通道布局复制） | **不依赖**。该功能只有 GUI 入口，无 CLI/IPC。room 复制自行实现（ReplicateLayout 插件的锚点变换算法可移植，`replicate_layout.py:47-66`） | KiCad 源码 `multichannel_tool.cpp` |
-| room 来源可选 sheet/class/group | **首选 group**。component class 的类定义存于工程文件（.kicad_pro），板内只有按 footprint 的赋值；sheet 不存在 | KiCad 源码 |
-| （未预估） | **新增三项约束**：group 成员排序不稳定（破坏字节级确定性）；net-0 悬空铜会被 KiCad 重存清理（引导几何必须放 User 图层）；DRC JSON 无结构化 net 字段（需 uuid 反查层） | 实测发现 |
-| 谨慎使用旧版 SWIG Python 绑定 | **完全禁用**。KiCad 10 已移除板级操纵 API | KiCad 源码 |
+| P0 | 确定性与基础修复（§A） | ✅ 完成 |
+| **P0.1** | **v10 迁移测试底座（§P0.1，原 §G 前半）** | ✅ 完成（88 通过 + 26 strict-xfail 待 P0.2 转绿） |
+| **P0.2** | **v10 方言迁移本体（§P0.2）** | ⬜ 下一步 |
+| P1 | layout_ir 导出（§B）、layout.yaml + rule area（§C）、布线执行器（§E1/E2/E5） | ⬜ |
+| P2 | 诊断闭环（§D）、硬引导点/room 复制（§E3/E4） | ⬜ |
 
 ---
 
-## A. P0 — 确定性与基础修复（第一阶段前置，本仓库）
+## 关键事实与约束（fact 先行——改代码前必读；全部实测，证据见 KicadDecisions.md）
 
-- [x] **A1. group 成员排序**（2026-06-12 代码级复核 + probe 复现后修订；**已修复并验证**：
-  `layout_sync.py:pull_group_layout` 末尾全量排序去重；变异验证确认回归测试可捕获）
+### 文件方言与解析器
 
-  **成因（已复现）**：原计划写"sync_groups 序列化前排序"——该排序在 HEAD **已存在**
-  （`layout_sync.py:149`，`sorted(current_members)`，commit eae6548a 引入）。真实漂移源是
-  `pull_group_layout`（`layout_sync.py:478-480`）：`new_group_uuids` 是 str UUID 的
-  **set 差集**，随后按 set 迭代序逐个 `append` 到已排序的 members 末尾；Python 字符串哈希
-  按进程随机（PYTHONHASHSEED），故追加顺序每次构建不同。
+1. **`kicad-cli pcb upgrade` / KiCad 10 重存是单向门**：重存后文件为 v10 方言
+   （`(version 20260206)`），atopile 的 Zig schema（钉在 20241229）无法解析。
+   P0.2 完成前：atopile 管理中的板子**禁跑 upgrade、禁在 KiCad 10 GUI 中保存**
+   （KiCad 10 直接读 v9，无须升级；placement rule area/groups/User 层都能在 v9 表达，
+   实测 KiCad 10 读取且保留）。
+2. **v9→v10 断裂点实测完整清单**（逐错误迭代修补至整文件可解析，2026-06-12）——
+   这是 P0.2 的需求清单：
+   - ① **net 模型彻底重构（比"去编号"更彻底，2026-06-12 语料生成时实测修正）**：
+     v10 文件**没有顶层 net 表**——net 只存在于引用处（pad/segment/via/zone 一律
+     `(net "名")`），编号和表都从文件中消失；zone 的冗余 `net_name` 字段没了；
+     无网络的 zone（keepout）直接省略 net 子句。推论：读侧合成编号没有"表序"可依，
+     顺序契约必须自定义（M0 决策；T4 已钉死两条底线：引用序无关性 + 跨进程确定性）；
+     in-memory 的 `pcb.nets` 列表在 v10 读入时只能由引用扫描合成。
+   - ② **盘面处理字段嵌套化**（tenting 族）：`(tenting front back)` →
+     `(tenting (front yes) (back yes))`，涉及 via/pad 的 padstack 字段——局部形状变化。
+   - ③ **其余 v10 新键被 Zig 静默跳过**（plot 参数、`duplicate_pad_numbers_are_jumpers`、
+     `locked` 移除、层 id 重编、…）：不挡读，但**写回丢失**。完整清单不靠人工枚举——
+     由 T2 在 v10 语料上的 `raw == dump` 字节保真 diff 自动产出（见 P0.1）。
+   - 工作量标定：只读 shim 2–5 天（已弃选）；全面迁移周级（`Net{number,name}` 模型
+     + 21 个 Python 消费方）。
+3. **解析器对未知内容的行为不对称**：KiCad 对未知 token 直接报错
+   （`pcb_io_kicad_sexpr_parser.cpp:1388`）→ 自有元数据只能放 footprint `(property ...)`
+   或 sidecar 文件，禁止发明自定义 S-expression token；Zig 则静默跳过未知键且写回丢失
+   → schema 必须完整覆盖目标方言。
+4. **`kicad.loads` 按 Path 缓存、无失效**（`fileformats.py:117-122`）：同进程重读已重写
+   文件拿到陈旧解析。进程内工具链（`ato layout`/`ato diagnose` 连续读写同一文件）的
+   真实地雷；绕法 `loads(类型, path.read_text())`。
+   **4b.（2026-06-12 执行 P0.1 时实测发现）pyzig 所有权 use-after-free**：`PcbFile`
+   包装对象独占 zig 侧内存；只要包装对象被 GC，其 `.kicad_pcb` 等子对象全部悬空，
+   且**不崩溃**——内存被下一次 parse 复用后子对象静默读出另一块板的数据
+   （最小复现：load A 取 `.kicad_pcb` 丢包装 → load B → A 的 net 名变成 B 的）。
+   生产代码 3 处 `loads(...).kicad_pcb`（layout_sync:66、jlcpcb:202、designators:184）
+   目前全靠 Path 缓存永久持有包装对象**碰巧**兜底——两颗地雷互相咬合：
+   单独修缓存（加失效）就会放出 use-after-free。**M5 必须把缓存失效与 pyzig
+   子对象持有 owner 引用两件事一起修**。测试侧已全部改为显式保活包装对象。
+5. **缺 version 守卫**：读 v10 文件的报错是不可懂的 tenting 解析错（且 Zig 错误归因
+   有时指错类、缺位置信息）——P0.2 的 M4 补可读报错。
 
-  **触发条件**：pull 仅在某 group 的 footprint 全部为新增时运行（`build_steps.py:798-813`，
-  即首次构建 / 新增模块实例的那次构建）；下一次构建 sync_groups 全量重排 → 相邻两次构建
-  仅 members 顺序不同。**稳态（无新增）的连续构建在 HEAD 已字节级一致**
-  （probe/layout_reuse 实测 diff 为空）；复现方法：副本工程删除 top.kicad_pcb 后连续构建
-  两次，diff 仅剩 `(members ...)` 重排——与 KicadDecisions.md §2.3 的实测现象完全吻合。
+### 确定性边界
 
-  **修复点**：不在 sync_groups，在 `pull_group_layout` 末尾——追加后对 members 全量排序去重
-  （使 pull 的终态 = 下次 sync_groups 的重排结果，构建序列立即收敛），约 3 行：
-  `kicad.clear_and_set(group, "members", group.members, sorted(set(group.members) | new_group_uuids))`。
-  两个调用方（`build_steps.py:813` 构建路径、`cli/kicad_ipc.py:142` KiCad 插件路径）共用此
-  方法，单点修复即可。
+6. **UUID 随机生成、靠回读稳定**：`gen_uuid`（`fileformats.py:150-165`）= uuid4 +
+   "FBRK" hex 后缀；首次生成即随机，仅靠从已有 .kicad_pcb 回读保持稳定。确定性目标 =
+   **增量稳态**（同一工作副本连续构建字节一致），非 clean-checkout 可重现。推论：
+   `.kicad_pcb` 必须入库；CI 确定性测试必须"在已有布局上 build→build→diff"，
+   不能"两次从零构建比对"。
+7. **`gen_uuid(mark)` 对 >16 字符名字产出超长非法 uuid**（`UUID = str` 无校验，
+   实测 20 字符名 → 40 hex）。现状 group 名通常较短未触雷；生成长地址组前必须先修。
+8. **`keep_net_names` 默认随 `frozen`**（`config.py:594,623-624`）：常态下 net 名每次
+   构建重 derive——net 名漂移的现存源头（关联 C2 与遗留问题 2）。
 
-  **半径 / 可能 break 的部分（已逐一核查，均不依赖 members 顺序）**：
-  - KiCad 本体：members 语义为集合，GUI 与 `kicad-cli pcb upgrade` 不依赖顺序；
-  - 仓库内消费方：`layout_sync.py` 自身（set 运算）、`kicad_ipc.py:132`（issubset）、
-    `layout_server/pcb_manager.py:610-633`（递归展开+去重）与 `:706-724`（分桶），
-    顺序最多影响 UI 列表展示序；
-  - KiCadRoutingTools 不解析 groups（外科手术式文本写出），不受影响；
-  - 仓库现有测试零处引用 LayoutSync——无需改测试，但也意味着当前无回归覆盖（见验证）。
-  - 存量已提交布局不会产生一次性 churn：稳态文件本就是 sync_groups 排好序的。
+### KiCad 行为
 
-  **明确的范围边界（实测新发现）**：`gen_uuid`（`fileformats.py:150-165`）= `uuid4` 随机数
-  + "FBRK" hex 后缀；footprint/pad/pull 复制元素的 UUID 首次生成即随机，仅靠从已有
-  .kicad_pcb 回读保持稳定（两次独立 fresh build 实测相差 330 行，全部是 UUID 值）。
-  因此 A1 交付的是**增量稳态确定性**（同一工作副本连续构建一致），不是 clean-checkout
-  可重现性；后者需地址派生 UUID，半径大得多（碰撞处理、KiCad 唯一性预期），明确不做。
-  推论：`.kicad_pcb` 必须入库随仓库走，CI 确定性测试必须是"在已有布局上 build→build→diff"，
-  不能是"两次从零构建比对"。
+9. **net-0 悬空铜被 KiCad 重存清理**（连带空 group）：写铜层的几何必须挂真实 net；
+   引导/标记几何放 User.x 层（User.1=引导走廊、User.2=禁布区，与布线器约定一致）。
+10. **atopile 不生成 .kicad_sch**：sheet 路线不存在；多通道布局走 named groups。
+11. **DRC JSON 无结构化 net 字段**（net 名嵌在描述文本）：诊断层用 items[].uuid 经
+    layout_ir 反查。
+12. SWIG Python 绑定完全禁用（KiCad 10 已移除板级 API）；Repeat Layout 仅 GUI 入口。
 
-  **验证方案**：
-  1. 回归测试（新增）：fixture PCB 上跑 `sync_groups`+`pull_group_layout`，断言
-     members 已排序；并以 `PYTHONHASHSEED=0/1` 两个子进程各跑一遍，断言序列化字节一致
-     （直接命中哈希随机化成因）；
-  2. E2E（并入 A3 的 CI 用例，三种状态都要覆盖）：(a) 空布局首建→再建→diff 为空
-     （今日唯一失败的场景，已复现）；(b) 稳态连续两建 diff 为空（防回归）；
-     (c) 新增一个模块实例→建两次→diff 为空（pull 增量路径）；
-  3. 插件路径：`kicad-ipc` layout-sync 动作执行两次，文件一致；
-  4. `kicad-cli pcb upgrade` 往返后 groups/members 保留（A3 既有项扩展）。
+### 周边
 
-- [x] **A2. `keep_designators` 回归测试（前提已过时，从"改默认值"降级为"验证固化"）**
-  **已固化**：`test_group_determinism.py::test_steady_state_and_incremental_add_deterministic`
-  断言新增实例后原有位号原样保留（实测 R1–R9 不变，新实例得 R10–R12）。
-  代码级复核：HEAD 的默认值**已经是开启**（`config.py:592`
-  `keep_designators: bool | None = Field(default=True)`），load-pcb 步骤回读已有位号
-  （`build_steps.py:636-637`）；`attach_random_designators`（`designators.py:24-93`）只给
-  **无位号**的新组件补号，且按模块地址 natsorted（`designators.py:50-52`），本身确定。
-  原任务"fork 内改默认"无事可做；改为把验收固化成测试。
-  验收不变：增删无关组件后，已有位号不变。
-  注意：`keep_net_names` 默认 None→随 `frozen`（`config.py:594,623-624`），即常态下 net 名
-  每次构建重derive——这才是命名漂移的现存源头，关联 C2 与遗留问题 2，A2 不处理。
+13. **KiCadRoutingTools 已有结构化结果**（`return_results=True`、stdout `JSON_SUMMARY`、
+    `BlockingInfo`）：诊断层是聚合+映射。其解析器独立、已兼容 v9/v10，不解析 groups——
+    不受本仓库迁移影响。
+14. **C3b 范围已缩小**：Zig schema 已有 `ZonePlacement`（`gen/sexp/pcb.pyi:937`），
+    缺的只是 `source_type` 枚举的 `group` 值与 `(group "...")` 子句。
+15. **EasyEDA API 会限流 403**：fresh 构建选型依赖它；离线靠工程级
+    `build/cache/parts/easyeda`（probe 已有）——CI 必须预置 fixture 或离线开关。
 
-- [~] **A3. 验证项固化为 CI 测试**（测试已写好并本地验证；CI 接线未做）
-  **已交付** `test/end_to_end/test_group_determinism.py`（4 个用例，全部经"破坏修复→
-  测试变红"变异验证）：
-  1. fresh 构建×2 字节一致（PYTHONHASHSEED=0/1 强制不同哈希序，直接命中 A1 成因）；
-  2. 稳态×2 + 新增实例后×2 字节一致 + 位号保持（A2）；
-  3. 注入手工线段/命名 group/placement rule area 后重建保留 + 稳态字节一致（A4）；
-  4. `kicad-cli pcb upgrade` 往返 group membership 保留（**文本级比对**，原因见下方新约束）。
-  **剩余（CI 接线）**：
-  - CI 镜像安装 kicad-cli 10（官方 PPA `kicad/kicad-10.0-releases`，
-    `--no-install-recommends` 跳过元件库）；
-  - **EasyEDA API 依赖**：fresh 构建需选型，API 会限流 403（沙盒实测）。需预置
-    `build/cache/parts/easyeda` fixture 或离线选型开关，否则 CI 必然间歇红。
+---
 
-- [x] **A4.（新发现并修复）手工命名 group 的内容被每次构建静默删除**
-  **成因**：commit 48fe6e18 的 group 清理把"所有命名 group − atopile 组"当作已删除组，
-  `_clean_group` 删除其全部非 footprint 成员（线段/过孔/zone）。调研时"非 atopile groups
-  全部保留"的实测样本恰为悬空成员组,未覆盖"组内有真实元素"的路径（实测复现：组内线段
-  被删，仅剩组壳 + 悬空引用）。
-  **修复**：`_is_managed_group()`——atopile 自管组的 uuid 后缀 = 组名的 hex
-  （`gen_uuid(mark)` 约定，对任意名字长度成立），仅对自管组做删除清理。
-  **原意保留**：删除模块实例后其组内 pulled 几何仍被清理（实测 8→6 段）；
-  空组壳留待 KiCad 重存回收（与修复前行为一致）。
+## A. P0 — 确定性与基础修复【✅ 2026-06-12 完成】
 
-## B. P0 — layout_ir.json 导出（第一阶段，本仓库）
+详细成因分析、修复半径核查与验证记录见 git 历史（分支 `fix/p0-layout-determinism`）
+与 KicadDecisions.md。回归测试：`test/end_to_end/test_group_determinism.py`
+（4 用例，全部经"破坏修复→测试变红"变异验证）。
+
+- [x] **A1. group 成员排序漂移**：真实源在 `pull_group_layout`（set 迭代序追加，
+  PYTHONHASHSEED 随机），非 BACKLOG 原计划所指的 sync_groups（HEAD 已排序）。
+  修复：pull 末尾全量排序去重（约 3 行），单点覆盖构建 + KiCad 插件 IPC 两路径。
+  交付边界 = 增量稳态确定性（见事实 6）。
+- [x] **A2. keep_designators**：前提过时——HEAD 默认已 True（`config.py:592`），
+  无代码可改；降级为测试固化（新增实例后 R1–R9 不变，实测通过）。
+- [x] **A4.（新发现）手工命名 group 内容被每次构建静默删除**：上游 48fe6e18 清理范围
+  过宽。修复：`_is_managed_group()`（atopile 自管组 uuid 后缀 = 组名 hex），仅清理自管组；
+  删除模块实例后 pulled 几何仍正常清理（8→6 段验证）。
+- [~] **A3. CI 接线** → 并入 P0.1 的 T9（测试本体已交付）。
+
+---
+
+## P0.1 — v10 迁移测试底座【✅ 2026-06-12 完成】
+
+**目标**：把"现在的正确行为"钉成可执行的地面，使 P0.2 每一步改动都有红/绿信号。
+
+**核心原则（防 false negative）**：测试的多样性必须由我们的 harness 制造
+（corrupter / 置换 / PYTHONHASHSEED），**不得指望 KiCad 产物天然提供**——
+天然语料里 net 表序 = 编号序 = 首次引用序三者对齐，按位置绑定的 loader 能通过
+全部天然往返测试。T8 自检用实验证实了这一点（见下）。盲随机 fuzz 不解决该问题
+（语法垃圾只测错误路径），明确不做（§F）。
+
+交付清单（测试基线：**88 passed + 26 strict-xfail**，xfail 即 P0.2 的验收开关）：
+
+- [x] **T0. dev 环境**：`uv sync` 即可——`ziglang==0.15.1` 是 pip 构建依赖，
+  Python 3.14 用 uv 托管版（miniconda 不需要，原决策据此修正）。
+  注意：克隆需 `git fetch --tags`（上游 https），否则 setuptools-scm 产出非
+  SemVer 版本号、`ato` CLI 启动即崩。`ato dev test` 入口验证可用。
+- [x] **T1. v10 语料**：`v10/pcb/` 4 块板（test / layout_reuse_top /
+  interf_u_unrouted 为 (v9,v10) 配对 + lvds_converter_dualclk 为**原生 KiCad 10
+  保存**的 v10），v9 侧同步扩充 2 块真实板；来源与再生成命令见 `v10/README.md`
+  （大板因体积排除，已记录——no silent caps）。
+- [x] **T2. 全语料四道闸门**（`test_fileformats_corpus.py`）：parse / 幂等 /
+  **无数据丢失**（schema 无关 sexp 树多重集 diff，`libs/test/sexp_tree.py`，输出
+  逐字段丢失清单 = M3 的输入）/ 字节保真（仅 atopile 自产板——实测 KiCad 写出
+  的文件有浮点格式与字段序差异，逐字节对齐是非目标，完整性审计改由"无数据丢失"
+  闸门承担）。**新发现：v9 上 schema 也丢数据**（interf_u 实测丢 pad
+  `pintype`/`pinfunction` 724 处、`sheetfile`、`aux_axis_origin`、title_block
+  `rev`）——M3 范围含 v9 缺口，对应 xfail(strict) 已标。
+- [x] **T3. 语义视图快照**：`libs/kicad/semantic_view.py`（B1 layout_ir 底座）+
+  4 份快照入库。严格解析：悬空引用/引用与表名不一致/重复名一律 raise
+  （`NetResolutionError`），杜绝静默误绑。
+- [x] **T4. corrupter**（`test_net_binding_corruption.py`，24 用例）：保语义
+  （表置换/全局一致重编号/节段重排→视图必须不变）+ 破语义（仅表内名字互换/
+  悬空引用/zone 双键不一致/重复名→必须 raise 或视图变化）+ harness 自检
+  （重排版本身视图中性）。**契约修正**：v10 没有 net 表（事实 2①），"合成编号==
+  表序"不成立；钉死的两条底线改为 (i) 视图与引用顺序无关 (ii) 跨进程
+  （PYTHONHASHSEED=0/1）dump 字节一致——均为 strict-xfail，M1 落地时转绿。
+- [x] **T5. net 名 property 测试**（hypothesis 已是 dev 依赖，derandomize 保 CI
+  确定）：150 生成用例 + 11 显式恶意用例（引号/反斜杠/换行/emoji/255 长名/
+  形如 sexp 的名字）全过——zig writer 转义现状无 bug。
+- [x] **T6. transformer net 单测**（8 用例）：编号空洞复用（{0,1,3}→2→4）、
+  removed 编号不回收（生成器快照语义钉死）、remove_net 断开 pad/segment/via、
+  rename_net 传播、get_net 按名（重编号后仍命中 + KeyError）。钉死两个 v9 怪癖
+  待 M5 移除：remove_net 对 zone 要求 number+name 双匹配（stale name 的 zone
+  残留连接）；`_get_net_number` 未知名静默→0（typo=静默断铜）。
+- [x] **T7. layout_sync net 单测**（5 用例）：`_get_net_number` 按名/未知名→0、
+  `_generate_net_map` 按 pad 拓扑映射（两侧编号故意错开）/忽略未连接 pad、
+  `_sync_routes` 重映射+偏移+新 uuid+源板不动。
+- [x] **T8. 变异自检（已执行并回滚，结果记录）**：
+  ① 植入"按表位置绑定"→ **4 个自然语料快照测试 3 个照常通过**（密集有序表下
+  bug 隐形——false-negative 风险实锤），corrupter 套件 4 failed + 8 errors 大面积
+  红，唯一例外 layout_reuse_top 快照变红（atopile 板的 net 表有编号空洞，
+  天然非密集——不可依赖的运气）；② 植入"密集计数式编号合成"→ T6 两用例红。
+  结论：安全网对两类目标 bug 均有效，且 corrupter 是必需的（快照不够）。
+- [x] **T9. CI 接线**：pytest.yml 增加 kicad-cli 10 安装步骤（PPA，
+  continue-on-error——缺席时相关测试 skipif 降级，不红 CI）；EasyEDA 离线化改为
+  **fixture 方案**：`test/common/resources/easyeda-cache/`（28K，.step 模型实测
+  非构建必需已剔除），E2E fixture 自动播种到工程副本，构建零网络依赖。
+
+**P0.1 期间新发现**（已并入上方事实清单）：事实 2① net 表整体消失（修正原
+"去编号"认知）；事实 4b pyzig use-after-free 与 Path 缓存互锁。
+
+## P0.2 — v10 方言迁移本体（依赖 P0.1 全绿）
+
+**写方言目标 = v10（20260206）**；读侧兼容 v5–v10。**flag day**：仓库内全部
+examples/fixtures/probe 工程的 `.kicad_pcb` 一次性升级提交。迁移完成后
+"单向门"约束解除——KiCad 10 GUI 保存不再损坏管理中的板子（迁移的最大收益之一）。
+
+- [ ] **M0. NetRef 模型决策**（动手前定案）。推荐：双字段
+  `NetRef{number: ?int, name: str}`——编号降级为进程内句柄；v9 读侧沿用文件编号，
+  **v10 读侧没有 net 表可依**（事实 2①）：`pcb.nets` 由引用扫描合成，合成顺序
+  自定义且必须与容器迭代顺序无关（T4 已钉死：引用序无关 + 跨进程字节一致；
+  建议规则：名字排序，"" 恒为 0——与文件布局解耦，最易论证）。
+  v9 写出编号（pad 处 编号+名）、v10 只写名字、不写表。
+  理由：21 个消费方中直接用编号的集中在 transformer（16 处）、pcb_manager（4）、
+  app/pcb（2）、layout_sync（2），保留编号字段可让"只传递编号"的代码零改动；
+  `get_net`/`bind_fbrk_nets` 已按名（`transformer.py:430`），半径有限。
+  备选（名字单键 + 外置句柄表）改动更纯但爆破半径全量，不推荐。
+- [ ] **M1. zig：net 模型重构**（断裂点①）：pad/segment/via/zone 四处引用语法的
+  读写双方言；v10 读侧 nets 合成（按 M0 规则）、写侧省略表与 zone net_name、
+  无网 zone 省略 net 子句。验收 = T4 的 2 个 strict-xfail 转绿 +
+  corpus parse/幂等闸门 v10 转绿。
+- [ ] **M2. zig：tenting 族嵌套化**（断裂点②）：via/pad padstack 的
+  tenting/covering/plugging 等字段，读双形状（v9 裸 token / v10 嵌套），写 v10 形状。
+- [ ] **M3. zig：静默丢弃键补全**（断裂点③）：以 T2 "无数据丢失"闸门的逐字段
+  清单为完整需求逐项补 schema（已知 v10 侧含 plot 参数、
+  `duplicate_pad_numbers_are_jumpers`、`locked` 移除、层 id 重编；
+  **v9 侧也有实测缺口**：pad `pintype`/`pinfunction`、footprint `sheetfile`、
+  setup `aux_axis_origin`、title_block `rev`——见 interf_u 的 strict-xfail）。
+  完成信号 = corpus 全部 no-data-loss xfail 转绿。
+- [ ] **M3b. pyzig 所有权 + loads 缓存联修**（事实 4b）：子对象持有 owner 引用
+  （消除 use-after-free）与 `kicad.loads` Path 缓存失效（mtime/内容指纹）必须
+  同一提交落地——单独修任何一个都会暴露另一个。补回归测试：load A 弃包装→
+  load B→A 数据仍正确；重写文件后重读拿到新内容。
+- [ ] **M4. 版本号 bump + version 守卫**：写出 `(version 20260206)`；读侧对
+  > 支持上限的文件给出可读报错（替代现在不可懂的 tenting 解析错，见事实 5）。
+- [ ] **M5. Python 消费方迁移**：按 M0 决策改 24 处编号直用点；`kicad.loads` 缓存
+  地雷（事实 4）在涉及模块顺手排掉（进程内改用 text 读或加失效）。
+- [ ] **M6. flag-day 升级 + 文档收尾**：examples/fixtures/probe 全部升 v10 一次性提交
+  （A1 的增量稳态逻辑依赖回读，升级提交后跑一轮 build→build→diff 确认稳态成立）；
+  改写 CLAUDE.md/KicadDecisions.md 中"单向门"约束为"已迁移，v9 只读兼容"。
+- [ ] **M7. 验收差分**：
+  - 同板 (v9, v10) 双解析 → 语义视图相等（T1+T3 复用）；
+  - kicad-cli oracle：迁移产物 DRC 正常运行、`pcb upgrade` 幂等（已是 v10，应无 diff）、
+    KiCad 10 重存后回读语义视图不变——"KiCad 认不认"从猜测变成 CI 断言；
+  - 4 个 group-determinism E2E 绿（序列化整体强约束）；
+  - 消费方回归：pcb_manager 补 net 断言、BOM/制造产物/DRC smoke；
+    KiCadRoutingTools 不动（事实 13）。
+
+**工作量**：周级（M1+M5 为主）。**回滚策略**：P0.1 底座全部以名字为基准，
+对 v9/v10 双方言对称——迁移分支若需中止，底座资产无一作废。
+
+---
+
+## B. P1 — layout_ir.json 导出（紧随 P0.2；提取器已由 T3 提前交付）
 
 - [ ] **B1. 新构建步骤 `layout-ir`**
   `@muster.register("layout-ir", dependencies=[update_pcb])`（`build_steps.py`）。
@@ -126,13 +249,13 @@ Python 3.14 开发环境用 miniconda 安装。
   模块地址 → {type, group_uuid, components{地址 → 位号/footprint_uuid/pads{net, xy, layer}},
   nets}；net → {kicad_net, pads}。
   地址来源：`Node.get_full_name(include_uuid=False)`（`faebryk/core/node.py:1520-1556`，
-  已确认稳定）。
+  已确认稳定）。**实现基底 = T3 的语义视图提取器**（一鱼两吃）。
   验收：PCB Layout SKILL 仅凭 layout_ir.json 即可解析位号/net/pad 坐标，无需读 .kicad_pcb。
 
 - [ ] **B2. schema 固化与版本号**
   layout_ir.json 增加 `version` 字段 + JSON Schema 文件入库（诊断层与布线执行器都依赖它）。
 
-## C. P1 — layout.yaml 加载 + KiCad 10 对象生成（第一阶段，本仓库）
+## C. P1 — layout.yaml 加载 + KiCad 10 对象生成
 
 - [ ] **C1. `BuildTargetConfig.layout_config: Path | None`**（`config.py:559-682`，Pydantic 字段）
   按构建目标挂 layout.yaml；缺省约定 `<layout>/<target>/layout.yaml`。
@@ -148,22 +271,22 @@ Python 3.14 开发环境用 miniconda 安装。
   (polygon ...))`——该结构已实测被 KiCad 10 完整往返、逐字保留。
   实现分两步：
   - C3a（过渡）：对序列化输出做后处理注入（立即可用，调研即此路径）。
-  - C3b（正式）：扩展 Zig sexp schema 的 zone `placement` 字段（仓库内 `sexp` 开发文档为指引），
-    走类型化模型。注意 Zig 类型模型**会丢弃 schema 之外的字段**，schema 必须完整覆盖 zone 语法。
-  约束：**禁止发明自定义 S-expression token**；引导/标记几何只放 User.x 图层
-  （User.1=引导走廊、User.2=禁布区，与布线器约定一致）；
-  **任何写入铜层的几何必须挂真实 net**（net-0 悬空铜会被 KiCad 重存清理）。
+  - C3b（正式）：扩展 Zig sexp schema——范围已缩小（事实 14），只缺 `source_type`
+    的 `group` 枚举值与 `(group "...")` 子句；若 P0.2 已完成，直接在 v10 schema 上做。
+  约束：禁止自定义 token（事实 3）；引导/标记几何只放 User.x 层（事实 9）；
+  写铜层的几何必须挂真实 net（事实 9）。
 
 - [ ] **C4. `ato layout` CLI 子命令**
   `cli/cli.py` 注册：`ato layout resolve`（产出 layout_ir）/ `ato layout emit`（产出 rule areas）。
   验收（第一阶段整体）：`examples/layout_reuse`（3 个重复 Sub 模块）上
-  `ato build` 两次字节级一致；`kicad-cli pcb upgrade` 往返保留；DRC JSON 正常运行。
+  `ato build` 两次字节级一致；DRC JSON 正常运行。
+  注意进程内连续读写的 loads 缓存地雷（事实 4，M5 处理后解除）。
 
 - [ ] **C5.（后置）component class 支持**
   需同时写 `.kicad_pro`（类定义在工程级）。group 来源已够用，仅当需要基于 class 的
   DRC 规则时再做。
 
-## D. P1 — 诊断闭环（第二阶段，本仓库侧）
+## D. P2 — 诊断闭环（本仓库侧）
 
 - [ ] **D1. `ato route --plan layout.yaml --stage <name>`**
   调用 KiCadRoutingTools fork 的计划执行器（§E1），通过 Python API 进程内调用
@@ -172,14 +295,14 @@ Python 3.14 开发环境用 miniconda 安装。
 - [ ] **D2. `ato diagnose` → diagnostics.json**
   聚合三路输入并映射回文本源：
   1. 执行器的 route_report.json（逐 net 线段/过孔/迭代数/失败 + 阻塞分析）；
-  2. `kicad-cli pcb drc --format json`（**注意：违例条目无结构化 net 字段，net 名嵌在
-     描述文本中，必须用 items[].uuid 经 layout_ir 反查**）；
+  2. `kicad-cli pcb drc --format json`（无结构化 net 字段，用 items[].uuid 经
+     layout_ir 反查，事实 11）；
   3. rule-area 多边形命中测试 → 给违例标注所属 room。
   输出字段：stage/room/ato_path/constraint（指向 layout.yaml 条目的 JSON-pointer）/
   reason/blocking_nets/failed_endpoints/suggestions。
   风格基线：kicad-happy 项目的检查结果 schema（rule_id/severity/report_context/confidence）。
 
-## E. KiCadRoutingTools fork（第二、三阶段，仓库：KiCadRoutingTools）
+## E. KiCadRoutingTools fork（仓库：KiCadRoutingTools）
 
 - [ ] **E1. `layout_plan_runner.py`（P1）**
   解析 layout.yaml 的 route_stages → 逐阶段构造 `GridRouteConfig`（数据类字段与 YAML
@@ -221,33 +344,26 @@ Python 3.14 开发环境用 miniconda 安装。
 
 - ❌ fork KiCad 10（所需对象已实测可外部生成并完整往返）。
 - ❌ 依赖旧版 SWIG Python 绑定（KiCad 10 已移除）。
+- ❌ **盲随机 fuzz（语法级）**：迁移期的危险类 bug 是"合法文件被静默误绑"，不是
+  "非法输入导致崩溃"；随机语法垃圾只锻炼错误路径，性价比低。该风险类由 T4
+  corrupter（结构化、确定性、可入 CI）+ T5 property 测试覆盖。zig 解析器的
+  honggfuzz/AFL 留作远期健壮性候选，不在 P0.1。
 - ❌ 生成 KiCad 原生 design block 库（atopile 的 `atopile_subaddresses` 机制已覆盖
   布局复用；group 的 `lib_id` 链接字段存在，留作第三阶段可选项）。
 - ❌ 调用 GUI 的 Repeat Layout / Generate Placement Rule Areas（无法脱离界面运行）。
+- ⏸ clean-checkout 可重现性（地址派生 UUID）：半径大（碰撞处理、KiCad 唯一性预期），
+  增量稳态已满足工作流需要（事实 6）。
 - ⏸ 向 KiCad 上游提 DRC JSON 增强补丁（结构化 net / rule-area 上下文字段）——
   外部映射可用；第二阶段跑通后评估。
 - ⏸ 修改 `.ato` 语法——布局语义全部走 sidecar 文件，不动语言本体。
 
-## 执行 P0 时新发现的约束（2026-06-12，影响后续各项）
-
-1. **`kicad-cli pcb upgrade` 是单向门**：升级后的文件用 KiCad 10 当前格式（如嵌套
-   `(tenting (front yes))`），atopile 的 Zig schema（钉在 20241229）**无法解析**——
-   对 atopile 仍管理的板子绝不能跑 upgrade（KiCad 10 直接读 v9 格式无须升级）。
-   调研只验证过"KiCad 读 atopile 输出"，反向是本次实测发现。
-2. **`kicad.loads` 按 Path 无失效缓存**（`fileformats.py:117-122`，"object returned is
-   shared"）：同进程内重读已重写的文件会拿到陈旧解析。对 B1/C/D 的进程内工具链
-   （`ato layout` / `ato diagnose` 连续读写同一文件）是真实地雷；测试中用
-   `loads(类型, path.read_text())` 绕开。
-3. **C3b 工作量缩小**：Zig schema 已有 `ZonePlacement`（enabled/source_type/source/
-   sheetname，`gen/sexp/pcb.pyi:937`），`(placement (enabled yes))` 已实测经构建保留；
-   缺的只是 `source_type` 枚举的 `group` 值与 `(group "...")` 子句。
-4. **`gen_uuid(mark)` 对 >16 字符的名字产出超长非法 uuid 字符串**（`UUID = str` 无校验，
-   实测 20 字符名 → 40 hex"uuid"）。现状 group 名 = 顶层模块地址通常较短未触雷；
-   生成长地址组前必须先修。
-
 ## 遗留问题
 
-1. C3a（后处理注入）→ C3b（Zig schema 扩展）的切换时点（注意上方新约束 3：范围已缩小）。
-2. net 名漂移程度（自动编号 `unnamed[N]` 在模块改动下的稳定性）——第一阶段实测后决定
-   layout.yaml 是否完全禁止裸 net 名引用。
-3. 是否向 KiCad 上游提 DRC JSON 增强补丁（见 §F）。
+1. C3a（后处理注入）→ C3b（Zig schema 扩展）的切换时点（范围已缩小，见事实 14；
+   P0.2 后直接在 v10 schema 上做 C3b 可能跳过 C3a）。
+2. net 名漂移程度（自动编号 `unnamed[N]` 在模块改动下的稳定性，关联事实 8）——
+   第一阶段实测后决定 layout.yaml 是否完全禁止裸 net 名引用。
+   **注意与 P0.2 的耦合**：v10 后 net 名是文件内唯一键，名字漂移从"显示问题"升级为
+   "几何归属漂移"——M7 验收需加一条：稳态重建下全部 net 名字节级稳定。
+3. `gen_uuid` 长名字 bug（事实 7）的修复时点——生成长地址组（C3）前必须修。
+4. 是否向 KiCad 上游提 DRC JSON 增强补丁（见 §F）。
