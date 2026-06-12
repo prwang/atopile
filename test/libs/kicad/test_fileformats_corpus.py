@@ -53,7 +53,9 @@ SNAPSHOT_DIR = FILEFORMATS_PATH / "snapshots"
 REGEN = os.environ.get("REGEN_SEMANTIC_SNAPSHOTS") == "1"
 
 V10_XFAIL = pytest.mark.xfail(
-    strict=True, reason="v10 dialect not parseable until P0.2 migration"
+    strict=True,
+    reason="v10 dialect rejected by the version guard (readable "
+    "UnsupportedKicadVersion) until the P0.2 S4 net-model migration",
 )
 
 

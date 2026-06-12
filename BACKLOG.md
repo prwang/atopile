@@ -216,10 +216,12 @@ examples/fixtures/probe 工程的 `.kicad_pcb` 一次性升级提交。迁移完
   自带测试 `test/libs/kicad/test_pyzig_ownership.py`（6 用例），且经变异自检：
   撤掉 zig 修复重编译后 use-after-free 用例确实变红。
   保持绿实测：libs/kicad+exporters 95 通过、core graph/zig 85 通过、E2E 4/4。
-- [ ] **S2. M4a：version 守卫**（小步热身）：读侧对 > 支持上限的版本给出含版本号
-  与指引的可读报错（替代不可懂的 tenting 解析错，事实 5）。
-  *自带*：守卫单测（v10 语料触发，断言报错文案）；同步把 corpus v10 xfail 的
-  reason 更新为守卫报错（仍 xfail）。*保持绿*：全量。
+- [x] **S2. M4a：version 守卫**【✅ 2026-06-12】：`kicad.loads` 对 PcbFile 按
+  `PCB_MAX_SUPPORTED_VERSION`（现 20241229，S4 提至 20260206）前置检查，
+  超限抛 `kicad.UnsupportedKicadVersion`（含双版本号 + 勿 upgrade/勿新 GUI 重存
+  指引 + 文件名）。自带 `test/libs/kicad/test_version_guard.py`（7 用例，
+  含"v10 语料必须报守卫错而非裸解析错"的口径测试）；corpus v10 xfail reason
+  已改指守卫。
 - [ ] **S3. M2：tenting 族嵌套化**（断裂点②）：via/pad padstack 的 tenting 等字段
   读双形状（v9 裸 token / v10 嵌套）、写 v10 形状。
   *本步转绿*：无 corpus 开关（v10 parse 仍卡在 net）→ *同 commit 自带*：

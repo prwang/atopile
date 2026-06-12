@@ -35,6 +35,13 @@ class Named(Protocol):
 
 # namespace
 class kicad:
+    # Highest .kicad_pcb format version the Zig schema can parse (v9 dialect).
+    # Bumped to the v10 dialect (20260206) by the P0.2 S4 net-model migration.
+    PCB_MAX_SUPPORTED_VERSION = 20241229
+
+    class UnsupportedKicadVersion(ValueError):
+        """The file's (version ...) is newer than the Zig schema supports."""
+
     from faebryk.core.zig.gen.sexp import (
         footprint,  # noqa: E402, F401 # type: ignore[import-untyped]
         footprint_v5,  # noqa: E402, F401 # type: ignore[import-untyped]
@@ -112,6 +119,26 @@ class kicad:
         return (stat.st_mtime_ns, stat.st_size)
 
     @staticmethod
+    def _check_pcb_version(data: str, source: Path | None = None) -> None:
+        """Readable guard for too-new boards instead of an inscrutable Zig
+        parse error deep inside the file (BACKLOG P0.2 M4a)."""
+        m = re.search(r"\(version\s+(\d+)\s*\)", data[:2000])
+        if m is None:
+            return
+        version = int(m.group(1))
+        if version <= kicad.PCB_MAX_SUPPORTED_VERSION:
+            return
+        origin = str(source) if source is not None else "<string>"
+        raise kicad.UnsupportedKicadVersion(
+            f"{origin} declares (version {version}), newer than the supported "
+            f"{kicad.PCB_MAX_SUPPORTED_VERSION}. This board was saved in a "
+            f"newer KiCad format than atopile can read. Do not run "
+            f"'kicad-cli pcb upgrade' on managed boards and do not re-save "
+            f"them from a newer KiCad GUI; restore the file from version "
+            f"control if it was upgraded by accident."
+        )
+
+    @staticmethod
     def loads[T: kicad.types](t: type[T], path_or_sexpstring: Path | str) -> T:
         """
         Attention: object returned is shared, so be careful with mutations!
@@ -135,6 +162,9 @@ class kicad:
             data = path.read_text(encoding="utf-8")
         else:
             data = path_or_sexpstring
+
+        if t is kicad.pcb.PcbFile:
+            kicad._check_pcb_version(data, source=path)
 
         out = cast(T, kicad.type_to_module(t).loads(data))
         if path:
