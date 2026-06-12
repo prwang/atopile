@@ -43,10 +43,7 @@ def _build(cwd: Path, hashseed: str) -> None:
 
 
 def _load_pcb(pcb_path: Path) -> "kicad.pcb.PcbFile":
-    # kicad.loads caches parses by Path with no invalidation; tests reload the
-    # same file after rebuilds, so always parse from text. Returns the PcbFile
-    # wrapper (not .kicad_pcb): the wrapper owns the zig memory, and once it is
-    # GC'd sub-objects dangle and silently alias the next parse.
+    # parse from text so these tests are independent of the loads Path cache
     return kicad.loads(kicad.pcb.PcbFile, pcb_path.read_text())
 
 

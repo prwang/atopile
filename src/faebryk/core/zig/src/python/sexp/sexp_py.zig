@@ -358,6 +358,7 @@ fn generateModule(
             const wrapper = @as(*bind.PyObjectWrapper(FileType), @ptrCast(@alignCast(pyobj)));
             wrapper.ob_base = py.PyObject_HEAD{ .ob_refcnt = 1, .ob_type = type_obj };
             wrapper.owned = false;
+            wrapper.owner = null;
 
             // Allocate persistent memory for the data
             wrapper.data = persistent_allocator.create(FileType) catch {

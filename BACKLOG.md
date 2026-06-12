@@ -62,17 +62,13 @@ PCB 布局布线工作流：`.ato` 描述电路（电路事实来源），`layou
    （`pcb_io_kicad_sexpr_parser.cpp:1388`）→ 自有元数据只能放 footprint `(property ...)`
    或 sidecar 文件，禁止发明自定义 S-expression token；Zig 则静默跳过未知键且写回丢失
    → schema 必须完整覆盖目标方言。
-4. **`kicad.loads` 按 Path 缓存、无失效**（`fileformats.py:117-122`）：同进程重读已重写
-   文件拿到陈旧解析。进程内工具链（`ato layout`/`ato diagnose` 连续读写同一文件）的
-   真实地雷；绕法 `loads(类型, path.read_text())`。
-   **4b.（2026-06-12 执行 P0.1 时实测发现）pyzig 所有权 use-after-free**：`PcbFile`
-   包装对象独占 zig 侧内存；只要包装对象被 GC，其 `.kicad_pcb` 等子对象全部悬空，
-   且**不崩溃**——内存被下一次 parse 复用后子对象静默读出另一块板的数据
-   （最小复现：load A 取 `.kicad_pcb` 丢包装 → load B → A 的 net 名变成 B 的）。
-   生产代码 3 处 `loads(...).kicad_pcb`（layout_sync:66、jlcpcb:202、designators:184）
-   目前全靠 Path 缓存永久持有包装对象**碰巧**兜底——两颗地雷互相咬合：
-   单独修缓存（加失效）就会放出 use-after-free。**M5 必须把缓存失效与 pyzig
-   子对象持有 owner 引用两件事一起修**。测试侧已全部改为显式保活包装对象。
+4. **`kicad.loads` 按 Path 缓存【✅ S1 已修】**：缓存现按 (mtime_ns, size) 指纹失效，
+   `kicad.dumps(obj, path)` 回写缓存——dump→load 返回同一对象（进程内工具链可依赖）。
+   **4b. pyzig 所有权 use-after-free【✅ S1 已修】**：历史症状=丢弃 `PcbFile` 包装后
+   `.kicad_pcb` 等子对象悬空且不崩溃，内存复用后静默读出另一块板的数据。
+   现子对象包装持 owner 强引用链（child→parent→root），`loads(...).kicad_pcb`
+   写法安全；两件事按互锁要求同一提交修复，回归测试
+   `test/libs/kicad/test_pyzig_ownership.py`（含变异自检记录）。
 5. **缺 version 守卫**：读 v10 文件的报错是不可懂的 tenting 解析错（且 Zig 错误归因
    有时指错类、缺位置信息）——P0.2 的 M4 补可读报错。
 
@@ -213,13 +209,13 @@ examples/fixtures/probe 工程的 `.kicad_pcb` 一次性升级提交。迁移完
   - M0 合成编号规则契约单测（按名排序、"" 恒 0，strict-xfail）——规则先于实现钉死；
   - 列出 S6 要**反转**的两个 T6/T7 钉死测试（zone 双键、未知名→0），反转动作
     与对应迁移改动同 commit。
-- [ ] **S1. M3b：pyzig 所有权 + loads 缓存联修**（第一个动 zig 的步骤，与方言无关，
-  先修它是因为不修则后续每一步的调试都暴露在静默数据混淆下——P0.1 已两次被坑）：
-  子对象持有 owner 引用（消除 use-after-free）+ `kicad.loads` Path 缓存失效
-  （mtime/内容指纹），**必须同一提交**（事实 4b：互锁）。
-  *本步转绿*：无（无现成开关）→ *同 commit 自带*：弃包装读子对象不悬空、
-  重写文件后重读取新内容、缓存对象身份语义保持（"shared object"文档行为）。
-  *保持绿*：全量 88 + E2E。
+- [x] **S1. M3b：pyzig 所有权 + loads 缓存联修**【✅ 2026-06-12】：
+  子对象包装持 owner 强引用链（child→parent→root，getset 三类 getter +
+  MutableList 及其元素全覆盖）；`kicad.loads` Path 缓存按 (mtime_ns, size)
+  指纹失效，`kicad.dumps(obj, path)` 回写缓存保持 dump→load 同对象语义。
+  自带测试 `test/libs/kicad/test_pyzig_ownership.py`（6 用例），且经变异自检：
+  撤掉 zig 修复重编译后 use-after-free 用例确实变红。
+  保持绿实测：libs/kicad+exporters 95 通过、core graph/zig 85 通过、E2E 4/4。
 - [ ] **S2. M4a：version 守卫**（小步热身）：读侧对 > 支持上限的版本给出含版本号
   与指引的可读报错（替代不可懂的 tenting 解析错，事实 5）。
   *自带*：守卫单测（v10 语料触发，断言报错文案）；同步把 corpus v10 xfail 的

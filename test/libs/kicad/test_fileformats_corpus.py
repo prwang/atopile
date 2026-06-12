@@ -66,9 +66,7 @@ def _params(extra_marks=lambda version, path: []):
 
 
 def _load(path: Path) -> kicad.pcb.PcbFile:
-    # bypass kicad.loads' Path-keyed cache. Keep the returned PcbFile alive
-    # while using .kicad_pcb: the wrapper owns the zig memory and sub-objects
-    # dangle (and silently alias the next parse) once it is GC'd.
+    # parse from text so these tests are independent of the loads Path cache
     return kicad.loads(kicad.pcb.PcbFile, path.read_text())
 
 

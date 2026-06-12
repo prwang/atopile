@@ -212,6 +212,11 @@ fn obj_prop(comptime struct_type: type, comptime field_name: [*:0]const u8, comp
             if (comptime @hasField(PType, "owned")) {
                 typed_obj.owned = false;
             }
+            if (comptime @hasField(PType, "owner")) {
+                // keep the parent (and transitively the owning root) alive
+                typed_obj.owner = self;
+                py.Py_INCREF(self.?);
+            }
 
             return pyobj;
         }
@@ -331,6 +336,9 @@ fn optional_prop(comptime struct_type: type, comptime field_name: [*:0]const u8,
                         const wrapper: *NestedWrapper = @ptrCast(@alignCast(pyobj));
                         wrapper.data = &field_ptr.*.?;
                         wrapper.owned = false;
+                        // ownership chain: keep parent alive (see PyObjectWrapper)
+                        wrapper.owner = self;
+                        py.Py_INCREF(self.?);
                         return pyobj;
                     },
                     .@"enum" => {
@@ -426,7 +434,7 @@ fn linked_list_prop(comptime struct_type: type, comptime field_name: [*:0]const 
                 pyzig.ensureTypeObject(ChildType, type_name_for_registry, "Failed to initialize linked_list nested type")
             else
                 null;
-            return linked_list.createMutableList(ChildType, list_ptr, element_type_obj);
+            return linked_list.createMutableList(ChildType, list_ptr, element_type_obj, self);
         }
     }.impl;
 
@@ -552,6 +560,9 @@ fn struct_prop(comptime struct_type: type, comptime field_name: [*:0]const u8, c
             wrapper.ob_base = py.PyObject_HEAD{ .ob_refcnt = 1, .ob_type = type_obj };
             wrapper.data = nested_data;
             wrapper.owned = false;
+            // ownership chain: keep parent alive (see PyObjectWrapper)
+            wrapper.owner = self;
+            py.Py_INCREF(self.?);
             return pyobj;
         }
     }.impl;

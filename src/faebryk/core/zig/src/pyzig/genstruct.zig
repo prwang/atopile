@@ -46,6 +46,13 @@ pub fn genStructInit(comptime WrapperType: type, comptime T: type) type {
         // Generate the __init__ function using a truly generic approach
         pub fn impl(self: ?*py.PyObject, args: ?*py.PyObject, kwargs: ?*py.PyObject) callconv(.c) c_int {
             const wrapper_obj: *WrapperType = @ptrCast(@alignCast(self));
+            if (comptime @hasField(WrapperType, "owner")) {
+                // re-init on a sub-object wrapper: drop any ownership backref
+                if (wrapper_obj.owner) |o| {
+                    wrapper_obj.owner = null;
+                    py.Py_DECREF(o);
+                }
+            }
             wrapper_obj.owned = false;
             wrapper_obj.data = std.heap.c_allocator.create(T) catch return -1;
             wrapper_obj.owned = true;

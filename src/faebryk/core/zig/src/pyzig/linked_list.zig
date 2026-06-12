@@ -9,14 +9,35 @@ pub fn MutableLinkedList(comptime T: type) type {
         ob_base: py.PyObject_HEAD,
         list: *compat.DoublyLinkedList(T),
         element_type_obj: ?*py.PyTypeObject,
+        // Strong reference to the Python object whose Zig allocation `list`
+        // points into (ownership chain, see pyzig.PyObjectWrapper).
+        owner: ?*py.PyObject,
 
-        fn create(list_ptr: *compat.DoublyLinkedList(T), element_type_obj: ?*py.PyTypeObject) ?*py.PyObject {
+        fn create(list_ptr: *compat.DoublyLinkedList(T), element_type_obj: ?*py.PyTypeObject, owner: ?*py.PyObject) ?*py.PyObject {
             const obj = py.PyType_GenericAlloc(&type_object, 0);
             if (obj == null) return null;
             const self: *Self = @ptrCast(@alignCast(obj));
             self.list = list_ptr;
             self.element_type_obj = element_type_obj;
+            self.owner = owner;
+            if (owner) |o| py.Py_INCREF(o);
             return obj;
+        }
+
+        fn dealloc(self: ?*py.PyObject) callconv(.c) void {
+            const s: *Self = @ptrCast(@alignCast(self.?));
+            if (s.owner) |o| {
+                s.owner = null;
+                py.Py_DECREF(o);
+            }
+            if (py.Py_TYPE(self.?)) |type_obj| {
+                if (type_obj.tp_free) |free_fn_any| {
+                    const free_fn = @as(*const fn (?*py.PyObject) callconv(.c) void, @ptrCast(@alignCast(free_fn_any)));
+                    free_fn(self);
+                    return;
+                }
+            }
+            py._Py_Dealloc(self.?);
         }
 
         fn count(self: *Self) usize {
@@ -192,6 +213,10 @@ pub fn MutableLinkedList(comptime T: type) type {
                     const w: *Wrap = @ptrCast(@alignCast(pyobj));
                     w.data = item;
                     w.owned = false;
+                    // element points into a list node: keep this MutableList
+                    // (and transitively the owning root) alive
+                    w.owner = @ptrCast(self);
+                    py.Py_INCREF(@as(*py.PyObject, @ptrCast(self)));
                     return pyobj;
                 },
                 .@"enum" => {
@@ -281,14 +306,14 @@ pub fn MutableLinkedList(comptime T: type) type {
             }
         }
 
-        var type_object = py.PyTypeObject{ .ob_base = .{ .ob_base = .{ .ob_refcnt = 1, .ob_type = null }, .ob_size = 0 }, .tp_name = "pyzig.MutableList", .tp_basicsize = @sizeOf(Self), .tp_flags = py.Py_TPFLAGS_DEFAULT, .tp_as_sequence = &sequence_methods, .tp_iter = @ptrCast(@constCast(&list_iter)), .tp_methods = @as([*]py.PyMethodDef, @ptrCast(&list_methods)), .tp_richcompare = @ptrCast(@constCast(&list_richcompare)) };
+        var type_object = py.PyTypeObject{ .ob_base = .{ .ob_base = .{ .ob_refcnt = 1, .ob_type = null }, .ob_size = 0 }, .tp_name = "pyzig.MutableList", .tp_basicsize = @sizeOf(Self), .tp_flags = py.Py_TPFLAGS_DEFAULT, .tp_as_sequence = &sequence_methods, .tp_iter = @ptrCast(@constCast(&list_iter)), .tp_methods = @as([*]py.PyMethodDef, @ptrCast(&list_methods)), .tp_richcompare = @ptrCast(@constCast(&list_richcompare)), .tp_dealloc = @ptrCast(@constCast(&dealloc)) };
     };
 }
 
-pub fn createMutableList(comptime T: type, list_ptr: *compat.DoublyLinkedList(T), element_type_obj: ?*py.PyTypeObject) ?*py.PyObject {
+pub fn createMutableList(comptime T: type, list_ptr: *compat.DoublyLinkedList(T), element_type_obj: ?*py.PyTypeObject, owner: ?*py.PyObject) ?*py.PyObject {
     const L = MutableLinkedList(T);
     if (py.PyType_Ready(&L.type_object) < 0) return null;
-    return L.create(list_ptr, element_type_obj);
+    return L.create(list_ptr, element_type_obj, owner);
 }
 
 pub fn isLinkedList(comptime T: type) bool {

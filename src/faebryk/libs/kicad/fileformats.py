@@ -107,17 +107,29 @@ class kicad:
         raise ValueError(f"Unsupported type: {t} ({type(t)})")
 
     @staticmethod
+    def _path_fingerprint(path: Path) -> tuple[int, int]:
+        stat = path.stat()
+        return (stat.st_mtime_ns, stat.st_size)
+
+    @staticmethod
     def loads[T: kicad.types](t: type[T], path_or_sexpstring: Path | str) -> T:
         """
         Attention: object returned is shared, so be careful with mutations!
+
+        Path loads are cached per file and invalidated by (mtime_ns, size):
+        re-reading an unchanged file returns the same (possibly mutated)
+        object; re-reading a rewritten file re-parses. `kicad.dumps(obj, path)`
+        keeps the cache coherent, so dump-then-load returns the same object.
         """
         path = None
         if isinstance(path_or_sexpstring, Path):
             path = path_or_sexpstring
             if not hasattr(kicad.loads, "cache"):
                 kicad.loads.cache = {}
-            if path in kicad.loads.cache:
-                out = kicad.loads.cache[path]
+            fingerprint = kicad._path_fingerprint(path)
+            cached = kicad.loads.cache.get(path)
+            if cached is not None and cached[0] == fingerprint:
+                out = cached[1]
                 assert isinstance(out, t)
                 return out
             data = path.read_text(encoding="utf-8")
@@ -126,7 +138,7 @@ class kicad:
 
         out = cast(T, kicad.type_to_module(t).loads(data))
         if path:
-            kicad.loads.cache[path] = out
+            kicad.loads.cache[path] = (fingerprint, out)
         return out
 
     @staticmethod
@@ -144,6 +156,11 @@ class kicad:
         if path is not None:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(raw, encoding="utf-8")
+            # keep the loads cache coherent: a load after this dump returns
+            # the object just written instead of a stale earlier parse
+            if not hasattr(kicad.loads, "cache"):
+                kicad.loads.cache = {}
+            kicad.loads.cache[path] = (kicad._path_fingerprint(path), obj)
         return raw
 
     @staticmethod

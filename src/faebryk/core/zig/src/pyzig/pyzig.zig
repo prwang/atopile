@@ -9,6 +9,12 @@ pub fn PyObjectWrapper(comptime T: type) type {
         ob_base: py.PyObject_HEAD,
         data: *T,
         owned: bool = false,
+        // Strong reference to the Python object whose Zig allocation `data`
+        // points into (ownership chain child -> parent -> root). Keeps the
+        // owning allocation alive while any sub-object wrapper exists —
+        // without it, dropping e.g. a PcbFile while holding .kicad_pcb leaves
+        // a dangling pointer that silently aliases the next parse.
+        owner: ?*py.PyObject = null,
     };
 }
 
@@ -19,6 +25,12 @@ fn genStructDealloc(comptime WrapperType: type) type {
             if (@hasField(WrapperType, "owned") and wrapper_obj.owned) {
                 std.heap.c_allocator.destroy(wrapper_obj.data);
                 wrapper_obj.owned = false;
+            }
+            if (comptime @hasField(WrapperType, "owner")) {
+                if (wrapper_obj.owner) |owner| {
+                    wrapper_obj.owner = null;
+                    py.Py_DECREF(owner);
+                }
             }
 
             if (py.Py_TYPE(self)) |type_obj| {
@@ -407,6 +419,9 @@ pub fn wrap_obj(
     wrapper.data = data_ptr;
     if (comptime @hasField(Wrapper, "owned")) {
         wrapper.owned = false;
+    }
+    if (comptime @hasField(Wrapper, "owner")) {
+        wrapper.owner = null;
     }
     return pyobj;
 }
