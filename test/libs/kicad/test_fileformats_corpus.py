@@ -66,13 +66,16 @@ def _params(extra_marks=lambda version, path: []):
 
 
 def _load(path: Path) -> kicad.pcb.PcbFile:
-    # bypass kicad.loads' Path-keyed cache
+    # bypass kicad.loads' Path-keyed cache. Keep the returned PcbFile alive
+    # while using .kicad_pcb: the wrapper owns the zig memory and sub-objects
+    # dangle (and silently alias the next parse) once it is GC'd.
     return kicad.loads(kicad.pcb.PcbFile, path.read_text())
 
 
 @pytest.mark.parametrize(("version", "path"), _params())
 def test_parse(version: int, path: Path):
-    pcb = _load(path).kicad_pcb
+    pcb_file = _load(path)
+    pcb = pcb_file.kicad_pcb
     assert pcb.footprints or pcb.segments or pcb.zones, "board parsed but empty"
 
 
@@ -126,7 +129,8 @@ def _snapshot_path(version: int, path: Path) -> Path:
 
 @pytest.mark.parametrize(("version", "path"), _params())
 def test_semantic_snapshot(version: int, path: Path):
-    view = semantic_view_json(_load(path).kicad_pcb)
+    pcb_file = _load(path)
+    view = semantic_view_json(pcb_file.kicad_pcb)
     snap = _snapshot_path(version, path)
     if REGEN:
         snap.parent.mkdir(parents=True, exist_ok=True)

@@ -78,7 +78,8 @@ def test_net_name_survives_write_parse_bind(name: str):
     pad.net.name = name
 
     dump = kicad.dumps(pcb_file)
-    reloaded = kicad.loads(kicad.pcb.PcbFile, dump).kicad_pcb
+    reloaded_file = kicad.loads(kicad.pcb.PcbFile, dump)
+    reloaded = reloaded_file.kicad_pcb
 
     # the name itself survives a write→parse cycle
     assert next(n for n in reloaded.nets if n.number == 1).name == name

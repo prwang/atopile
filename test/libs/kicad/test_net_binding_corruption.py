@@ -41,7 +41,9 @@ V9_BOARDS = ["test", "layout_reuse_top", "interf_u_unrouted"]
 
 
 def _view(text: str) -> str:
-    return semantic_view_json(kicad.loads(kicad.pcb.PcbFile, text).kicad_pcb)
+    # bind the PcbFile: it owns the zig memory; dropping it dangles .kicad_pcb
+    pcb_file = kicad.loads(kicad.pcb.PcbFile, text)
+    return semantic_view_json(pcb_file.kicad_pcb)
 
 
 def _view_of_tree(root: Node) -> str:

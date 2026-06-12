@@ -42,14 +42,17 @@ def _build(cwd: Path, hashseed: str) -> None:
     assert "Build successful! 🚀" in stdout + stderr
 
 
-def _load_pcb(pcb_path: Path) -> "kicad.pcb.KicadPcb":
+def _load_pcb(pcb_path: Path) -> "kicad.pcb.PcbFile":
     # kicad.loads caches parses by Path with no invalidation; tests reload the
-    # same file after rebuilds, so always parse from text
-    return kicad.loads(kicad.pcb.PcbFile, pcb_path.read_text()).kicad_pcb
+    # same file after rebuilds, so always parse from text. Returns the PcbFile
+    # wrapper (not .kicad_pcb): the wrapper owns the zig memory, and once it is
+    # GC'd sub-objects dangle and silently alias the next parse.
+    return kicad.loads(kicad.pcb.PcbFile, pcb_path.read_text())
 
 
 def _assert_members_sorted(pcb_path: Path) -> None:
-    pcb = _load_pcb(pcb_path)
+    pcb_file = _load_pcb(pcb_path)
+    pcb = pcb_file.kicad_pcb
     for group in pcb.groups:
         assert list(group.members) == sorted(group.members), (
             f"group {group.name!r} members not sorted"
@@ -96,9 +99,10 @@ def test_steady_state_and_incremental_add_deterministic(
     _build(example_copy, hashseed="1")
     assert (example_copy / TOP_PCB).read_bytes() == baseline
 
+    pcb_file_before = _load_pcb(example_copy / TOP_PCB)
     refs_before = {
         Property.try_get_property(fp.propertys, "Reference")
-        for fp in _load_pcb(example_copy / TOP_PCB).footprints
+        for fp in pcb_file_before.kicad_pcb.footprints
     }
 
     # incremental: add a 4th Sub instance
@@ -114,9 +118,10 @@ def test_steady_state_and_incremental_add_deterministic(
         "build after adding an instance must already be in canonical order"
     )
 
+    pcb_file_after = _load_pcb(example_copy / TOP_PCB)
     refs_after = {
         Property.try_get_property(fp.propertys, "Reference")
-        for fp in _load_pcb(example_copy / TOP_PCB).footprints
+        for fp in pcb_file_after.kicad_pcb.footprints
     }
     assert refs_before <= refs_after, (
         f"pre-existing designators changed: {refs_before - refs_after}"
@@ -181,8 +186,10 @@ def test_manual_edits_preserved(example_copy: Path, save_tmp_path_on_failure: No
     _build(example_copy, hashseed="0")
     pcb_path = example_copy / TOP_PCB
 
-    pcb = _load_pcb(pcb_path)
-    net_number = next(n.number for n in pcb.nets if n.number != 0)
+    pcb_file = _load_pcb(pcb_path)
+    net_number = next(
+        n.number for n in pcb_file.kicad_pcb.nets if n.number != 0
+    )
 
     txt = pcb_path.read_text()
     closing = txt.rfind(")")
@@ -192,7 +199,8 @@ def test_manual_edits_preserved(example_copy: Path, save_tmp_path_on_failure: No
 
     _build(example_copy, hashseed="1")
 
-    rebuilt = _load_pcb(pcb_path)
+    rebuilt_file = _load_pcb(pcb_path)
+    rebuilt = rebuilt_file.kicad_pcb
     assert any(s.uuid == MANUAL_SEG_UUID for s in rebuilt.segments), (
         "manual segment inside a user group was deleted by the rebuild"
     )
