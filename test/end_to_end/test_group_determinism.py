@@ -63,6 +63,10 @@ def _assert_members_sorted(pcb_path: Path) -> None:
 def example_copy(tmp_path: Path) -> Path:
     copy = tmp_path / EXAMPLE.name
     shutil.copytree(EXAMPLE, copy)
+    # Seed the part cache so builds never hit the EasyEDA API (rate-limited
+    # 403s would make these determinism tests flaky in CI).
+    cache_fixture = _repo_root() / "test" / "common" / "resources" / "easyeda-cache"
+    shutil.copytree(cache_fixture, copy / "build" / "cache" / "parts" / "easyeda")
     return copy
 
 
