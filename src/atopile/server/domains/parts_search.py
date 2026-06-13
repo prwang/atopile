@@ -406,7 +406,7 @@ def _lib_fp_to_pcb_fp(
 
 def handle_get_part_footprint(lcsc_id: str) -> bytes | None:
     """Fetch footprint data wrapped in a kicad_pcb file for viewing in kicanvas."""
-    from easyeda2kicad.easyeda.easyeda_api import EasyedaApi
+    from faebryk.libs.picker.easyeda_resilient import ResilientEasyedaApi as EasyedaApi
     from easyeda2kicad.easyeda.easyeda_importer import EasyedaFootprintImporter
     from easyeda2kicad.kicad.export_kicad_footprint import ExporterFootprintKicad
 
@@ -470,7 +470,7 @@ def handle_get_part_footprint(lcsc_id: str) -> bytes | None:
 
 def handle_get_part_model(lcsc_id: str) -> tuple[bytes, str] | None:
     """Fetch the STEP 3D model data for a part."""
-    from easyeda2kicad.easyeda.easyeda_api import EasyedaApi
+    from faebryk.libs.picker.easyeda_resilient import ResilientEasyedaApi as EasyedaApi
     from easyeda2kicad.easyeda.easyeda_importer import EasyedaFootprintImporter
 
     lcsc_numeric = _normalize_lcsc_id(lcsc_id)

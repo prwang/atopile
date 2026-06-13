@@ -17,7 +17,6 @@ from dataclasses_json import (
 from dataclasses_json import (
     config as dataclasses_json_config,
 )
-from easyeda2kicad.easyeda.easyeda_api import EasyedaApi
 from easyeda2kicad.easyeda.easyeda_importer import (
     EasyedaFootprintImporter,
     EasyedaSymbolImporter,
@@ -31,6 +30,7 @@ import faebryk.core.node as fabll
 import faebryk.library._F as F
 from atopile.config import config as Gcfg
 from faebryk.libs.kicad.fileformats import kicad, strip_duplicate_ref_texts
+from faebryk.libs.picker.easyeda_resilient import ResilientEasyedaApi as EasyedaApi
 from faebryk.libs.picker.picker import PickedPart, PickSupplier
 from faebryk.libs.util import ConfigFlag, call_with_file_capture, not_none, once
 
