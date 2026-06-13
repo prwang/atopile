@@ -29,7 +29,7 @@ PCB 布局布线工作流：`.ato` = 电路事实源，`layout.yaml` = 布局意
 |---|---|---|
 | P0 | 确定性与基础修复（§A） | ✅ |
 | P0.1 | v10 迁移测试底座（§P0.1） | ✅ |
-| P0.2 | v10 方言迁移本体（§P0.2，S0–S6 + D1 完成） | 🔶 S7 待 BUG-2 修复 |
+| P0.2 | v10 方言迁移本体（§P0.2，S0–S6 + D1 + BUG-2 完成） | 🔶 S7 剩 flag-day 升级/smoke |
 | P1 | layout_ir 导出（§B）、layout.yaml + rule area（§C）、布线执行器（§E1/E2/E5） | ⬜ |
 | P2 | 诊断闭环（§D）、硬引导点/room 复制（§E3/E4） | ⬜ |
 
@@ -156,53 +156,52 @@ PCB 布局布线工作流：`.ato` = 电路事实源，`layout.yaml` = 布局意
   S5b 引入的 `?str` 与 footprint.zig `list(str)` 冲突，crash `insert_footprint`】；
   BUG-1 测试隔离【见下】。
 
-### ⬜ S7. flag day 终验（代码已落，验收待 BUG-2）
+### ⬜ S7. flag day 终验（代码已落，BUG-2 已修，剩余验收项）
 
 代码已完成（写 v10 + 版本 bump，`b3c0d2aa`；单测 354 passed；真实 `ato build` 出 v10 板、
-`test_pcb_export`/`test_net_naming` 11 passed、DRC 干净）。**剩余验收（被 BUG-2 挡住）**：
+`test_pcb_export`/`test_net_naming` 11 passed、DRC 干净）。**剩余验收**：
+- [x] **BUG-2 已修**（v10 读回填 pad net 名，见下）——增量稳态阻断已解除。
+- [x] E2E room-reuse 确定性绿：`test_group_determinism`（4）+ `test_net_name_determinism`（1）
+  = 5 passed；pull→rebuild→rebuild 逐字节一致、恒 24 net-ref。
 - [ ] examples/fixtures/probe 工程 `.kicad_pcb` 一次性升级提交（v9→v10）；跑 build→build→diff
   确认增量稳态（事实 6）。
-- [ ] E2E ×4 在 v10 上绿（含 `test_group_determinism` / `test_net_name_determinism`——**当前红，
-  根因 = BUG-2**）。
 - [ ] BOM/制造产物/DRC smoke。
 - [ ] 改写 `/kicad_wksp/CLAUDE.md` 与 `KicadDecisions.md` 的"单向门/只读不存"约束为
   "已迁移，v9 只读、写即升级 v10"（事实 1）。
 - 已绿子项：S0 DRC oracle（`b3c0d2aa` 翻绿，v9 输入升级 v10 后 kicad-cli DRC 通过）；
   GUI 编辑回环门（S6c 提前落地）。
 
-### 调试日志 BUG-2：room-reuse（pull_group_layout）net 分配非确定 + pull≠sync 【OPEN，高优先】
+### 调试日志 BUG-2：rebuild 丢失 pull 进来的 room 布线 net（pull≠sync）【✅ CONFIRMED+FIXED 2026-06-13】
 
-**纪律**：先记录后行动；假设标 `[OPEN]`/`[REJECTED]`/`[CONFIRMED]` + 证据。
+根因 = **v10 读侧不回填 pad net 名**（`Net.name` 是 `v9_only` 字段，v10 pad 的 `(net "名")`
+经 net_ref 只解析出编号、`name` 留 None）。下游 rebuild 时
+`libs/nets.bind_fbrk_nets_to_kicad_nets` 靠 `pad.net.name` 把 fbrk net 重新绑回已存 kicad
+net；名缺失→绑定静默失败→`apply_design` 把该 net 当新 net `insert_net`（拿新编号、改绑
+pads）、把读回合成的旧同名 net 判为"设计中不存在"→`remove_net`→`remove_net` 按编号断开
+routing（`transformer.py:1963-1966`）→ 引用旧编号的 segment 落 net 0、v10 写出时省略。
+pad 因被 apply_design 重设而存活，**只有 pull 进来的 segment 掉 net**。
 
-**状态（2026-06-13）**：根因 `[OPEN]`，最可能 H1。**这是头号功能（room 局部复用）的
-确定性，且是 S7 终验的唯一拦路项。**
+修复：`pcb.zig` `PcbFile.loads` 合成 net 表后，遍历 footprint pads 把 `pad.net.name` 按
+合成编号回填（`names.items[number-1]`，"" = 0），使内存模型方言无关。回归测试
+`test_v10_acceptance.py::test_v10_read_backfills_pad_net_names`。
 
-**现象**（S7 后跑全 e2e 暴露——此前误以为 e2e 靠 EasyEDA，实则有离线缓存，per-step 未跑）：
-- 红：`test_group_determinism.py::test_fresh_build_deterministic` /
-  `::test_steady_state_and_incremental_add_deterministic` /
-  `test_net_name_determinism.py::test_net_names_deterministic`。
-- 复现（examples/layout_reuse + 缓存，反复 `ato build`）：
-  - net **NAME 集稳定**（两次都 9 个名）——compiler 命名确定。
-  - net→**几何分配不稳定**：写出 `(net "…")` 引用数 run-to-run 在 **18/24** 跳变（同一
-    segment 有时挂真实 net、有时落 net 0 被 v10 省略）。
-  - **sync（增量）确定**（两次逐字节同）；**pull（fresh）随机**：差异 = (a) uuid4 随机
-    【已知预期，事实 6】 + (b) net-ref 数 18/24【真 bug】。
-  - **pull ≠ sync**：违反 A1 增量稳态（刚 pull 的板再 build 会改动）。
+**实测纠偏（原假设表全错，留作教训）**：原记"net 分配非确定/18-24 run-to-run 跳变/pull 随机
+sync 确定"——**全部错**。实测（examples/layout_reuse + 缓存，venv ato 直跑，注意 PATH 必须
+让 venv ato 在 `~/.local/bin` 之前，否则 BuildQueue 会 spawn 装好的旧版 0.15.7 worker、
+版本错配崩在 pydantic/sqlite schema）：
+- **确定性的单步回归**，与 PYTHONHASHSEED 无关：fresh pull 恒 24 net-ref（hs=0/1/2/7 全同）；
+  **第一次 rebuild 恒掉到 18**；其后 rebuild 恒 18。即 pull 确定、sync 也确定，但 **pull≠sync**
+  （违反 A1 增量稳态）。掉的 6 = 3 个 sub × 2 条 intra-sub chain net 的 segment 引用
+  （inter-sub net 无布线故不显形，但其 net 同样被 renumber，只是无 segment 可掉）。
+- H1（`_generate_net_map` 首次胜并列判据）`[REJECTED]`：pull 本身确定，与此无关。
+  （注：该并列判据 `mapping_counts[src][tgt] > max(values())` 自增后恒 false = 死代码 ≈
+  "首次胜"，是真实但**休眠**的隐患，留 §遗留问题。）
+- H2/H3/H4 `[REJECTED]`：非随机 set 迭代、非 pull/sync 编号不一致、非 pre-existing
+  （bug 由 S7 写 v10 引入：v9 pad 自带名，v10 才暴露未回填）。
 
-**假设表**：
-- **H1 `[OPEN]` 最可能**：`layout_sync._generate_net_map` 的"最频映射"并列判据
-  `mapping_counts[src][tgt] > max(values())` 自增后恒等于 max → 实为"首次出现胜"，首次
-  取决于 `addr_map.items()`/pads 迭代序；若上游迭代受随机 UUID 键控 → net_map 缺漏 →
-  segment 落 net 0。验证 = 给迭代/并列判据加确定序后是否转确定。
-- **H2 `[OPEN]`**：`pull_group_layout` 搬运几何时按随机 UUID/set 迭代。验证 = 定位 pull
-  路径 set/dict 迭代。
-- **H3 `[OPEN]`**：v10 读回合成编号与 pull 内存编号不一致使 sync 少绑。验证 = 对比 pull
-  内存态 nets 与 sync 读回合成态 nets。
-- **H4 `[OPEN]`**：pre-existing（与 v10 无关，仅 e2e 没在 per-step 跑过）。验证 = 在 S6c
-  （`663baa6f`，pre-S7）跑这三个 e2e 测试。
-
-**修复方向**（确认根因后）：给 `_generate_net_map` 迭代/并列判据加确定序（按 src_addr/pad
-排序、并列取字典序最小 tgt）+ 审计 pull 路径所有 set/dict 迭代；以这三个 e2e 测试验收。
+修复后验收：3 个 e2e 全绿（`test_group_determinism.py` 4 个 + `test_net_name_determinism.py`
+1 个 = 5 passed in 247s）；pull/rebuild/rebuild 三连逐字节一致且恒 24 ref；
+`test/libs/kicad`+`exporters/pcb`+`layout_server` 181 passed。
 
 ### 调试日志 BUG-1：测试污染版本控制 fixture v8/pcb/test.kicad_pcb 【✅ CONFIRMED+FIXED】
 
@@ -283,3 +282,7 @@ teardrop / generated 蛇形等长 / via padstack 的 v10 子键形变补全（sc
    漂移。验收须加"稳态重建下全部 net 名字节稳定"。**与 BUG-2 同源风险**（net→几何绑定稳定性）。
 3. `gen_uuid` 长名字 bug（事实 7）：生成长地址组（C3）前必修。
 4. 是否向 KiCad 上游提 DRC JSON 增强补丁（见 §F）。
+5. **`_generate_net_map` 并列判据死代码**（`layout_sync.py:238`）：
+   `mapping_counts[src][tgt] > max(values())` 自增后恒 false → 注释写"最频映射"实为"首次胜"。
+   当前 pull 迭代序确定故未发病（BUG-2 排查中 `[REJECTED]` 为根因），但歧义映射下是休眠隐患。
+   修法：并列取字典序最小 tgt + 迭代按 src_addr/pad 排序。无歧义复用场景不阻塞，留作硬化项。

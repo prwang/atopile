@@ -133,6 +133,74 @@ def test_net_numbering_synthesis_rule():
 
 
 # ---------------------------------------------------------------------------
+# 1b. Pad net-name back-fill on v10 read (BACKLOG BUG-2)
+# ---------------------------------------------------------------------------
+
+# A pad's inline (net "name") resolves its number via net_ref, but Net.name is a
+# v9-only field, so a naive v10 read leaves pad.net.name == None. The rebuild
+# path re-associates fbrk nets with kicad nets by reading pad.net.name
+# (libs/nets.bind_fbrk_nets_to_kicad_nets); an absent name makes the binding
+# silently fail, the net is re-inserted under a new number, the old one removed,
+# and every routed segment referencing it is disconnected (net 0 → dropped in
+# v10). Symptom: a board pulled from a sub-layout loses its intra-group routing
+# nets on the very next build (pull != sync, violating increment-stability).
+_V10_PAD_NET_BOARD = """(kicad_pcb
+\t(version 20260206)
+\t(generator "pcbnew")
+\t(generator_version "10.0")
+\t(general
+\t\t(thickness 1.6)
+\t)
+\t(footprint "test:R"
+\t\t(layer "F.Cu")
+\t\t(uuid "00000000-0000-0000-0000-0000000000f0")
+\t\t(at 0 0)
+\t\t(pad "1" smd rect
+\t\t\t(at 0 0)
+\t\t\t(size 1 1)
+\t\t\t(layers "F.Cu")
+\t\t\t(net "zz_last")
+\t\t\t(uuid "00000000-0000-0000-0000-0000000000f1")
+\t\t)
+\t\t(pad "2" smd rect
+\t\t\t(at 1 0)
+\t\t\t(size 1 1)
+\t\t\t(layers "F.Cu")
+\t\t\t(net "aa_first")
+\t\t\t(uuid "00000000-0000-0000-0000-0000000000f2")
+\t\t)
+\t)
+\t(segment
+\t\t(start 0 0)
+\t\t(end 1 0)
+\t\t(width 0.2)
+\t\t(layer "F.Cu")
+\t\t(net "aa_first")
+\t\t(uuid "00000000-0000-0000-0000-000000000001")
+\t)
+)
+"""
+
+
+def test_v10_read_backfills_pad_net_names():
+    pcb = kicad.loads(kicad.pcb.PcbFile, _V10_PAD_NET_BOARD).kicad_pcb
+    by_number = {n.number: n.name for n in pcb.nets}
+
+    pads = {pad.name: pad for fp in pcb.footprints for pad in fp.pads}
+    for pad in pads.values():
+        assert pad.net is not None
+        # the bug: name left None on v10 read
+        assert pad.net.name is not None, (
+            f"pad {pad.name} net name not back-filled on v10 read"
+        )
+        # name must match the synthesized number it resolved to
+        assert pad.net.name == by_number[pad.net.number]
+
+    assert pads["1"].net.name == "zz_last"
+    assert pads["2"].net.name == "aa_first"
+
+
+# ---------------------------------------------------------------------------
 # 2. DRC oracle (flips in S7 — write dialect)
 # ---------------------------------------------------------------------------
 

@@ -1458,6 +1458,32 @@ pub const PcbFile = struct {
                 } };
                 pcb.nets.append(node);
             }
+
+            // Back-fill pad net names. A v10 pad carries (net "name") only; the
+            // net_ref resolves the number but leaves Net.name null (it is a
+            // v9-only field). The rest of the toolchain reads pad.net.name to
+            // re-associate fbrk nets with existing kicad nets on rebuild
+            // (libs/nets.bind_fbrk_nets_to_kicad_nets) — an absent name makes
+            // that binding silently fail, so the net is re-inserted with a new
+            // number and the old one removed, which disconnects the routed
+            // segments referencing it (BACKLOG BUG-2). Numbering is dense
+            // (name index+1, "" = 0), so names.items[number-1] is authoritative.
+            var fp_it = pcb.footprints.first;
+            while (fp_it) |fp_node| : (fp_it = fp_node.next) {
+                var pad_it = fp_node.data.pads.first;
+                while (pad_it) |pad_node| : (pad_it = pad_node.next) {
+                    if (pad_node.data.net) |*net| {
+                        if (net.name == null) {
+                            const num = net.number;
+                            if (num == 0) {
+                                net.name = try allocator.dupe(u8, "");
+                            } else if (num >= 1 and @as(usize, @intCast(num)) <= names.items.len) {
+                                net.name = try allocator.dupe(u8, names.items[@as(usize, @intCast(num)) - 1]);
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         return PcbFile{ .kicad_pcb = pcb };
