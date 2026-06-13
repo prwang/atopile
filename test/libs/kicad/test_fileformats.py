@@ -23,6 +23,7 @@ from faebryk.libs.test.fileformats import (
     _SYM_DIR,  # noqa: F401
     _VERSION_DIR,  # noqa: F401
     DEFAULT_VERSION,  # noqa: F401
+    FILEFORMATS_PATH,
     FPFILE,
     FPLIBFILE,
     NETFILE,
@@ -34,6 +35,9 @@ from faebryk.libs.test.fileformats import (
 from faebryk.libs.util import ConfigFlag, find, not_none
 
 logger = logging.getLogger(__name__)
+
+# The write dialect is v10 (P0.2 S7), so byte fidelity only holds for v10 input.
+V10_PCBFILE = FILEFORMATS_PATH / "v10" / "pcb" / "test.kicad_pcb"
 
 DUMP = ConfigFlag("DUMP", descr="dump load->save into /tmp")
 
@@ -193,7 +197,9 @@ def test_dump_load_equality(parser: type[kicad.types], path: Path):
 @pytest.mark.parametrize(
     ("parser", "path"),
     [
-        (kicad.pcb.PcbFile, PCBFILE),
+        # PCB byte fidelity is v10-only now (write dialect is v10, S7); a v9
+        # board would upgrade on write and never reproduce its own bytes.
+        (kicad.pcb.PcbFile, V10_PCBFILE),
         (kicad.footprint.FootprintFile, FPFILE),
     ],
 )
@@ -518,11 +524,11 @@ def test_zone_connect_pads_mode_roundtrip():
     """Test that zone connect_pads mode (e.g. thru_hole_only) survives round-trip."""
     sexp = """
     (kicad_pcb
+        (version 20260206)
         (generator "test_atopile")
         (generator_version "latest")
         (zone
-            (net 1)
-            (net_name "GND")
+            (net "GND")
             (layer "F.Cu")
             (uuid "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
             (hatch edge 0.5)
@@ -563,11 +569,11 @@ def test_zone_connect_pads_default_mode_roundtrip():
     """Test that zone with default connect_pads (thermal reliefs) round-trips."""
     sexp = """
     (kicad_pcb
+        (version 20260206)
         (generator "test_atopile")
         (generator_version "latest")
         (zone
-            (net 1)
-            (net_name "GND")
+            (net "GND")
             (layer "F.Cu")
             (uuid "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
             (hatch edge 0.5)

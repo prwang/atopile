@@ -138,8 +138,10 @@ def test_net_numbering_synthesis_rule():
 
 
 @NEEDS_KICAD_CLI
-@pytest.mark.xfail(strict=True, reason="P0.2 S7: write dialect is still v9")
 def test_oracle_written_board_is_v10_and_drc_runs(tmp_path: Path):
+    """P0.2 S7 flag day (Option B, upgrade-on-write): a board read as v9 is
+    re-emitted as v10, and that v10 output is a file KiCad 10 can DRC. This is
+    the green flip of the flag day — atopile now writes v10 for everything."""
     raw = (V9_PCB_DIR / "test.kicad_pcb").read_text()
     pcb_file = kicad.loads(kicad.pcb.PcbFile, raw)
     out = kicad.dumps(pcb_file)
@@ -147,7 +149,7 @@ def test_oracle_written_board_is_v10_and_drc_runs(tmp_path: Path):
     m = re.search(r"\(version (\d+)\)", out)
     assert m is not None
     assert int(m.group(1)) >= 20250000, (
-        f"written dialect is v9 ({m.group(1)}); flag day (S7) flips this"
+        f"v9 input was not upgraded on write (got {m.group(1)})"
     )
 
     board = tmp_path / "board.kicad_pcb"

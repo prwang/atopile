@@ -135,8 +135,9 @@ def test_dumps_keeps_cache_coherent(tmp_path: Path):
 
     # load after dump: same object (not a stale reparse, not a cache miss)
     assert kicad.loads(kicad.pcb.PcbFile, board) is obj
-    # and the bytes on disk match
-    assert '(net 1 "RENAMED")' in board.read_text()
+    # and the rename is on disk. The write dialect is v10 (S7): no top-level net
+    # table — the name lives at the point of use (the pad's net reference).
+    assert '(net "RENAMED")' in board.read_text()
 
 
 def test_loads_path_type_assert_still_holds(tmp_path: Path):

@@ -22,14 +22,21 @@ view of every parseable board must match its committed snapshot byte-for-byte.
 Regenerate snapshots with REGEN_SEMANTIC_SNAPSHOTS=1 after an *intentional*
 semantic change — never to silence an unexplained diff.
 
-All four gates are green on both dialects since P0.2 S5b: the schema covers
-every key the corpus carries (gate 3), and the v10 fixtures were re-derived
-from our own writer so they round-trip byte-for-byte (gate 4). Any new
-schema gap surfaces as a gate-3 failure here and a loud warning at load time
-(test_unknown_key_loudness.py).
+Since P0.2 S7 (flag day, Option B) atopile writes the v10 dialect for every
+board — v9 is read-only and is *upgraded on write*. So gates 3 and 4 are v10-only:
+a v9 board re-emitted as v10 differs structurally (no net table, name-only refs),
+which is a deliberate dialect change, not data loss. The v9 read path is instead
+guarded by:
+  - test_v9_upgrade_preserves_semantics (load v9 → write v10 → reload → the
+    semantic view is unchanged: the upgrade loses nothing that matters);
+  - test_cross_dialect_equivalence (v9 and v10 of the same board agree);
+  - the semantic-view snapshots (read fidelity for every dialect).
+Any new v10 schema gap surfaces as a gate-3 failure here and a loud warning at
+load time (test_unknown_key_loudness.py).
 """
 
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -55,6 +62,20 @@ def _params(extra_marks=lambda version, path: []):
         yield pytest.param(version, path, id=f"v{version}-{path.stem}", marks=marks)
 
 
+def _v10_params():
+    """Only the v10 fixtures. The write dialect is v10 (S7), so byte fidelity and
+    structural no-data-loss are only meaningful when input and output share it."""
+    for version, path in all_pcb_fixtures():
+        if version == 10:
+            yield pytest.param(version, path, id=f"v{version}-{path.stem}")
+
+
+def _v9_params():
+    for version, path in all_pcb_fixtures():
+        if version == 9:
+            yield pytest.param(version, path, id=f"v{version}-{path.stem}")
+
+
 def _load(path: Path) -> kicad.pcb.PcbFile:
     # parse from text so these tests are independent of the loads Path cache
     return kicad.loads(kicad.pcb.PcbFile, path.read_text())
@@ -74,11 +95,14 @@ def test_dump_load_idempotent(version: int, path: Path):
     assert dump == dump2
 
 
-@pytest.mark.parametrize(("version", "path"), _params())
+@pytest.mark.parametrize(("version", "path"), _v10_params())
 def test_no_data_loss(version: int, path: Path):
-    """No schema field is silently dropped on rewrite (P0.2 S5b complete).
+    """A v10 board re-emitted as v10 drops no schema field (P0.2 S5b complete).
     The remaining round-trip gap, if any, is float/quote formatting, which
-    data_loss() normalizes away — a real drop shows as a per-field entry."""
+    data_loss() normalizes away — a real drop shows as a per-field entry.
+    v10-only: a v9 board is upgraded on write (S7), so raw-vs-dump structural
+    diff there is dialect change, not loss (see test_v9_upgrade_preserves_
+    semantics)."""
     raw = path.read_text()
     dump = kicad.dumps(kicad.loads(kicad.pcb.PcbFile, raw))
     loss = sexp_tree.data_loss(raw, dump)
@@ -90,18 +114,31 @@ def test_no_data_loss(version: int, path: Path):
 
 @pytest.mark.parametrize(
     ("version", "path"),
-    [
-        p
-        for p in _params()
-        if Path(str(p.values[1])).stem in ATOPILE_AUTHORED_STEMS
-    ],
+    [p for p in _v10_params() if Path(str(p.values[1])).stem in ATOPILE_AUTHORED_STEMS],
 )
 def test_byte_fidelity(version: int, path: Path):
-    """Atopile-authored boards round-trip byte-for-byte. The v10 fixtures were
-    re-derived from our own writer at S5b (kicad-cli's formatting is a
-    non-goal); KiCad reads them losslessly (test_v10_acceptance oracles)."""
+    """Atopile-authored v10 boards round-trip byte-for-byte. The v10 fixtures
+    were re-derived from our own writer (kicad-cli's formatting is a non-goal);
+    KiCad reads them losslessly (test_v10_acceptance oracles). v10-only: the
+    write dialect is v10, so v9 input never reproduces its own bytes (S7)."""
     raw = path.read_text()
     assert raw == kicad.dumps(kicad.loads(kicad.pcb.PcbFile, raw))
+
+
+@pytest.mark.parametrize(("version", "path"), _v9_params())
+def test_v9_upgrade_preserves_semantics(version: int, path: Path):
+    """The v9 read path's safety net under S7 upgrade-on-write: reading a v9
+    board, writing it (as v10), and reading it back must leave the name-based
+    semantic view unchanged. Structural bytes change (dialect upgrade); meaning
+    does not."""
+    original = _load(path)
+    before = semantic_view_json(original.kicad_pcb)
+
+    upgraded_text = kicad.dumps(original)
+    reloaded = kicad.loads(kicad.pcb.PcbFile, upgraded_text)
+
+    assert int(re.search(r"\(version (\d+)\)", upgraded_text).group(1)) >= 20250000
+    assert semantic_view_json(reloaded.kicad_pcb) == before
 
 
 def _snapshot_path(version: int, path: Path) -> Path:

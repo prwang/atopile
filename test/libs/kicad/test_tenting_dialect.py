@@ -5,12 +5,12 @@ P0.2 S3 — tenting-family dual-shape support (BACKLOG M2, breaking point ②).
 
 v9 serializes the tenting family as bare presence symbols
 ``(tenting front back)``; v10 nests them as ``(tenting (front yes) (back
-yes))``. Reading accepts both shapes everywhere (setup, pad, via); writing
-follows the board's own version: v9 boards keep the v9 bytes (corpus byte
-fidelity guards this), v10 boards get the nested form.
+yes))``. Reading accepts both shapes everywhere (setup, pad, via). Since the
+P0.2 S7 flag day (Option B) writing is always v10, so a v9 board's bare tokens
+are upgraded to the nested form on write and the v9-only pad ``none`` is dropped.
 
-No corpus switch flips here — v10 boards still stop at the net model (S4) —
-so this file brings its own inline coverage per the S0 discipline.
+No corpus switch flips here, so this file brings its own inline coverage per
+the S0 discipline.
 """
 
 import re
@@ -93,12 +93,15 @@ def test_absent_tenting_is_none():
     assert pcb.footprints[0].pads[0].tenting is None
 
 
-def test_write_v9_keeps_bare_symbols():
+def test_write_upgrades_v9_tenting_to_v10_nested():
+    """S7 upgrade-on-write: a v9 board's bare tenting tokens are re-emitted in
+    the v10 nested form, and the v9-only pad-level ``none`` is dropped."""
     raw = _board(V9, "\t\t(tenting front back)", "\t\t\t(tenting none)")
     out = kicad.dumps(kicad.loads(kicad.pcb.PcbFile, raw))
-    assert "(tenting front back)" in out
-    assert "(tenting none)" in out
-    assert "(front yes)" not in out
+    assert re.search(r"\(tenting\s*\(front yes\)\s*\(back yes\)\s*\)", out), out
+    assert "(tenting front back)" not in out
+    # the v9-only pad "none" token must not leak into v10 output
+    assert "(tenting none)" not in out
 
 
 def test_write_v10_nests_and_drops_none():

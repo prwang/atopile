@@ -9,10 +9,13 @@ fn list(comptime T: type) type {
 }
 
 // Constants
-pub const KICAD_PCB_VERSION: i32 = 20241229;
-pub const KICAD_FP_VERSION: i32 = 20241229; // Footprint version - same as PCB version
-// Boards at/after this format version are written in the v10 dialect
-// (nested tenting family, name-only net references, no net table).
+// P0.2 S7 flag day (2026-06-13): write dialect is now v10. atopile writes the
+// KiCad 10 format for every board; v9 is read-only (upgrade-on-write, Option B).
+pub const KICAD_PCB_VERSION: i32 = 20260206;
+pub const KICAD_FP_VERSION: i32 = 20260206; // Footprint version - same as PCB version
+// Boards at/after this format version are READ in the v10 dialect (nested
+// tenting family, name-only net references, no net table). Writing is always
+// v10 since the flag day; this gate only steers the reader.
 pub const KICAD_PCB_V10_MIN_VERSION: i32 = 20250000;
 
 // Basic geometry types
@@ -1456,23 +1459,25 @@ pub const PcbFile = struct {
     }
 
     pub fn dumps(self: PcbFile, allocator: std.mem.Allocator, out: structure.output) !void {
-        // the board's own version selects the write dialect (v9 until the
-        // P0.2 flag day bumps KICAD_PCB_VERSION; v10 for re-written v10 files)
-        structure.write_dialect = if (self.kicad_pcb.version >= KICAD_PCB_V10_MIN_VERSION) .v10 else .v9;
+        // P0.2 S7 flag day (Option B, upgrade-on-write): atopile always writes
+        // the v10 dialect; v9 is read-only. A board read as v9 is re-emitted as
+        // v10 and stamped with the current format version.
+        structure.write_dialect = .v10;
         defer structure.write_dialect = .v9;
+
+        var pcb = self.kicad_pcb;
+        pcb.version = KICAD_PCB_VERSION;
 
         var net_names = std.AutoHashMap(i32, []const u8).init(allocator);
         defer net_names.deinit();
-        if (structure.write_dialect == .v10) {
-            var it = self.kicad_pcb.nets.first;
-            while (it) |node| : (it = node.next) {
-                try net_names.put(node.data.number, node.data.name orelse "");
-            }
-            structure.write_net_names = &net_names;
+        var it = pcb.nets.first;
+        while (it) |node| : (it = node.next) {
+            try net_names.put(node.data.number, node.data.name orelse "");
         }
+        structure.write_net_names = &net_names;
         defer structure.write_net_names = null;
 
-        try structure.dumps(self.kicad_pcb, allocator, root_symbol, out);
+        try structure.dumps(pcb, allocator, root_symbol, out);
     }
 
     pub fn free(self: *PcbFile, allocator: std.mem.Allocator) void {

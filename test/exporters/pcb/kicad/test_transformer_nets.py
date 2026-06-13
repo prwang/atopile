@@ -77,7 +77,12 @@ def test_insert_net_fills_number_holes(transformer):
 
 
 def test_inserted_net_survives_serialization(transformer):
-    transformer.insert_net("fresh_net")
+    fresh = transformer.insert_net("fresh_net")
+    # Since the S7 flag day we write v10, which has no top-level net table: a net
+    # persists only where it is referenced. Wire it to copper (as the real flow
+    # does — insert_net is always followed by binding pads/routing) so it has a
+    # use to survive the round-trip. (VCC stays referenced by its pad and via.)
+    transformer.pcb.segments[0].net = fresh.number
     dump = kicad.dumps(transformer.__pcb_file_keepalive)
     reloaded_file = kicad.loads(kicad.pcb.PcbFile, dump)
     assert {n.name for n in reloaded_file.kicad_pcb.nets} == {
