@@ -252,10 +252,25 @@ examples/fixtures/probe 工程的 `.kicad_pcb` 一次性升级提交。迁移完
   *T8 变异自检（已做）*：植入"按出现序编号"（去排序+线性查找）→ **唯一**报警的
   是 S0 合成规则契约（语义视图按名解析，对一致重编号天然失明）——印证"规则先于
   实现钉死"的必要性；恢复后全绿。
-- [ ] **S5. M3：静默丢弃键补全**（断裂点③，file-by-file burndown）：以
-  no-data-loss 闸门的逐字段清单驱动（已知 v10 侧：plot 参数、
-  `duplicate_pad_numbers_are_jumpers`、`locked` 移除、层 id 重编；v9 侧：
-  pad `pintype`/`pinfunction`、`sheetfile`、`aux_axis_origin`、`rev`）。
+- [ ] **S5. M3：静默丢弃键补全**（断裂点③，file-by-file burndown）：
+  - **S5a 未知键响亮化（2026-06-13 新增，机制先行，no-silent-failure 保底）**：
+    decode 匹配循环目前对不认识的键直接落空（structure.zig 键匹配 inline for
+    无 else 分支）——加 unmatched 检测，未匹配键按（结构名, 键名）收进诊断
+    sink（与 `read_net_names` 同一全局模式）；Python 侧 loads 后可查询，
+    默认 logger.warning，strict 模式抛错。一石二鸟：① 任何未建模构造
+    （含未来 KiCad 版本新键）从静默丢失降级为响亮警告——schema 没补到的
+    部分用户至少能看见；② 对全语料跑一遍即**机械化产出 S5b 的丢失清单**
+    （替代手工盘点，手工盘点对"语料里没有的构造"天然失明）。
+    自带测试：注入未知键 → 断言警告/strict 抛错；"全 v9+v10 语料零警告"
+    即 S5b 的完成判据。
+  - **S5b 清单 burndown**：以 S5a 机械化清单驱动（已知 v10 侧：plot 参数、
+    `duplicate_pad_numbers_are_jumpers`、`locked` 移除、层 id 重编；v9 侧：
+    pad `pintype`/`pinfunction`、`sheetfile`、`aux_axis_origin`、`rev`）。
+    范围决策（2026-06-13，用户拍板=最小集）：**保真集** = 既有 7 开关清单
+    + group + rule area placement（room 工作流自有依赖）；**警告集** =
+    teardrop / generated 蛇形等长 / via padstack——仅 S5a 响亮警告，
+    schema v10 形变补全见 P1+ 条目「GUI 高级布线构造保真」；GUI 演示
+    脚本只用普通走线+过孔+组，回避警告集操作。
   *本步转绿（7 个，可逐文件分 commit）*：no-data-loss×5（v9-interf_u 可先行，
   与 v10 无依赖）+ 字节保真 v10×2——**注意**：v10 fixture 现为 kicad-cli 写出，
   逐字节对齐其排版是非目标；转绿方式 = schema 补全后用**我们的 writer 重新生成**
@@ -274,10 +289,28 @@ examples/fixtures/probe 工程的 `.kicad_pcb` 一次性升级提交。迁移完
   S0 的 oracle 开关全部转绿；BOM/制造产物/DRC smoke；KiCadRoutingTools 不动
   （事实 13）；改写 CLAUDE.md/KicadDecisions.md"单向门"约束为
   "已迁移，v9 只读兼容"。
+  - **GUI 编辑回环验收（2026-06-13 新增，演示前置门）**：模拟编辑回环单测
+    ——向 v10 fixture 注入手工布线构造集（= S5b 保真集：segment/arc/via/
+    zone/locked 标记/手工命名 group/rule area placement）→ `kicad.loads`
+    → 受管重写（pcb_manager 同步路径）→ dump → 语义视图不变 + 注入对象
+    逐一无损 + kicad-cli DRC 跑通；另注入警告集构造（teardrop/generated/
+    padstack 的 v10 形）断言 S5a **响亮警告而非静默丢失**。验证的是
+    "KiCad **改了**板子后 rebuild 不吃改动"（重存 oracle 只验"原样重存"，
+    编辑≠重存）。测试可在 S6c 提前落地：dumps 方言随文件 version（S3
+    机制），v10 fixture 重写已是 v10，不依赖 flag day。
+    **此门未绿不演示 GUI 全流程**；演示脚本回避警告集操作。
 
 **工作量**：周级（S4+S6 为主）。**回滚策略**：P0.1 底座全部以名字为基准，对
 v9/v10 双方言对称——迁移分支若需中止，底座资产无一作废；S1/S2 与方言无关，
 无论如何保留。
+
+### P1+ 候选 — GUI 高级布线构造保真（2026-06-13 立项，源于 S5b 范围决策）
+
+teardrop / generated 蛇形等长 / via padstack 的 v10 子键形变补全
+（schema 已有 KiCad 9 形模型，缺 v10 验证与形变适配）。P0.2 内仅由
+S5a 响亮警告兜底，GUI 演示脚本回避这三类操作。触发条件：演示反馈
+需要、或用户板子警告频发。验收 = 把这三类构造从 S7 回环测试的
+"警告集"挪进"保真集"。
 
 ---
 
