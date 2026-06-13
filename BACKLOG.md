@@ -302,7 +302,8 @@ examples/fixtures/probe 工程的 `.kicad_pcb` 一次性升级提交。迁移完
     4 测试全绿（含 DRC，本机有 kicad-cli）。
   *保持绿实测*：test/layout_server + test/exporters/pcb + test/libs/kicad
   = 184 passed + 1 skipped（node drag 闭环）+ 1 xfailed（仅剩 S7 DRC oracle）；
-  v8/v9 fixture 干净。E2E/examples 受 EasyEDA 403 限流，非本步代码问题。
+  v8/v9 fixture 干净。E2E/examples 取件 403 的真因见下「EasyEDA 取件韧性」
+  条（**非简单限流**，是 CloudFront WAF 的 UA 拒绝名单 + 速率规则两条），非本步代码问题。
   **GUI 演示门已绿**（S7 终验前即可演示 fidelity-set 手工编辑全流程）。
 - [ ] **S7. M4b+M6：版本号 bump + flag day + 终验**：写出 `(version 20260206)`；
   examples/fixtures/probe 一次性升级提交（A1 增量稳态依赖回读，升级后跑
@@ -320,6 +321,30 @@ examples/fixtures/probe 工程的 `.kicad_pcb` 一次性升级提交。迁移完
     编辑≠重存）。测试可在 S6c 提前落地：dumps 方言随文件 version（S3
     机制），v10 fixture 重写已是 v10，不依赖 flag day。
     **此门未绿不演示 GUI 全流程**；演示脚本回避警告集操作。
+
+- [ ] **D1. EasyEDA 取件韧性（end-to-end demo 可用性需求，S7 之后）**
+  （2026-06-13 立项，源于"EasyEDA 403 真相"实测纠正，详见 `/kicad_wksp/CLAUDE.md`）：
+  end-to-end demo（`ato build` 冷启动取件 → 选型 → 布局 → 布线 → 制造产物）
+  要能在本沙盒/CI 跑通，必须先解决取件被 CloudFront WAF 挡的两条独立原因——
+  **旧记"EasyEDA 限流 403"是错的/不完整**，真相是：
+  1. **UA 拒绝名单（主因，确定性）**：`easyeda2kicad` 库硬编码
+     `User-Agent: easyeda2kicad v<版本>`（`easyeda_api.py:24`），与
+     `python-requests/*`、`Mozilla/*` 一样在 WAF 黑名单里，**任何速率下都 403**；
+     `curl/*`、node 默认 UA 被放行。实测同一时刻 `requests`+`curl/8.5.0` UA → 200 真 JSON。
+  2. **按 IP 速率/信誉规则（次因）**：取件路径**完全无自我限速**——
+     `get_raw`（lcsc.py:491）逐件**串行**取（无并发、无间隔、无退避、无重试、
+     无超时、无 jitter、无 semaphore；easyeda2kicad 原始 GET 同样裸奔），
+     唯一缓解是 1 天缓存（`build/cache/parts/easyeda`，warm build 零调用）。
+     冷启动会把 N 个未缓存件**背靠背连发**，触发 CloudFront 速率规则后
+     即便放行 UA 也短时全 403，响应体是 `Request blocked / too much traffic`
+     的 HTML（非 JSON → `r.json()` 抛 `Expecting value: line 1 column 1`，
+     正是历史误判为"空 JSON/限流"的症状）。
+  *验收*：① easyeda2kicad 取件注入被放行 UA（curl/node 形），把确定性 403 转 200；
+  ② 取件包一层 **随机指数退避 + 重试**（对 403 与非 JSON "too much traffic" 体均视为
+  可重试，带 jitter、上限、超时），冷启动不再因突发被 WAF 拒；③ warm build 仍走缓存零调用；
+  ④ 回归测试钉死 UA 与退避（用打桩的 transport/响应，不打真网）。
+  **此条不阻塞 S7 代码**（S7 方言验收可用已缓存件/离线跑），但
+  **是 S7 之后 demo 端到端可用性的前置**。
 
 **工作量**：周级（S4+S6 为主）。**回滚策略**：P0.1 底座全部以名字为基准，对
 v9/v10 双方言对称——迁移分支若需中止，底座资产无一作废；S1/S2 与方言无关，
