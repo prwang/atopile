@@ -322,7 +322,15 @@ examples/fixtures/probe 工程的 `.kicad_pcb` 一次性升级提交。迁移完
     机制），v10 fixture 重写已是 v10，不依赖 flag day。
     **此门未绿不演示 GUI 全流程**；演示脚本回避警告集操作。
 
-- [ ] **D1. EasyEDA 取件韧性（end-to-end demo 可用性需求，S7 之后）**
+- [x] **D1. EasyEDA 取件韧性（end-to-end demo 可用性需求，S7 之后）**
+  【✅ 2026-06-13 实现，提交 `f5b707fe`（实现）+ `2a5f5777`（诊断/立项）】
+  `ResilientEasyedaApi`（drop-in 子类，4 处调用点全换）：① 注入放行 UA
+  `curl/8.5.0`（确定性 403→200，**实测真网** C125116→LTST-S326KGJRKT 经 Python 取到）；
+  ② 全 jitter 指数退避重试（403/HTML 体视为可重试，success:false 不重试、
+  耗尽返回 {} 而非 JSONDecodeError）；③ warm build 仍走 1 天缓存零调用；
+  ④ 回归测试 `test/libs/picker/test_easyeda_resilient.py`（打桩 transport，不打真网，
+  5 绿）+ 全 picker 套件 36 绿。不动 vendored easyeda2kicad（仓外、reinstall 易失）。
+  （原始立项记录如下，保留为诊断档案。）
   （2026-06-13 立项，源于"EasyEDA 403 真相"实测纠正，详见 `/kicad_wksp/CLAUDE.md`）：
   end-to-end demo（`ato build` 冷启动取件 → 选型 → 布局 → 布线 → 制造产物）
   要能在本沙盒/CI 跑通，必须先解决取件被 CloudFront WAF 挡的两条独立原因——
