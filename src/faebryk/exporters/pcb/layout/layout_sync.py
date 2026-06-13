@@ -500,9 +500,18 @@ class LayoutSync:
         )
 
     def _get_net_number(self, pcb: PCB, net_name: str) -> int:
-        """Get the net number for a given net name."""
+        """Resolve a net name to its (file-local) number on `pcb`.
+
+        Callers only pass names taken from the generated net map, which are
+        real net names on the target board (and never ""), so a miss means the
+        map and the board have desynced. The old behavior returned 0 ("no
+        net"), silently disconnecting copper; P0.2 S6b made it fail loudly. The
+        empty net "" still resolves normally — it is a real entry (number 0),
+        not the unknown case."""
         for net in pcb.nets:
             if net.name == net_name:
                 return net.number
-        # If net doesn't exist, return 0 (no net)
-        return 0
+        raise KeyError(
+            f"net {net_name!r} not found on board; available nets: "
+            f"{sorted(n.name for n in pcb.nets)}"
+        )

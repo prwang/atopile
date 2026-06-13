@@ -64,13 +64,18 @@ def sync():
 def test_get_net_number_resolves_by_name(sync):
     assert sync._get_net_number(sync.pcb, "TOP_VCC") == 7
     assert sync._get_net_number(sync.pcb, "TOP_GND") == 8
+    # the empty net is a real entry (number 0), not the unknown case
+    assert sync._get_net_number(sync.pcb, "") == 0
 
 
-def test_get_net_number_silently_maps_unknown_to_zero(sync):
-    """Pin: an unknown net name maps to 0 ("no net") without any diagnostic —
-    a typo in a net map silently disconnects copper. The v10 migration (P0.2
-    M5) should turn this into a loud failure; invert this test then."""
-    assert sync._get_net_number(sync.pcb, "TYPO_NET") == 0
+def test_get_net_number_raises_on_unknown(sync):
+    """Inverted at P0.2 S6b (was test_get_net_number_silently_maps_unknown_to_
+    zero). An unknown net name used to map to 0 ("no net") with no diagnostic,
+    so a typo in a net map silently disconnected copper. It now raises: callers
+    only pass names that must exist on the target board, so a miss is a real
+    map/board desync, not a routine no-net."""
+    with pytest.raises(KeyError, match="TYPO_NET"):
+        sync._get_net_number(sync.pcb, "TYPO_NET")
 
 
 def test_generate_net_map_maps_by_pad_topology(sync):
