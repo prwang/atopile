@@ -358,6 +358,52 @@ examples/fixtures/probe 工程的 `.kicad_pcb` 一次性升级提交。迁移完
 v9/v10 双方言对称——迁移分支若需中止，底座资产无一作废；S1/S2 与方言无关，
 无论如何保留。
 
+### 调试日志 BUG-2：room-reuse（pull_group_layout）net 分配非确定 + pull≠sync
+
+**纪律**：先记录后行动。假设标 `[OPEN]`/`[REJECTED]`/`[CONFIRMED]`，附可复现证据。
+
+**状态（2026-06-13）**：根因 `[OPEN]`。已隔离现象，定位到 layout_reuse 的
+pull/sync net 映射；尚未确定是 pre-existing 还是 v10 交互引入。**这是 demo 头号
+功能（room 局部复用）的确定性，优先级高。**
+
+**现象**（S7 后跑全 e2e 才暴露——之前 per-step 保持绿没跑 e2e，误以为 e2e 靠
+EasyEDA 而实际有 `test/common/resources/easyeda-cache` 离线缓存）：
+- `test/end_to_end/test_group_determinism.py::test_fresh_build_deterministic`、
+  `test_steady_state_and_incremental_add_deterministic`、
+  `test_net_name_determinism.py::test_net_names_deterministic` 三个全红。
+- 复现（examples/layout_reuse + 缓存，反复 `ato build`）：
+  - **net NAME 集稳定**（两次构建都是同样 9 个名字）——net 命名（compiler）确定。
+  - **net→几何 分配不稳定**：写出的 `(net "…")` 引用数 run-to-run 在 **18 / 24**
+    间跳变；即同一 segment/pad 有时挂真实 net、有时落 net 0（v10 省略）。
+  - **sync（增量，top.kicad_pcb 已存在）确定**：两次 sync 构建逐字节相同。
+  - **pull（fresh，top 缺失）随机**：两次 fresh 构建不同。差异有二：
+    (a) UUID = uuid4 随机+FBRK 后缀（**这是已知预期**，确定性目标只增量稳态，非 fresh 相同）；
+    (b) net-ref 数 18 vs 24（**这是真 bug**，非 UUID）。
+  - **pull ≠ sync**：fresh pull 与紧接着的 sync 重建 net-ref 数不同 → 违反 A1
+    增量稳态（在刚 pull 出的板上再 build 会改动它）。
+
+**假设表**：
+- **H1 `[OPEN]`（最可能）** `layout_sync._generate_net_map` 的"最频映射"
+  并列判据 `mapping_counts[src][tgt] > max(values())` 自增后恒等于 max → 实为
+  "首次出现胜"，首次取决于 `addr_map.items()` / pads 迭代序；若上游 addr_map
+  或 pad/net 迭代序受随机 UUID 键控容器影响 → net_map 缺漏部分 src_net →
+  对应 segment 落 net 0。待验证：给该函数排序 + 修并列判据后是否转确定。
+- **H2 `[OPEN]`** pull_group_layout 里选择/搬运几何时按随机 UUID 排序或 set
+  迭代，导致 net 绑定顺序漂移。待验证：定位 pull 路径里的 set/dict 迭代。
+- **H3 `[OPEN]`** v10 net 合成（读回增量时按名合成编号）与 pull 在内存里的
+  编号不一致，使 sync 比 pull 少绑 net。待验证：对比 pull 内存态 nets 与
+  sync 读回 top.kicad_pcb 合成态 nets。
+- **H4 `[OPEN]`** pre-existing：与 S7/v10 无关，本就存在，只是 e2e 没在
+  per-step 里跑过。待验证：在 S6c（663baa6f，pre-S7）上跑这三个 e2e 测试。
+
+**与 S7 的关系**：S7 代码/单测/真实 `ato build` 出 v10 板均已绿（提交 b3c0d2aa、
+1fdaab18）；**S7 的"E2E ×4 + build→build→diff 稳态"验收被 BUG-2 挡住**。
+**S7 不可宣布完成，直到 BUG-2 修复**（带红灯不进）。
+
+**修复方向（确认根因后再定）**：大概率给 `_generate_net_map` 的迭代与并列
+判据加确定序（按 src_addr/pad name 排序、并列取字典序最小 tgt），并审计 pull
+路径所有 set/dict 迭代；以这三个 e2e 测试为验收。
+
 ### 调试日志 BUG-1：测试运行污染版本控制 fixture v8/pcb/test.kicad_pcb
 
 **纪律**：本节为"先记录后行动"的调试日志。每个假设标 `[OPEN]`/`[REJECTED]`/
