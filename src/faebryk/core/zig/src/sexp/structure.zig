@@ -87,6 +87,24 @@ pub var read_net_names: ?*const NetNameTable = null;
 // Write: number -> name resolution for the v10 dialect.
 pub var write_net_names: ?*const std.AutoHashMap(i32, []const u8) = null;
 
+// Unknown-key sink (BACKLOG P0.2 S5a). The decoder drops any keyed list whose
+// key matches no schema field of the enclosing struct — historically silently.
+// With a sink installed (by the Python loads() wrapper; same GIL caveat as
+// above) those keys are recorded as deduplicated "Type:key" entries so callers
+// can surface them loudly. Decoding behavior itself is unchanged.
+pub var unknown_key_sink: ?*std.array_list.Managed([]const u8) = null;
+
+fn reportUnknownKey(type_name: []const u8, key: []const u8) void {
+    const sink = unknown_key_sink orelse return;
+    var buf: [512]u8 = undefined;
+    const entry = std.fmt.bufPrint(&buf, "{s}:{s}", .{ type_name, key }) catch return;
+    for (sink.items) |existing| {
+        if (std.mem.eql(u8, existing, entry)) return;
+    }
+    const owned = sink.allocator.dupe(u8, entry) catch return;
+    sink.append(owned) catch sink.allocator.free(owned);
+}
+
 fn _print_indent(writer: anytype, indent: usize) !void {
     var k: usize = 0;
     while (k < indent) : (k += 1) {
@@ -595,10 +613,14 @@ fn handleKeyValuesAndBooleans(comptime T: type, allocator: std.mem.Allocator, it
         if (kv_items.len == 0) continue; // Skip empty lists to prevent segfault
         const key = ast.getSymbol(kv_items[0]) orelse continue;
 
+        // a key matching ANY field name (even an already-set or skipped one)
+        // is schema-known; everything else is silently dropped — report it
+        var key_known = false;
         inline for (fields, 0..) |field, field_idx| {
             const fm = comptime getSexpMetadata(T, field.name);
             const fname = fm.sexp_name orelse field.name;
             if (std.mem.eql(u8, key, fname)) {
+                key_known = true;
                 if (fm.multidict) {
                     if (comptime isSlice(field.type, false)) {
                         if (!fields_set.isSet(field_idx)) {
@@ -662,6 +684,7 @@ fn handleKeyValuesAndBooleans(comptime T: type, allocator: std.mem.Allocator, it
                 }
             }
         }
+        if (!key_known) reportUnknownKey(@typeName(T), key);
     }
 }
 

@@ -47,6 +47,7 @@ fn generateModuleStub(allocator: std.mem.Allocator, comptime name: []const u8, c
     try file.writeAll("# Module-level functions\n");
     try file.writeAll(std.fmt.comptimePrint("def loads(data: str) -> {s}: ...\n", .{typename}));
     try file.writeAll(std.fmt.comptimePrint("def dumps(obj: {s}) -> str: ...\n", .{typename}));
+    try file.writeAll("def take_unknown_keys() -> list[str]: ...\n");
 }
 
 pub fn make_pyi(allocator: std.mem.Allocator, output_dir: []const u8, source_dir: []const u8) !void {

@@ -10,6 +10,49 @@ const LineCol = struct {
     column: usize,
 };
 
+// Process-wide store for schema-unknown keys met by the most recent loads()
+// (BACKLOG P0.2 S5a). Shared by every generated sexp submodule: each loads()
+// starts a fresh collection; take_unknown_keys() drains it. Single-threaded
+// by the GIL, same as the other structure.zig globals.
+var unknown_keys_storage: ?std.array_list.Managed([]const u8) = null;
+
+fn ensureUnknownStorage() *std.array_list.Managed([]const u8) {
+    if (unknown_keys_storage == null) {
+        unknown_keys_storage = std.array_list.Managed([]const u8).init(std.heap.c_allocator);
+    }
+    return &unknown_keys_storage.?;
+}
+
+fn clearUnknownStorage() void {
+    if (unknown_keys_storage) |*s| {
+        for (s.items) |e| s.allocator.free(e);
+        s.clearRetainingCapacity();
+    }
+}
+
+fn py_take_unknown_keys(self: ?*pyzig.pybindings.PyObject, args: ?*pyzig.pybindings.PyObject) callconv(.c) ?*pyzig.pybindings.PyObject {
+    _ = self;
+    _ = args;
+    const pyb = pyzig.pybindings;
+    const count: isize = if (unknown_keys_storage) |*s| @intCast(s.items.len) else 0;
+    const list = pyb.PyList_New(count) orelse return null;
+    if (unknown_keys_storage) |*s| {
+        for (s.items, 0..) |e, i| {
+            const str = pyb.PyUnicode_FromStringAndSize(e.ptr, @intCast(e.len)) orelse {
+                pyb.Py_DECREF(list);
+                return null;
+            };
+            // PyList_SetItem steals the reference
+            if (pyb.PyList_SetItem(list, @intCast(i), str) < 0) {
+                pyb.Py_DECREF(list);
+                return null;
+            }
+        }
+    }
+    clearUnknownStorage();
+    return list;
+}
+
 fn offsetToLineCol(source: []const u8, offset: usize) LineCol {
     var line: usize = 1;
     var column: usize = 1;
@@ -199,6 +242,12 @@ fn generateModule(
                     .ml_flags = py.METH_O,
                     .ml_doc = "Serialize file to S-expression string",
                 },
+                .{
+                    .ml_name = "take_unknown_keys",
+                    .ml_meth = @ptrCast(&py_take_unknown_keys),
+                    .ml_flags = py.METH_NOARGS,
+                    .ml_doc = "Drain the schema-unknown keys recorded by the most recent loads()",
+                },
                 py.ML_SENTINEL,
             };
         };
@@ -235,6 +284,11 @@ fn generateModule(
                 py.PyErr_SetString(py.PyExc_ValueError, "Failed to allocate memory for input string");
                 return null;
             };
+
+            // Record schema-unknown keys for exactly this parse (P0.2 S5a)
+            clearUnknownStorage();
+            sexp.structure.unknown_key_sink = ensureUnknownStorage();
+            defer sexp.structure.unknown_key_sink = null;
 
             // Parse the S-expression string
             const file = FileType.loads(persistent_allocator, .{ .string = input_copy }) catch |err| {

@@ -42,6 +42,14 @@ class kicad:
     class UnsupportedKicadVersion(ValueError):
         """The file's (version ...) is newer than the Zig schema supports."""
 
+    class UnknownSexpKeys(ValueError):
+        """strict loads(): the file contains keys the Zig schema would
+        silently drop on the next rewrite."""
+
+    # schema-unknown keys met by the most recent loads(); queryable
+    # alternative to the warning log (BACKLOG P0.2 S5a)
+    last_unknown_keys: list[str] = []
+
     from faebryk.core.zig.gen.sexp import (
         footprint,  # noqa: E402, F401 # type: ignore[import-untyped]
         footprint_v5,  # noqa: E402, F401 # type: ignore[import-untyped]
@@ -139,7 +147,9 @@ class kicad:
         )
 
     @staticmethod
-    def loads[T: kicad.types](t: type[T], path_or_sexpstring: Path | str) -> T:
+    def loads[T: kicad.types](
+        t: type[T], path_or_sexpstring: Path | str, *, strict_unknown: bool = False
+    ) -> T:
         """
         Attention: object returned is shared, so be careful with mutations!
 
@@ -147,6 +157,12 @@ class kicad:
         re-reading an unchanged file returns the same (possibly mutated)
         object; re-reading a rewritten file re-parses. `kicad.dumps(obj, path)`
         keeps the cache coherent, so dump-then-load returns the same object.
+
+        Keys the Zig schema does not model are dropped on the next dumps();
+        they are never dropped silently: loads() logs a warning (raises
+        UnknownSexpKeys with strict_unknown=True) and records them in
+        kicad.last_unknown_keys. A cache hit skips the parse and therefore
+        reports nothing.
         """
         path = None
         if isinstance(path_or_sexpstring, Path):
@@ -166,7 +182,23 @@ class kicad:
         if t is kicad.pcb.PcbFile:
             kicad._check_pcb_version(data, source=path)
 
-        out = cast(T, kicad.type_to_module(t).loads(data))
+        module = kicad.type_to_module(t)
+        out = cast(T, module.loads(data))
+
+        take_unknown = getattr(module, "take_unknown_keys", None)
+        if take_unknown is not None:
+            kicad.last_unknown_keys = sorted(take_unknown())
+            if kicad.last_unknown_keys:
+                origin = str(path) if path is not None else "<string>"
+                message = (
+                    f"{origin} contains keys the schema does not model; "
+                    f"they WILL BE DROPPED if this file is rewritten: "
+                    f"{', '.join(kicad.last_unknown_keys)}"
+                )
+                if strict_unknown:
+                    raise kicad.UnknownSexpKeys(message)
+                logger.warning(message)
+
         if path:
             kicad.loads.cache[path] = (fingerprint, out)
         return out
