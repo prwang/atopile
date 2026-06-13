@@ -744,7 +744,7 @@ class Footprint:
     uuid: str | None
     at: Xyr
     descr: str | None
-    tags: str | None
+    tags: list[str]
     path: str | None
     sheetname: str | None
     sheetfile: str | None
@@ -771,7 +771,7 @@ class Footprint:
         uuid: str | None,
         at: Xyr,
         descr: str | None,
-        tags: str | None,
+        tags: list[str],
         path: str | None,
         sheetname: str | None,
         sheetfile: str | None,

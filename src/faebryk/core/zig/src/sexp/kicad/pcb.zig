@@ -681,7 +681,12 @@ pub const Footprint = struct {
     uuid: ?str = null,
     at: Xyr,
     descr: ?str = null,
-    tags: ?str = null,
+    // list(str) to match footprint.zig's Footprint.tags: the transformer copies
+    // this field by name from a lib footprint into a pcb footprint
+    // (_fp_common_fields_dict), so the two schemas must agree on its type. KiCad
+    // writes a single (tags "a b c") string, which round-trips as a 1-element
+    // list — byte-identical to the scalar form.
+    tags: list(str) = .{},
     path: ?str = null,
     sheetname: ?str = null,
     sheetfile: ?str = null,

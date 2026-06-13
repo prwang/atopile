@@ -14,8 +14,12 @@ class PcbSummary:
     def from_pcb(cls, pcb: kicad.pcb.PcbFile):
         return cls(
             num_layers=len(pcb.kicad_pcb.layers),
+            # real nets only — exclude the empty "no-net" sentinel (net 0). The
+            # v10 net synthesis always materializes net 0 as "" in pcb.nets;
+            # fresh v9 boards did not surface it, so filter it out here to keep
+            # the summary about real nets and dialect-agnostic.
             nets=sorted(
-                [net.name for net in pcb.kicad_pcb.nets if net.name is not None]
+                [net.name for net in pcb.kicad_pcb.nets if net.name]
             ),
             footprints=sorted(
                 [
