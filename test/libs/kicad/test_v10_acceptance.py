@@ -23,6 +23,7 @@ Three switches that define "done" for the v10 dialect migration:
 S6 inversion ledger (per the S0 discipline checklist, these two pinned-quirk
 tests get *inverted* together with the consumer migration commits):
   - S6a: test_transformer_nets.py::test_remove_net_skips_zone_with_stale_name
+         [inverted → test_remove_net_disconnects_zone_despite_stale_name]
   - S6b: test_layout_sync_nets.py::test_get_net_number_silently_maps_unknown_to_zero
 """
 

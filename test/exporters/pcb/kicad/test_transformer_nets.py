@@ -117,16 +117,29 @@ def test_remove_net_disconnects_matching_zone(transformer):
     assert (zone.net, zone.net_name) == (0, "")
 
 
-def test_remove_net_skips_zone_with_stale_name(transformer):
-    """Pin a v9 dual-key quirk: remove_net only disconnects a zone when number
-    AND net_name both match, so a zone with a stale net_name stays connected
-    by number. v10 has a single key — P0.2 M5 must delete this ambiguity, at
-    which point this test should be inverted."""
+def test_remove_net_disconnects_zone_despite_stale_name(transformer):
+    """Inverted at P0.2 S6a (was test_remove_net_skips_zone_with_stale_name).
+    remove_net now keys zones on the net handle alone — net_name is a v9-only
+    redundant field with no v10 equivalent, so a stale (or absent) net_name no
+    longer leaves a zone dangling. Disconnect happens whenever the number
+    matches."""
     zone = transformer.pcb.zones[0]
     zone.net_name = "STALE"
     gnd = next(n for n in transformer.pcb.nets if n.name == "GND")
     transformer.remove_net(gnd)
-    assert zone.net == 3  # left dangling — current (questionable) behavior
+    assert (zone.net, zone.net_name) == (0, "")  # disconnected, single-key
+
+
+def test_remove_net_disconnects_zone_with_absent_net_name(transformer):
+    """The v10 condition the dual key broke on: a zone carries no net_name
+    (v9-only field), only the net handle. The old `net_name == net.name` clause
+    would never match (""!="GND") and leave the zone dangling; single-key
+    matching disconnects it."""
+    zone = transformer.pcb.zones[0]
+    zone.net_name = ""  # as a v10 zone loads — net referenced by name → handle
+    gnd = next(n for n in transformer.pcb.nets if n.name == "GND")
+    transformer.remove_net(gnd)
+    assert zone.net == 0
 
 
 def test_rename_net_propagates_to_pads_and_zones(transformer):

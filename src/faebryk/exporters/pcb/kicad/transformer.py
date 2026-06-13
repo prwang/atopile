@@ -1951,9 +1951,12 @@ class PCB_Transformer:
                     pad.net.name = ""
                     pad.net.number = 0
 
-        # Disconnect zones
+        # Disconnect zones. Match by the net handle alone: net_name is a
+        # v9-only redundant field (absent in v10, where a zone references its
+        # net by name → synthesized number), so keying on it would leave v10
+        # zones dangling. P0.2 S6a removed the v9 dual-key quirk.
         for zone in self.pcb.zones:
-            if zone.net == net.number and zone.net_name == net.name:
+            if zone.net == net.number:
                 zone.net_name = ""
                 zone.net = 0
 
