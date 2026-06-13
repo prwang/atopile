@@ -28,10 +28,36 @@ PCB 布局布线工作流：`.ato` = 电路事实源，`layout.yaml` = 布局意
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | P0 | 确定性与基础修复（§A） | ✅ |
-| P0.1 | v10 迁移测试底座（§P0.1） | ✅ |
+| P0.1 | v10 迁移测试底座（§P0.1，任务编号 T0–T9，**全部已完成**） | ✅ |
 | P0.2 | v10 方言迁移本体（§P0.2，S0–S6 + D1 + BUG-2 完成） | 🔶 S7 剩 flag-day 升级/smoke |
-| P1 | layout_ir 导出（§B）、layout.yaml + rule area（§C）、布线执行器（§E1/E2/E5） | ⬜ |
-| P2 | 诊断闭环（§D）、硬引导点/room 复制（§E3/E4） | ⬜ |
+| P1+ | 功能开发（§B/§C/§D/§E）——**真实排序见下方"依赖与关键路径"，非按字母** | ⬜ |
+
+> 命名澄清：**T0–T9 = P0.1 已完成的测试底座任务**（T1 = v10 语料 fixtures，T3 = 语义视图
+> = layout_ir 提取器底座）。往后的功能开发**没有 T 编号**，落在 §B/§C/§D/§E；其中
+> layout_ir 是 **B1**，不是"T1"。
+
+### 依赖与关键路径（v10 数据模型推导，覆盖字母序）
+
+v10 模型有三条硬约束逼出真实排序：① 无顶层 net 表 + 随机 FBRK uuid → **唯一稳定键是 ato
+地址**（不是 uuid/net 编号）；② **net 名 = net 唯一键**，名漂移 = 几何归属漂移（事实 2/8，
+BUG-2 同源面）；③ 引导/铜层几何分层与挂 net 规则（事实 9）。由此：
+
+```
+B (layout_ir)  ← 关键路径基石，最先做、最便宜（提取器 T3 已交付）
+│  提供 addr↔uuid↔net(name) 桥表；下游全部依赖它
+├─► C2 (room/net 解析，net 走 ir 间接，禁裸名)
+│   └─► [前置: 遗留#3 gen_uuid 长名修复] ─► C3 (rule area placement group) ─► C4 (CLI+验收)
+├─► E3 (室局部→板坐标 forced via)
+└─► E4 (room 复制 = 文本版 pull_group_layout，按地址前缀重映射 net，继承 BUG-2 教训)
+                                   │
+C(plan) + 板上 rule area ─────────►  E1 (plan_runner) + E2 (阶段锁定) ──► D (诊断闭环)
+
+E5 (独立回归台) ‖ 与 E 全程并行，应尽早搭 = E 的 S0 纪律底座
+```
+
+**推荐落地序**：B1→B2 ⇒ C1→C2 ⇒（遗留#3）⇒ C3→C4 ⇒ E5‖E1→E2 ⇒ E3/E4 ⇒ D。
+即原"P1/P2"的字母分组**不代表执行序**——B 必须先行解锁四个下游，D 必须最后（吃 E 的
+route_report + ir 反查）。
 
 ---
 
@@ -219,7 +245,7 @@ teardrop / generated 蛇形等长 / via padstack 的 v10 子键形变补全（sc
 
 ---
 
-## B. P1 — layout_ir.json 导出（提取器已由 T3 交付）
+## B. 【关键路径基石，先做】layout_ir.json 导出（提取器已由 T3 交付）
 
 - [ ] **B1** 构建步骤 `layout-ir`（`@muster.register("layout-ir", dependencies=[update_pcb])`，
   `build_steps.py`）：遍历实例图 + footprint 映射 → `build/builds/<target>/layout_ir.json`
@@ -228,7 +254,7 @@ teardrop / generated 蛇形等长 / via padstack 的 v10 子键形变补全（sc
   实现基底 = T3 语义视图提取器。
 - [ ] **B2** schema 固化 + version 字段 + JSON Schema 入库。
 
-## C. P1 — layout.yaml 加载 + KiCad 10 对象生成
+## C. layout.yaml 加载 + KiCad 10 对象生成（依赖 B）
 
 - [ ] **C1** `BuildTargetConfig.layout_config: Path | None`（`config.py:559-682`）。
 - [ ] **C2** layout.yaml + room 解析：rooms = module（=group 名）/origin/rotation/size/
@@ -244,7 +270,7 @@ teardrop / generated 蛇形等长 / via padstack 的 v10 子键形变补全（sc
   `ato build` 两次字节级一致（依赖 BUG-2 修复）+ DRC 正常。
 - [ ] **C5（后置）** component class 支持（需写 `.kicad_pro`）。
 
-## D. P2 — 诊断闭环
+## D. 诊断闭环（最后做，依赖 E 的 route_report + B 的 ir 反查）
 
 - [ ] **D-route** `ato route --plan layout.yaml --stage <name>`：进程内调 KiCadRoutingTools
   fork 执行器（§E1，`batch_route(..., return_results=True)`）。
@@ -253,7 +279,7 @@ teardrop / generated 蛇形等长 / via padstack 的 v10 子键形变补全（sc
   ato_path/constraint(JSON-pointer)/reason/blocking_nets/failed_endpoints/suggestions。
   schema 基线参考 kicad-happy。
 
-## E. KiCadRoutingTools fork
+## E. KiCadRoutingTools fork（E1 依赖 C 的 plan + 板上 rule area；E5 全程并行先搭）
 
 - [ ] **E1** `layout_plan_runner.py`：route_stages → `GridRouteConfig`（字段与 YAML 一一对应，
   `routing_config.py:31-124`）→ 多次 `batch_route`，阶段间 pcb_data 累积。产 `route_report.json`。
