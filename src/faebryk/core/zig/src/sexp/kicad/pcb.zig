@@ -582,6 +582,8 @@ pub const Pad = struct {
     chamfer_ratio: ?f64 = null,
     chamfer: ?E_pad_chamfer = null,
     properties: ?E_pad_property = null,
+    pinfunction: ?str = null,
+    pintype: ?str = null,
     options: ?PadOptions = null,
     tenting: ?Tenting = null,
     uuid: ?str = null,
@@ -653,15 +655,37 @@ pub const E_Attr = enum {
     allow_missing_courtyard,
 };
 
+// Multi-unit symbol mapping, new in the v10 dialect:
+// (units (unit (name "A") (pins "1" "2")))
+pub const FootprintUnit = struct {
+    name: str,
+    pins: list(str) = .{},
+};
+
+pub const FootprintUnits = struct {
+    units: list(FootprintUnit) = .{},
+
+    pub const fields_meta = .{
+        .units = structure.SexpField{ .multidict = true, .sexp_name = "unit" },
+    };
+};
+
 // Footprint structure
 pub const Footprint = struct {
     name: str,
+    locked: ?bool = null,
     layer: str = "F.Cu",
     uuid: ?str = null,
     at: Xyr,
+    descr: ?str = null,
+    tags: ?str = null,
     path: ?str = null,
+    sheetname: ?str = null,
+    sheetfile: ?str = null,
+    units: ?FootprintUnits = null,
     propertys: list(Property) = .{},
     attr: list(E_Attr) = .{},
+    duplicate_pad_numbers_are_jumpers: ?bool = null,
     fp_lines: list(Line) = .{},
     fp_arcs: list(Arc) = .{},
     fp_circles: list(Circle) = .{},
@@ -887,6 +911,8 @@ pub const TitleBlock = struct {
     comment: list(Comment) = .{},
 
     pub const fields_meta = .{
+        // the file key is (rev "..."), not (revision ...)
+        .revision = structure.SexpField{ .sexp_name = "rev" },
         .comment = structure.SexpField{ .multidict = true },
     };
 };
@@ -1028,6 +1054,13 @@ pub const Setup = struct {
     pad_to_mask_clearance: i32 = 0,
     allow_soldermask_bridges_in_footprints: bool = false,
     tenting: ?Tenting = null,
+    // v10 mask/via-treatment family; covering/plugging share the nested
+    // front/back shape with tenting, capping/filling are plain bools
+    covering: ?Tenting = null,
+    plugging: ?Tenting = null,
+    capping: ?bool = null,
+    filling: ?bool = null,
+    aux_axis_origin: ?Xy = null,
     pcbplotparams: PcbPlotParams = .{},
     rules: ?Rules = null,
 };
@@ -1184,6 +1217,7 @@ pub const TextBox = struct {
     effects: Effects,
     border: ?bool = null,
     stroke: ?Stroke = null,
+    knockout: ?bool = null,
     locked: ?bool = null,
     //span: ?Span = null,
     //render_cache: ?RenderCache = null,

@@ -73,10 +73,13 @@ def walk(node: Node):
 
 
 def norm_atom(tok: str) -> str:
-    """Normalize an atom for value comparison (12.000000 == 12; quoted strings
-    and symbols compare raw)."""
-    if tok.startswith('"'):
-        return tok
+    """Normalize an atom for value comparison: 12.000000 == 12, and a quoted
+    string equals the bare symbol with the same text (KiCad's reader tokenizes
+    both forms to the same value — e.g. kicad-cli writes
+    (property ki_fp_filters ...) where we write (property "ki_fp_filters" ...);
+    quoting is lexical, not semantic)."""
+    if tok.startswith('"') and tok.endswith('"') and len(tok) >= 2:
+        tok = tok[1:-1].replace('\\"', '"').replace("\\\\", "\\")
     try:
         return repr(float(tok))
     except ValueError:

@@ -252,7 +252,13 @@ examples/fixtures/probe 工程的 `.kicad_pcb` 一次性升级提交。迁移完
   *T8 变异自检（已做）*：植入"按出现序编号"（去排序+线性查找）→ **唯一**报警的
   是 S0 合成规则契约（语义视图按名解析，对一致重编号天然失明）——印证"规则先于
   实现钉死"的必要性；恢复后全绿。
-- [ ] **S5. M3：静默丢弃键补全**（断裂点③，file-by-file burndown）：
+- [x] **S5. M3：静默丢弃键补全**（断裂点③，file-by-file burndown）
+  **【✅ 2026-06-13 完成】** S5a 提交 `9fd47a51`（未知键响亮化 + 4 测试，
+  机械化清单与 data_loss 审计零误差吻合）；S5b 提交本次：schema 补全后
+  全语料 unknown=0 / loss=0，7 个 strict-xfail 翻绿（5 no-data-loss +
+  2 字节保真 v10），v10 fixture 由我们的 writer 重生（DRC rc=0、version
+  20260206），`test/libs/kicad/ test/exporters/pcb/` = 144 passed + 1 xfailed
+  （仅剩 S7 DRC oracle）。norm_atom 增「引号串≡裸符号」归一化。
   - **S5a 未知键响亮化（2026-06-13 新增，机制先行，no-silent-failure 保底）**：
     decode 匹配循环目前对不认识的键直接落空（structure.zig 键匹配 inline for
     无 else 分支）——加 unmatched 检测，未匹配键按（结构名, 键名）收进诊断

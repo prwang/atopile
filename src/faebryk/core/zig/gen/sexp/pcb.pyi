@@ -616,6 +616,8 @@ class Pad:
     chamfer_ratio: float | None
     chamfer: str | None
     properties: str | None
+    pinfunction: str | None
+    pintype: str | None
     options: PadOptions | None
     tenting: Tenting | None
     uuid: str | None
@@ -644,6 +646,8 @@ class Pad:
         chamfer_ratio: float | None,
         chamfer: str | None,
         properties: str | None,
+        pinfunction: str | None,
+        pintype: str | None,
         options: PadOptions | None,
         tenting: Tenting | None,
         uuid: str | None,
@@ -714,14 +718,40 @@ class Model:
     def __field_names__() -> list[str]: ...
     def __zig_address__(self) -> int: ...
 
+class FootprintUnit:
+    name: str
+    pins: list[str]
+
+    def __init__(self, *, name: str, pins: list[str]) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
+class FootprintUnits:
+    units: list[FootprintUnit]
+
+    def __init__(self, *, units: list[FootprintUnit]) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
 class Footprint:
     name: str
+    locked: bool | None
     layer: str
     uuid: str | None
     at: Xyr
+    descr: str | None
+    tags: str | None
     path: str | None
+    sheetname: str | None
+    sheetfile: str | None
+    units: FootprintUnits | None
     propertys: list[Property]
     attr: list[str]
+    duplicate_pad_numbers_are_jumpers: bool | None
     fp_lines: list[Line]
     fp_arcs: list[Arc]
     fp_circles: list[Circle]
@@ -736,12 +766,19 @@ class Footprint:
         self,
         *,
         name: str,
+        locked: bool | None,
         layer: str,
         uuid: str | None,
         at: Xyr,
+        descr: str | None,
+        tags: str | None,
         path: str | None,
+        sheetname: str | None,
+        sheetfile: str | None,
+        units: FootprintUnits | None,
         propertys: list[Property],
         attr: list[str],
+        duplicate_pad_numbers_are_jumpers: bool | None,
         fp_lines: list[Line],
         fp_arcs: list[Arc],
         fp_circles: list[Circle],
@@ -1320,6 +1357,11 @@ class Setup:
     pad_to_mask_clearance: int
     allow_soldermask_bridges_in_footprints: bool
     tenting: Tenting | None
+    covering: Tenting | None
+    plugging: Tenting | None
+    capping: bool | None
+    filling: bool | None
+    aux_axis_origin: Xy | None
     pcbplotparams: PcbPlotParams
     rules: Rules | None
 
@@ -1330,6 +1372,11 @@ class Setup:
         pad_to_mask_clearance: int,
         allow_soldermask_bridges_in_footprints: bool,
         tenting: Tenting | None,
+        covering: Tenting | None,
+        plugging: Tenting | None,
+        capping: bool | None,
+        filling: bool | None,
+        aux_axis_origin: Xy | None,
         pcbplotparams: PcbPlotParams,
         rules: Rules | None,
     ) -> None: ...
@@ -1548,6 +1595,7 @@ class TextBox:
     effects: Effects
     border: bool | None
     stroke: Stroke | None
+    knockout: bool | None
     locked: bool | None
 
     def __init__(
@@ -1564,6 +1612,7 @@ class TextBox:
         effects: Effects,
         border: bool | None,
         stroke: Stroke | None,
+        knockout: bool | None,
         locked: bool | None,
     ) -> None: ...
     def __repr__(self) -> str: ...

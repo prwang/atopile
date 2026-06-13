@@ -22,9 +22,11 @@ view of every parseable board must match its committed snapshot byte-for-byte.
 Regenerate snapshots with REGEN_SEMANTIC_SNAPSHOTS=1 after an *intentional*
 semantic change — never to silence an unexplained diff.
 
-v10 boards parse and round-trip since P0.2 S4 (net model); gates 3 and 4
-stay strict-xfail on them until S5 completes the schema and re-derives the
-v10 byte-fidelity fixtures from our own writer.
+All four gates are green on both dialects since P0.2 S5b: the schema covers
+every key the corpus carries (gate 3), and the v10 fixtures were re-derived
+from our own writer so they round-trip byte-for-byte (gate 4). Any new
+schema gap surfaces as a gate-3 failure here and a loud warning at load time
+(test_unknown_key_loudness.py).
 """
 
 import os
@@ -38,30 +40,13 @@ from faebryk.libs.kicad.semantic_view import semantic_view_json
 from faebryk.libs.test import sexp_tree
 from faebryk.libs.test.fileformats import FILEFORMATS_PATH, all_pcb_fixtures
 
-# Boards whose bytes were last written by atopile/our fixtures (not KiCad).
+# Boards whose bytes were last written by atopile/our writer (not KiCad). The
+# v10 fixtures were re-derived from our writer at S5b; both dialects of these
+# stems are byte-stable round-trips.
 ATOPILE_AUTHORED_STEMS = {"test", "layout_reuse_top"}
-
-# Real-world KiCad-authored v9 boards currently lose data through the schema
-# (pintype/pinfunction/sheetfile/rev/aux_axis_origin, ...). Inventory lives in
-# the test failure output; fixing them is BACKLOG P0.2 S5 scope.
-KNOWN_V9_DATA_LOSS_STEMS = {"interf_u_unrouted"}
 
 SNAPSHOT_DIR = FILEFORMATS_PATH / "snapshots"
 REGEN = os.environ.get("REGEN_SEMANTIC_SNAPSHOTS") == "1"
-
-# v10 boards parse since S4 (net model), but the schema does not yet cover
-# every v10 key (covering/plugging/..., units, sheetname, ...) — S5 burns
-# this down field-by-field, then regenerates the v10 byte-fidelity fixtures
-# from our own writer (matching kicad-cli's formatting is a non-goal).
-S5_DATA_LOSS_XFAIL = pytest.mark.xfail(
-    strict=True,
-    reason="schema drops v10-only keys (P0.2 S5 scope) — run for the inventory",
-)
-S5_BYTE_FIDELITY_XFAIL = pytest.mark.xfail(
-    strict=True,
-    reason="v10 fixture bytes are kicad-cli-authored; S5 re-derives them from "
-    "our writer once the schema is complete",
-)
 
 
 def _params(extra_marks=lambda version, path: []):
@@ -89,15 +74,11 @@ def test_dump_load_idempotent(version: int, path: Path):
     assert dump == dump2
 
 
-@pytest.mark.parametrize(
-    ("version", "path"),
-    _params(
-        lambda version, path: [S5_DATA_LOSS_XFAIL]
-        if version >= 10 or path.stem in KNOWN_V9_DATA_LOSS_STEMS
-        else []
-    ),
-)
+@pytest.mark.parametrize(("version", "path"), _params())
 def test_no_data_loss(version: int, path: Path):
+    """No schema field is silently dropped on rewrite (P0.2 S5b complete).
+    The remaining round-trip gap, if any, is float/quote formatting, which
+    data_loss() normalizes away — a real drop shows as a per-field entry."""
     raw = path.read_text()
     dump = kicad.dumps(kicad.loads(kicad.pcb.PcbFile, raw))
     loss = sexp_tree.data_loss(raw, dump)
@@ -111,13 +92,14 @@ def test_no_data_loss(version: int, path: Path):
     ("version", "path"),
     [
         p
-        for p in _params(
-            lambda version, path: [S5_BYTE_FIDELITY_XFAIL] if version >= 10 else []
-        )
+        for p in _params()
         if Path(str(p.values[1])).stem in ATOPILE_AUTHORED_STEMS
     ],
 )
 def test_byte_fidelity(version: int, path: Path):
+    """Atopile-authored boards round-trip byte-for-byte. The v10 fixtures were
+    re-derived from our own writer at S5b (kicad-cli's formatting is a
+    non-goal); KiCad reads them losslessly (test_v10_acceptance oracles)."""
     raw = path.read_text()
     assert raw == kicad.dumps(kicad.loads(kicad.pcb.PcbFile, raw))
 
