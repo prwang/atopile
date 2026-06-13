@@ -1,5 +1,6 @@
 """Tests for the layout server FastAPI app."""
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -11,8 +12,13 @@ TEST_PCB = Path("test/common/resources/fileformats/kicad/v8/pcb/test.kicad_pcb")
 
 
 @pytest.fixture
-def app():
-    return create_app(TEST_PCB)
+def app(tmp_path):
+    # execute-action endpoints (flip/rotate/move) call save() back to the
+    # board path; copy the source fixture into tmp so the test never writes
+    # the version-controlled file (BACKLOG BUG-1, H3 CONFIRMED).
+    work = tmp_path / TEST_PCB.name
+    shutil.copy2(TEST_PCB, work)
+    return create_app(work)
 
 
 @pytest.fixture

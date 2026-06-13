@@ -304,6 +304,75 @@ examples/fixtures/probe 工程的 `.kicad_pcb` 一次性升级提交。迁移完
 v9/v10 双方言对称——迁移分支若需中止，底座资产无一作废；S1/S2 与方言无关，
 无论如何保留。
 
+### 调试日志 BUG-1：测试运行污染版本控制 fixture v8/pcb/test.kicad_pcb
+
+**纪律**：本节为"先记录后行动"的调试日志。每个假设标 `[OPEN]`/`[REJECTED]`/
+`[CONFIRMED]`，附可复现证据。禁止凭记忆下结论。
+
+**状态（2026-06-13）**：根因 `[CONFIRMED]` = H3。已隔离复现并定位写回点，
+修复 = test_server.py `app` fixture 改用临时副本（见下）。
+
+**现象**：
+- 跑 `pytest test/ -k "pcb or transform or layout or footprint or fileformat"`
+  后，工作区 `test/common/resources/fileformats/kicad/v8/pcb/test.kicad_pcb`
+  被改（`git diff --stat` = 231 ins / 221 del）。
+- 具体改动：`logos:faebryk_logo` footprint 从 `(layer F.Cu)(at 10 20 0)`
+  → `(layer B.Cu)(at 20 40 90)`，各 property 加 `(justify mirror)`、
+  `(at .. 90)`——即一次 **flip（翻面）操作的产物**。
+- 连带 `test_semantic_snapshot[v8-test]` 失败（视图漂移出已提交快照）。
+- 文件 mtime 落在该广选 run 期间（实测 12:21:22）。
+- 已用 `git checkout HEAD -- <v8>` 还原；还原后当前代码解析正确、
+  byte_fidelity=True、8/8 快照通过——确认 S5b schema 改动**无辜**（见 H1）。
+
+**复现命令**：
+```
+git status --short <v8>            # 干净
+pytest test/ -k "pcb or transform or layout or footprint or fileformat" -q
+git status --short <v8>            # 显示 M
+```
+
+**假设表**：
+- **H1 `[REJECTED]`** S5b schema 改动破坏 v8 解析。
+  证据：还原 fixture 后，当前代码读 logo at=[10,20,0]/F.Cu 正确、
+  byte_fidelity=True、`test_semantic_snapshot` 8/8 通过。失败是脏 fixture
+  导致，非解析器。
+- **H2 `[REJECTED]`** `test_pcb_manager.py::manager_v8` fixture 直接
+  `load(源路径)` + 某测试 `save()` 写回。
+  证据：单跑 `test/layout_server/test_pcb_manager.py` → 25 passed，
+  跑后 `git status` v8 **干净**。且 `PcbManager.load()` 走
+  `kicad.loads(PcbFile, text)`（文本载入，不进 Path 缓存）、
+  `dispatch_action` 不落盘、唯一 `save()`（test_save_roundtrip）用
+  `shutil.copy2` 临时副本。
+- **H3 `[CONFIRMED]`** `test/layout_server/test_server.py` 用
+  `create_app(TEST_PCB=源路径)`，`POST /api/execute-action` 的
+  flip/rotate/move 端点在 dispatch 后调 `service.save_and_broadcast()`
+  → `PcbManager.save()` → `kicad.dumps(_pcb_file, _path)` 写回源路径。
+  确认证据：(a) `server.py:62` execute-action handler 在 flip/rotate/move
+  后调 `await service.save_and_broadcast(...)`，`PcbManager.save()`
+  写 `self._path`，而 `app` fixture 把 `_path` 设成 v8 **源路径**；
+  (b) **隔离复现**：v8 还原干净 → 单跑 `pytest test/layout_server/test_server.py`
+  （10 passed）→ `git status` 显示 v8 `M`；
+  diff 正是 logo flip 到 B.Cu + at 20 40 90 + justify mirror，
+  与三个 execute-action 端点（rotate 90 / move 10 20 / flip）逐项吻合。
+- **H1/H2 不再需要 H4**：H3 已 CONFIRMED 且独立复现，H4 关闭为不需要。
+- **同类潜伏（已记录，未触发）** `test_frontend_drag_closed_loop.py:93`
+  把 server 直接架在源 `examples/esp32_minimal/.../esp32_minimal.kicad_pcb`
+  上做 drag 闭环（会 save 回源）。本沙盒无 node/puppeteer 故 skip，未污染；
+  属同一 bug 类（server 指向源路径）。修复一并放 S6c（layout_server 测试隔离）：
+  改用 `tmp_path` 副本启动 server。
+
+**修复（已定，根因 CONFIRMED）**：`test_server.py` 的 `app` fixture 把
+源 `TEST_PCB` 用 `shutil.copy2` 拷到 `tmp_path` 临时副本再传给
+`create_app`（对齐 `test_pcb_manager.py::test_save_roundtrip` 的模式），
+使 execute-action 的 save() 落到临时副本而非版本控制 fixture。
+属正当的测试隔离修复，非范围蔓延（save()→_path 的写回路径本身正确，
+bug 仅在于测试把 _path 指向源 fixture）。
+
+**与 P0.2 的关联**：本 bug 与 S5b schema 无关（H1 已否），但
+①会反复污染 v8 造成 S5b/快照测试假红；②S6c 正要迁移 layout_server
+消费方；③save()→源路径的写回正是 S7 GUI 编辑回环要验的真实路径
+（测试把它指向源 fixture 而非工作副本才是 bug）。
+
 ### P1+ 候选 — GUI 高级布线构造保真（2026-06-13 立项，源于 S5b 范围决策）
 
 teardrop / generated 蛇形等长 / via padstack 的 v10 子键形变补全
