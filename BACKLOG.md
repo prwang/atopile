@@ -282,13 +282,28 @@ examples/fixtures/probe 工程的 `.kicad_pcb` 一次性升级提交。迁移完
   逐字节对齐其排版是非目标；转绿方式 = schema 补全后用**我们的 writer 重新生成**
   这两份 v10 fixture（oracle 确认 KiCad 10 读取无损后替换），raw==dump 即自然成立。
   *保持绿*：全量(此时 corpus 应零 xfail)。
-- [ ] **S6. M5：Python 消费方迁移**（拆三个子步，每子步全量绿才进下一个）：
-  - S6a transformer（16 处编号直用点）：移除 remove_net 的 zone 双键怪癖 →
-    **同 commit 反转** `test_remove_net_skips_zone_with_stale_name`；
-  - S6b layout_sync（2 处）：`_get_net_number` 未知名改响亮失败 →
-    **同 commit 反转** `test_get_net_number_silently_maps_unknown_to_zero`；
-  - S6c pcb_manager（4 处）+ app/pcb（2 处）：既有 15+ 测试保持绿 + 补 net 断言。
-  *保持绿*：全量 + E2E（仍在 v9 例子上跑，确认双方言期一切正常）。
+- [x] **S6. M5：Python 消费方迁移**【✅ 2026-06-13】（三个子步逐个全绿后进下一个）：
+  - S6a transformer：remove_net 改按 net 句柄单键匹配 zone（net_name 是
+    v9-only 冗余字段，v10 缺席会让旧双键漏断 zone）→ 反转
+    `test_remove_net_skips_zone_with_stale_name` →
+    `test_remove_net_disconnects_zone_despite_stale_name`，增 absent-net_name
+    用例。提交 `02bd5998`。
+  - S6b layout_sync：`_get_net_number` 未知名从静默→0 改 **raise KeyError**
+    （两个调用点均 `in net_map` 守卫，名必存在；""→0 仍走正常路径）→ 反转
+    `test_get_net_number_silently_maps_unknown_to_zero` →
+    `test_get_net_number_raises_on_unknown`，钉死 ""→0 边界。提交 `0d3a516b`。
+  - S6c pcb_manager：`_extract_zone` 增 `net_names_by_number` 回退（v10 zone
+    无 net_name 时由合成表补标签，双方言一致）；既有 layout_server 35 测试
+    保持绿。**GUI 编辑回环验收门提前落地**（计划允许）：
+    `test/layout_server/test_gui_edit_roundtrip.py`——v10 fixture 经受管
+    move→save→重读：① 方言保持 20260206；② 编辑持久；③ groups/zones/nets/
+    其余 footprint/每个 pad 的 net 全部无损；④ 分组成员保持；⑤ kicad-cli DRC
+    跑通；⑥ 警告集构造（teardrops 内未建模键）响亮上报而非静默丢失。
+    4 测试全绿（含 DRC，本机有 kicad-cli）。
+  *保持绿实测*：test/layout_server + test/exporters/pcb + test/libs/kicad
+  = 184 passed + 1 skipped（node drag 闭环）+ 1 xfailed（仅剩 S7 DRC oracle）；
+  v8/v9 fixture 干净。E2E/examples 受 EasyEDA 403 限流，非本步代码问题。
+  **GUI 演示门已绿**（S7 终验前即可演示 fidelity-set 手工编辑全流程）。
 - [ ] **S7. M4b+M6：版本号 bump + flag day + 终验**：写出 `(version 20260206)`；
   examples/fixtures/probe 一次性升级提交（A1 增量稳态依赖回读，升级后跑
   build→build→diff 确认 v10 稳态成立）；E2E ×4 在 v10 上绿；

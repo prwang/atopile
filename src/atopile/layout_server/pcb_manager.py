@@ -440,7 +440,7 @@ class PcbManager:
                 *[self._extract_arc_segment(arc) for arc in pcb.arcs],
             ],
             vias=self._extract_vias(pcb, copper_layers),
-            zones=self._extract_zones(pcb, all_layers),
+            zones=self._extract_zones(pcb, all_layers, net_names_by_number),
         )
         model.layers = _build_layer_models(model, all_layers, copper_layers)
         self._render_model_cache = model
@@ -518,7 +518,9 @@ class PcbManager:
                 continue
 
             if isinstance(obj, kicad.pcb.Zone):
-                zones.append(self._extract_zone(obj, all_layers))
+                zones.append(
+                    self._extract_zone(obj, all_layers, net_names_by_number)
+                )
                 continue
 
             if isinstance(obj, kicad.pcb.Text):
@@ -1336,11 +1338,22 @@ class PcbManager:
         )
 
     def _extract_zones(
-        self, pcb: kicad.pcb.KicadPcb, all_layers: list[str]
+        self,
+        pcb: kicad.pcb.KicadPcb,
+        all_layers: list[str],
+        net_names_by_number: dict[int, str],
     ) -> list[ZoneModel]:
-        return [self._extract_zone(zone, all_layers) for zone in pcb.zones]
+        return [
+            self._extract_zone(zone, all_layers, net_names_by_number)
+            for zone in pcb.zones
+        ]
 
-    def _extract_zone(self, zone: kicad.pcb.Zone, all_layers: list[str]) -> ZoneModel:
+    def _extract_zone(
+        self,
+        zone: kicad.pcb.Zone,
+        all_layers: list[str],
+        net_names_by_number: dict[int, str],
+    ) -> ZoneModel:
         layers = list(zone.layers)
         if not layers and zone.layer:
             layers = [zone.layer]
@@ -1362,9 +1375,14 @@ class PcbManager:
         hatch = zone.hatch
         zone_fill = zone.fill
 
+        # net_name is a v9-only redundant field (absent on v10 boards, where a
+        # zone references its net by name → synthesized number); fall back to
+        # the synthesized table so the label survives in both dialects.
+        net_name = zone.net_name or net_names_by_number.get(zone.net) or ""
+
         return ZoneModel(
             net=zone.net,
-            net_name=zone.net_name,
+            net_name=net_name,
             layers=layers,
             name=zone.name,
             uuid=zone.uuid,
