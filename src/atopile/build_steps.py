@@ -794,10 +794,10 @@ def update_pcb(ctx: BuildStepContext) -> None:
                 if (addr := Property.try_get_property(fp.propertys, "atopile_address"))
             }
             new_fps = {k: v for k, v in current_fps.items() if k not in original_fps}
-            sync.sync_groups()
-            groups_to_update = {
-                gname
-                for gname, fps in sync.groups.items()
+            sync.sync_rooms()
+            rooms_to_update = {
+                rname
+                for rname, fps in sync.rooms.items()
                 if {
                     addr
                     for fp, _ in fps
@@ -809,8 +809,8 @@ def update_pcb(ctx: BuildStepContext) -> None:
                 }.issubset(new_fps)
             }
 
-            for group_name in groups_to_update:
-                sync.pull_group_layout(group_name)
+            for room_name in rooms_to_update:
+                sync.pull_room_layout(room_name)
 
             kicad.dumps(pcb_file, config.build.paths.layout)
 
@@ -860,6 +860,30 @@ def post_pcb_checks(ctx: BuildStepContext) -> None:
 @muster.register("build-design", dependencies=[post_pcb_checks], virtual=True)
 def build_design(ctx: BuildStepContext) -> None:
     pass
+
+
+@muster.register(
+    "layout-ir",
+    description="Generating layout IR",
+    dependencies=[build_design],
+    produces_artifact=True,
+)
+def generate_layout_ir(ctx: BuildStepContext) -> None:
+    """Export the deterministic text↔geometry interface (BACKLOG §B / B1b).
+
+    Reads the final synced board + the graph (for the signal-address→net bridge)
+    and writes `<output_base>.layout_ir.json`. This is the only artifact the
+    text layer (§C/§D/§F) is allowed to know the board through.
+    """
+    from faebryk.libs.kicad.layout_ir import layout_ir_json
+
+    app = ctx.require_app()
+    pcb = ctx.require_pcb()
+
+    out_path = config.build.paths.output_base.with_suffix(".layout_ir.json")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(layout_ir_json(pcb.pcb_file.kicad_pcb, app))
+    logger.info(f"Wrote layout IR to {out_path}")
 
 
 @muster.register(
@@ -1180,6 +1204,7 @@ def generate_datasheets(ctx: BuildStepContext) -> None:
         generate_variable_report,
         # generate_power_tree,
         generate_datasheets,
+        generate_layout_ir,
     ],
     virtual=True,
 )

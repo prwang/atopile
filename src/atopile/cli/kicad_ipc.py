@@ -116,32 +116,33 @@ def layout_sync(
     pcb_file = kicad.loads(kicad.pcb.PcbFile, pcb_path)
     sync = LayoutSync(pcb_file.kicad_pcb)
 
-    if not sync.groups:
-        logger.warning("No sub layout groups found in pcb")
+    if not sync.rooms:
+        logger.warning("No sub layout rooms found in pcb")
         return
 
-    # Sync groups
-    logger.info("Synchronizing groups...")
-    sync.sync_groups()
+    # Sync rooms (writes footprint sheetname; creates no groups, BACKLOG §C3)
+    logger.info("Synchronizing rooms...")
+    sync.sync_rooms()
 
-    group_names = set(include_groups or [])
+    # room names == footprint sheetnames; --include-group is the legacy alias
+    room_names = set(include_groups or [])
 
-    # determine groups from fps
+    # determine rooms from selected footprints (room = sheetname, not group)
     fp_uuids = set(include_fp or [])
-    for group in sync.pcb.groups:
-        if set(group.members).issubset(fp_uuids):
-            group_names.add(not_none(group.name))
+    for fp in sync.pcb.footprints:
+        if fp.uuid in fp_uuids and fp.sheetname:
+            room_names.add(fp.sheetname)
 
     if sync_all:
-        group_names = set(sync.groups.keys())
+        room_names = set(sync.rooms.keys())
 
-    # Only sync specified groups
-    for group_name in group_names:
-        if group_name in sync.groups:
-            logger.info(f"Pulling layout for group: {group_name}")
-            sync.pull_group_layout(group_name)
+    # Only sync specified rooms
+    for room_name in room_names:
+        if room_name in sync.rooms:
+            logger.info(f"Pulling layout for room: {room_name}")
+            sync.pull_room_layout(room_name)
         else:
-            logger.warning(f"Group '{group_name}' not found in layout maps")
+            logger.warning(f"Room '{room_name}' not found in layout maps")
 
     # Save the PCB
     logger.info(f"Saving PCB to {pcb_path}")

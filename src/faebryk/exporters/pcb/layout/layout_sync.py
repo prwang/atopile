@@ -8,7 +8,6 @@ from atopile.config import config as gcfg
 from atopile.layout import SubAddress
 from faebryk.exporters.pcb.kicad.transformer import (
     PCB_Transformer,
-    get_all_geo_containers,
     get_all_geos,
 )
 from faebryk.libs.kicad.fileformats import Property, kicad
@@ -34,18 +33,19 @@ class LayoutSync:
     def __init__(self, pcb: PCB):
         self.pcb = pcb
 
-        self._old_groups: dict[str, kicad.pcb.Group] = {}
-
         fps = self.pcb.footprints
         sub_fps = [
             (fp, sub_addr) for fp in fps if (sub_addr := self._get_sub_address(fp))
         ]
 
-        self.groups = groupby(sub_fps, lambda x: self._get_group_name(x[1], x[0]))
-        for group_name, fps in self.groups.items():
+        # rooms: reuse-instance footprints grouped by room name (= sheetname,
+        # BACKLOG §C3). The carrier moved from KiCad groups to footprint
+        # sheetname; the room name itself is still _get_group_name.
+        self.rooms = groupby(sub_fps, lambda x: self._get_group_name(x[1], x[0]))
+        for room_name, fps in self.rooms.items():
             pcb_names = {x[1].pcb_address for x in fps}
             assert len(pcb_names) == 1, (
-                f"Multiple PCB names found for group {group_name}: {pcb_names}"
+                f"Multiple PCB names found for room {room_name}: {pcb_names}"
             )
 
     def _get_all_sub_addresses(self, fp: Footprint) -> list[SubAddress]:
@@ -98,75 +98,20 @@ class LayoutSync:
         """Get the address of a footprint."""
         return Property.try_get_property(fp.propertys, "atopile_address")
 
-    def sync_groups(self):
-        """Synchronize groups based on the layout map."""
-        self._old_groups = {g.name: kicad.copy(g) for g in self.pcb.groups if g.name}
-        groups = {g.name: g for g in self.pcb.groups if g.name}
-        atopile_footprints = {
-            addr: fp
-            for fp in self.pcb.footprints
-            if (addr := self._get_footprint_addr(fp))
-        }
-        atopile_fps_uuid = {fp.uuid: fp for fp in atopile_footprints.values()}
+    def sync_rooms(self):
+        """Write each reuse-instance footprint's room identity onto its
+        `sheetname` (KiCad's source-correspondence channel, BACKLOG §C3).
 
-        # remove all atopile footprints from groups (later re-added)
-        for pcb_group in self.pcb.groups:
-            kicad.filter(
-                pcb_group,
-                "members",
-                pcb_group.members,
-                lambda uuid: uuid not in atopile_fps_uuid,
-            )
-
-        for group_name, fps in self.groups.items():
-            logger.debug(f"Updating group {group_name}")
-
-            # Create group if it doesn't exist
-            if group_name not in groups:
-                group = kicad.pcb.Group(
-                    name=group_name,
-                    uuid=kicad.gen_uuid(group_name),
-                    members=[],
-                    locked=False,
-                )
-                group = kicad.set(self.pcb, "groups", self.pcb.groups, group)  # type: ignore
-                groups[group_name] = group
-            else:
-                group = groups[group_name]
-
-            # Update group membership
-            expected_members = {fp.uuid for fp, _ in fps}
-
-            # add new members
-            current_members = set(group.members) | expected_members
-            # remove old atopile fps
-            current_members -= set(atopile_fps_uuid.keys()).difference(expected_members)
-            current_members = [
-                member for member in current_members if member is not None
-            ]
-
-            kicad.clear_and_set(
-                group, "members", group.members, sorted(current_members)
-            )
-
-        # Clean up groups that no longer have footprints assigned to them.
-        # Only atopile-managed groups: manual user groups (and their contents)
-        # must survive rebuilds.
-        removed_groups = {
-            name
-            for name, group in self._old_groups.items()
-            if self._is_managed_group(group)
-        } - set(self.groups.keys())
-        for group_name in removed_groups:
-            self._clean_group(group_name)
-
-    @staticmethod
-    def _is_managed_group(group: kicad.pcb.Group) -> bool:
-        """Groups created by atopile carry the hex-encoded group name as the
-        uuid suffix (see kicad.gen_uuid)."""
-        if not group.name or not group.uuid:
-            return False
-        return group.uuid.replace("-", "").endswith(group.name.encode().hex())
+        atopile creates ZERO KiCad groups and touches no existing group, so a
+        user's manual group survives by construction (the A4 failure mode is
+        gone). Stale routes of a removed instance are not cleaned here: their net
+        vanishes with the instance and KiCad garbage-collects net-0 copper on
+        save (事实 9)."""
+        for room_name, fps in self.rooms.items():
+            logger.debug(f"Tagging room {room_name}")
+            for fp, _sub_addr in fps:
+                fp.sheetname = room_name
+                fp.sheetfile = f"{room_name}.kicad_sch"
 
     def _generate_net_map(
         self, source_pcb: PCB, target_pcb: PCB, addr_map: dict[str, str]
@@ -358,27 +303,26 @@ class LayoutSync:
 
         return new_graphics
 
-    def _calculate_group_offset(
+    def _calculate_room_offset(
         self,
         source_pcb: PCB,
-        target_group: kicad.pcb.Group,
+        room_name: str,
     ) -> kicad.pcb.Xy:
-        """Calculate offset to apply when pulling a group layout."""
+        """Calculate offset to apply when pulling a room layout.
+
+        The anchor is the room's largest-by-pad-count footprint, taken from the
+        room membership (self.rooms) — NOT from a KiCad group's member list,
+        which no longer exists (BACKLOG §C3)."""
 
         ZERO = kicad.pcb.Xy(x=0, y=0)
-        # Find anchor footprint (largest by pad count)
-        group_fps = [
-            fp
-            for fp in self.pcb.footprints
-            if fp.uuid in target_group.members and self._get_footprint_addr(fp)
-        ]
+        room_fps = [fp for fp, _ in self.rooms.get(room_name, [])]
 
-        if not group_fps:
+        if not room_fps:
             return ZERO
 
         # Find anchor by pad count
         anchor_fp = max(
-            group_fps,
+            room_fps,
             key=lambda fp: len(fp.pads),
         )
         top_pos = anchor_fp.at
@@ -402,48 +346,46 @@ class LayoutSync:
         # TODO rotation?
         return kicad.pcb.Xy(x=offset.x, y=offset.y)
 
-    def _clean_group(self, group_name: str):
-        """Delete all non-fp elements in group."""
+    def _clean_room(self, room_name: str):
+        """Delete a room's intra-room-net copper before a re-pull, so routes are
+        replaced rather than duplicated (BACKLOG §C3, pinned by C3.9).
 
-        if group_name not in self._old_groups:
+        A net is *intra-room* iff every pad referencing it sits on this room's
+        footprints. Inter-room nets (pads in two rooms) and a sibling room's nets
+        are NOT deleted — this is strictly safer than the old membership-based
+        clean, which deleted whatever a group happened to list. Footprints are
+        never deleted (they are repositioned by the pull)."""
+        pcb = self.pcb
+        room_fp_uuids = {
+            fp.uuid for fp in pcb.footprints if fp.sheetname == room_name
+        }
+        if not room_fp_uuids:
             return
 
-        pcb = self.pcb
+        inside: set[int] = set()
+        outside: set[int] = set()
+        for fp in pcb.footprints:
+            bucket = inside if fp.uuid in room_fp_uuids else outside
+            for pad in fp.pads:
+                if pad.net is not None and pad.net.number != 0:
+                    bucket.add(pad.net.number)
+        intra = inside - outside
 
-        to_delete = (
-            set(self._old_groups[group_name].members)
-            if group_name in self._old_groups
-            else set()
-        )
         for container, name in [
             (pcb.segments, "segments"),
             (pcb.arcs, "arcs"),
             (pcb.vias, "vias"),
             (pcb.zones, "zones"),
-            *get_all_geo_containers(pcb),
-            (pcb.images, "images"),
-            (pcb.gr_texts, "gr_texts"),
-            (pcb.gr_text_boxes, "gr_text_boxes"),
-            # top_pcb.tables,
         ]:
-            kicad.filter(pcb, name, container, lambda x: x.uuid not in to_delete)
+            kicad.filter(pcb, name, container, lambda x: x.net not in intra)
 
-        # delete non-atopile group footprints
-        kicad.filter(
-            pcb,
-            "footprints",
-            pcb.footprints,
-            lambda x: x.uuid not in to_delete
-            or (self._get_footprint_addr(x) is not None),
-        )
-
-    def pull_group_layout(self, group_name: str):
-        """Pull layout for a specific group from its source file."""
-        if group_name not in self.groups:
-            logger.warning(f"No layout map found for group {group_name}")
+    def pull_room_layout(self, room_name: str):
+        """Pull layout for a specific room from its source file (BACKLOG §C3)."""
+        if room_name not in self.rooms:
+            logger.warning(f"No layout map found for room {room_name}")
             return
 
-        fps = self.groups[group_name]
+        fps = self.rooms[room_name]
         pcb_address = fps[0][1].pcb_address
 
         top_pcb = self.pcb
@@ -453,8 +395,7 @@ class LayoutSync:
             logger.error(f"Error loading sub pcb {pcb_address}: {e}")
             return
 
-        group = find(top_pcb.groups, lambda g: g.name == group_name)
-        offset = self._calculate_group_offset(sub_pcb, group)
+        offset = self._calculate_room_offset(sub_pcb, room_name)
         inverted_addr_map = {
             sub_addr.module_address: not_none(self._get_footprint_addr(fp))
             for fp, sub_addr in fps
@@ -462,14 +403,15 @@ class LayoutSync:
 
         net_map = self._generate_net_map(sub_pcb, top_pcb, inverted_addr_map)
 
-        # remove all stuff from involved groups, before re-adding new elements
-        involved_groups = {
+        # remove intra-room copper from involved rooms before re-adding (clean by
+        # net, not by group membership which no longer exists).
+        involved_rooms = {
             self._get_group_name(addr, fp)
             for fp, _ in fps
             for addr in self._get_all_sub_addresses(fp)
         }
-        for g_name in involved_groups:
-            self._clean_group(g_name)
+        for r_name in involved_rooms:
+            self._clean_room(r_name)
 
         new_fps = self._sync_footprints(
             sub_pcb, top_pcb, inverted_addr_map, net_map, offset
@@ -478,26 +420,14 @@ class LayoutSync:
         new_routes = self._sync_routes(sub_pcb, top_pcb, net_map, offset)
         new_other = self._sync_other(sub_pcb, top_pcb, offset)
 
-        new_elements = new_fps + new_routes + new_other
-        new_elements_out = []
-        for new_group_uuid in new_elements:
+        # Insert everything. No group membership to update — room identity rides
+        # on each footprint's sheetname (set by sync_rooms), so the old
+        # member-sort determinism guard (A1/A3) is obsolete.
+        for new_element in new_fps + new_routes + new_other:
             container, container_name = PCB_Transformer.get_pcb_container(
-                new_group_uuid, top_pcb
+                new_element, top_pcb
             )
-            new_element_out = kicad.insert(
-                top_pcb, container_name, container, new_group_uuid
-            )
-            new_elements_out.append(new_element_out)
-
-        new_member_uuids = {e.uuid for e in new_elements_out if e.uuid is not None}
-        # keep members fully sorted so this build's output matches the re-sort
-        # sync_groups performs on the next build (byte-level determinism)
-        kicad.clear_and_set(
-            group,
-            "members",
-            group.members,
-            sorted(set(group.members) | new_member_uuids),
-        )
+            kicad.insert(top_pcb, container_name, container, new_element)
 
     def _get_net_number(self, pcb: PCB, net_name: str) -> int:
         """Resolve a net name to its (file-local) number on `pcb`.

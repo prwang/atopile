@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atopile.io/schemas/layout_ir/v2.json",
+  "title": "atopile layout_ir",
+  "description": "The stable text<->geometry interface (BACKLOG §B/§C3). Net names drift and uuids are random under v10, so the text layer references only ato addresses; the IR translates. Pinned by test_layout_ir_contract.py + test_room_migration_contract.py. v2: rooms (derived from footprint sheetname) replaced groups. The optional `signal_nets` (bridge ②, I4b) is folded in only by graph-aware callers.",
+  "type": "object",
+  "required": ["layout_ir_version", "components", "nets", "rooms"],
+  "additionalProperties": false,
+  "properties": {
+    "layout_ir_version": {
+      "description": "Schema version; consumers must gate on it.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "components": {
+      "description": "Managed footprints keyed by ato address (== the pcb atopile_address property, I1).",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/component" }
+    },
+    "nets": {
+      "description": "Geometry net name -> sorted [\"<addr>.<pad>\"] endpoints. The empty net is never a key (I4a).",
+      "type": "object",
+      "propertyNames": { "minLength": 1 },
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string", "minLength": 1 }
+      }
+    },
+    "rooms": {
+      "description": "Rooms keyed by name (= footprint sheetname, BACKLOG §C3). Derived, no object identity.",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/room" }
+    },
+    "signal_nets": {
+      "description": "Bridge ② (I4b): signal ato-address -> kicad net name. Graph-derived, optional; absent for pcb-only callers.",
+      "type": "object",
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "xyr": {
+      "description": "[x, y, rotation_degrees]; rotation defaults to 0.0 when absent in the pcb.",
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "component": {
+      "type": "object",
+      "required": ["ref", "footprint_uuid", "at", "layer", "pads"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": { "type": "string" },
+        "footprint_uuid": { "type": "string", "minLength": 1 },
+        "at": { "$ref": "#/$defs/xyr" },
+        "layer": { "type": "string", "minLength": 1 },
+        "pads": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/pad" }
+        }
+      }
+    },
+    "pad": {
+      "type": "object",
+      "required": ["uuid", "net", "at", "layers"],
+      "additionalProperties": false,
+      "properties": {
+        "uuid": { "type": "string", "minLength": 1 },
+        "net": { "description": "Geometry-bound net name (I3); \"\" means no net.", "type": "string" },
+        "at": { "$ref": "#/$defs/xyr" },
+        "layers": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "room": {
+      "type": "object",
+      "required": ["sheetname", "member_addrs"],
+      "additionalProperties": false,
+      "properties": {
+        "sheetname": { "type": "string", "minLength": 1 },
+        "member_addrs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

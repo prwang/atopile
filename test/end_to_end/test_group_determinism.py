@@ -1,14 +1,22 @@
 """
-Regression tests for byte-level determinism of group members in .kicad_pcb.
+Determinism + manual-edit preservation regressions for the build → .kicad_pcb
+path. Originally the "group determinism" suite (BACKLOG §A: A1/A3 member-sort
+determinism, A4 manual-group preservation); after §C3 atopile no longer creates
+KiCad groups (room identity moved to footprint sheetname), so the group-specific
+invariants moved:
 
-Root cause (fixed in layout_sync.py:pull_group_layout): newly pulled element
-UUIDs were appended to the already-sorted member list in Python set-iteration
-order, which varies per process with PYTHONHASHSEED. The next build's
-sync_groups re-sorted the full list, so the build *after* a pull differed from
-the pull build in member order only.
+  * fresh-build determinism through the pull path  -> test_room_migration_e2e.py
+    ::test_C3_3_determinism_through_pull_without_groups
+  * KiCad preserves the room across upgrade        -> test_room_migration_contract
+    .py::test_C3_4 (now sheetname-based, not group-based)
 
-These tests force different hash seeds across consecutive builds so any
-unsorted set-iteration path shows up as a byte diff.
+What remains here are the two invariants NOT subsumed by C3 and that must never
+regress:
+
+  * incremental-add determinism + pre-existing designator preservation;
+  * A4: a user's manual segment / named group / rule-area zone survives rebuilds
+    (atopile must never touch a non-atopile construct — now guaranteed by
+    construction since sync_rooms creates/edits no groups at all).
 """
 
 import os
@@ -47,12 +55,23 @@ def _load_pcb(pcb_path: Path) -> "kicad.pcb.PcbFile":
     return kicad.loads(kicad.pcb.PcbFile, pcb_path.read_text())
 
 
-def _assert_members_sorted(pcb_path: Path) -> None:
-    pcb_file = _load_pcb(pcb_path)
-    pcb = pcb_file.kicad_pcb
-    for group in pcb.groups:
-        assert list(group.members) == sorted(group.members), (
-            f"group {group.name!r} members not sorted"
+def _assert_rooms_tagged_no_atopile_groups(pcb_path: Path) -> None:
+    """Post-§C3 successor of `_assert_members_sorted`: every managed footprint
+    carries its room identity on `sheetname`, and atopile put no managed
+    footprint into any KiCad group (the old member-sort determinism concern is
+    gone — there are no atopile group member lists left to order)."""
+    pcb = _load_pcb(pcb_path).kicad_pcb
+    managed = [
+        fp for fp in pcb.footprints
+        if Property.try_get_property(fp.propertys, "atopile_address")
+    ]
+    assert managed, "expected atopile-managed footprints"
+    for fp in managed:
+        assert fp.sheetname, f"managed fp {fp.uuid} not tagged with a room sheetname"
+    managed_uuids = {fp.uuid for fp in managed}
+    for g in pcb.groups:
+        assert not (set(g.members) & managed_uuids), (
+            f"atopile group {g.name!r} contains managed footprints"
         )
 
 
@@ -67,30 +86,11 @@ def example_copy(tmp_path: Path) -> Path:
     return copy
 
 
-def test_fresh_build_deterministic(
-    example_copy: Path, save_tmp_path_on_failure: None
-):
-    """First build runs pull_group_layout (top layout absent in the example);
-    second build re-sorts via sync_groups. Both must serialize identically."""
-    assert not (example_copy / TOP_PCB).exists(), (
-        "fixture must start without a top layout to exercise the pull path"
-    )
-
-    _build(example_copy, hashseed="0")
-    first = (example_copy / TOP_PCB).read_bytes()
-    _assert_members_sorted(example_copy / TOP_PCB)
-
-    _build(example_copy, hashseed="1")
-    second = (example_copy / TOP_PCB).read_bytes()
-
-    assert first == second, "fresh build then rebuild must be byte-identical"
-
-
 def test_steady_state_and_incremental_add_deterministic(
     example_copy: Path, save_tmp_path_on_failure: None
 ):
     """Steady-state rebuilds stay identical; adding a module instance triggers
-    the pull path for the new group only, and the next build must not move
+    the pull path for the new room only, and the next build must not move
     bytes. Pre-existing designators must survive the addition
     (keep_designators default)."""
     _build(example_copy, hashseed="0")
@@ -112,7 +112,7 @@ def test_steady_state_and_incremental_add_deterministic(
 
     _build(example_copy, hashseed="0")
     after_add = (example_copy / TOP_PCB).read_bytes()
-    _assert_members_sorted(example_copy / TOP_PCB)
+    _assert_rooms_tagged_no_atopile_groups(example_copy / TOP_PCB)
 
     _build(example_copy, hashseed="1")
     assert (example_copy / TOP_PCB).read_bytes() == after_add, (
@@ -181,9 +181,11 @@ def _manual_injection(net_number: int) -> str:
 
 
 def test_manual_edits_preserved(example_copy: Path, save_tmp_path_on_failure: None):
-    """Manual segments, user-named groups (incl. their member contents) and
-    rule areas must survive rebuilds. Regression for the over-broad group
-    cleanup that deleted the contents of every non-atopile named group."""
+    """A4: manual segments, user-named groups (incl. their member contents) and
+    rule areas survive rebuilds. Post-§C3 this is guaranteed by construction —
+    sync_rooms creates and edits no groups, and _clean_room only deletes a room's
+    own intra-room-net copper (the manual segment is on net 0 / a non-room net),
+    so a non-atopile construct is never touched."""
     _build(example_copy, hashseed="0")
     pcb_path = example_copy / TOP_PCB
 
@@ -211,56 +213,17 @@ def test_manual_edits_preserved(example_copy: Path, save_tmp_path_on_failure: No
     assert zones and zones[0].name == "manual_room"
     assert zones[0].placement is not None and zones[0].placement.enabled
 
+    # atopile itself created no groups — the only group is the user's manual one
+    managed_uuids = {
+        fp.uuid for fp in rebuilt.footprints
+        if Property.try_get_property(fp.propertys, "atopile_address")
+    }
+    for g in rebuilt.groups:
+        assert not (set(g.members) & managed_uuids), (
+            f"atopile group {g.name!r} contains managed footprints"
+        )
+
     # manual elements must not disturb steady-state byte determinism
     stable = pcb_path.read_bytes()
     _build(example_copy, hashseed="0")
     assert pcb_path.read_bytes() == stable
-
-
-def _groups_from_text(pcb_path: Path) -> dict[str, set[str]]:
-    """Text-level group extraction. The file written by `kicad-cli pcb
-    upgrade` uses the current KiCad 10 format (e.g. nested `(tenting ...)`),
-    which the Zig schema (pinned to version 20241229) cannot parse — so the
-    upgraded side of the round trip must be compared at text level. Corollary:
-    never run `pcb upgrade` on boards atopile still manages."""
-    import re
-
-    txt = pcb_path.read_text()
-    out: dict[str, set[str]] = {}
-    for m in re.finditer(r'\(group "([^"]*)"', txt):
-        depth = 0
-        for j in range(m.start(), len(txt)):
-            if txt[j] == "(":
-                depth += 1
-            elif txt[j] == ")":
-                depth -= 1
-                if depth == 0:
-                    break
-        block = txt[m.start() : j + 1]
-        members = re.search(r"\(members((?:\s+\"[0-9a-f-]+\")+)\s*\)", block)
-        out[m.group(1)] = (
-            set(re.findall(r'"([0-9a-f-]+)"', members.group(1))) if members else set()
-        )
-    return out
-
-
-@pytest.mark.skipif(
-    shutil.which("kicad-cli") is None, reason="requires kicad-cli"
-)
-def test_kicad_upgrade_roundtrip_preserves_groups(
-    example_copy: Path, save_tmp_path_on_failure: None
-):
-    """`kicad-cli pcb upgrade` must preserve group membership (order may be
-    KiCad's own; membership sets are what we rely on)."""
-    _build(example_copy, hashseed="0")
-
-    before = _groups_from_text(example_copy / TOP_PCB)
-    run_live(
-        ["kicad-cli", "pcb", "upgrade", str(example_copy / TOP_PCB)],
-        stdout=print,
-        stderr=print,
-        timeout=120,
-    )
-    after = _groups_from_text(example_copy / TOP_PCB)
-
-    assert before == after
