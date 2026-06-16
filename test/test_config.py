@@ -1,12 +1,15 @@
 from pathlib import Path
 from textwrap import dedent
 
+import pytest
 import semver
 from pydantic.networks import HttpUrl
 
 from atopile.config import (
     PROJECT_CONFIG_FILENAME,
+    BuildTargetPaths,
     FileDependencySpec,
+    ProjectPaths,
     RegistryDependencySpec,
     config,
 )
@@ -82,3 +85,52 @@ def test_update_project_config(tmp_path: Path):
     assert config.project.dependencies[4].release == "v0.0.1"
     assert isinstance(config.project.dependencies[5], FileDependencySpec)
     assert config.project.dependencies[5].path == Path("../esp32-s3")
+
+
+# ===========================================================================
+# D1 — layout.yaml path config (BACKLOG §D, task D1). S0 tests-first ratchet.
+#
+# `BuildTargetPaths` gains an optional `layout_config: Path | None = None` that
+# carries the path to the build's layout.yaml (the layout-intent source, peer of
+# `paths.layout` = the .kicad_pcb). Like the other build-target paths it is
+# absolutized relative to the project root, and defaults to None when the build
+# declares no layout.yaml. The build steps (D4) read it via
+# `config.build.paths.layout_config`.
+#
+# Ratchet (S0 discipline, mirrors test_room_migration_contract `_C3_LANDED`):
+# `_D1_LANDED` is a pure field probe — the field's presence on the model == the
+# feature landed. strict-xfail until then, so an unimplemented field keeps the
+# ratchet red and the flip to green is automatic on landing.
+# ===========================================================================
+
+_D1_LANDED = "layout_config" in BuildTargetPaths.model_fields
+needs_d1 = pytest.mark.xfail(
+    not _D1_LANDED,
+    reason="D1 layout_config path field not landed (S0 ratchet)",
+    strict=True,
+)
+
+
+@needs_d1
+def test_layout_config_relative_path_is_absolutized(tmp_path: Path):
+    """A relative `layout_config` resolves to an absolute path under the project
+    root — same absolutization contract as the other build-target paths."""
+    project_paths = ProjectPaths(root=tmp_path)
+    paths = BuildTargetPaths(
+        name="default",
+        project_paths=project_paths,
+        layout_config="layout.yaml",
+    )
+    assert paths.layout_config is not None
+    assert paths.layout_config.is_absolute()
+    assert paths.layout_config == (tmp_path / "layout.yaml").resolve().absolute()
+
+
+@needs_d1
+def test_layout_config_defaults_to_none(tmp_path: Path):
+    """A build that declares no layout.yaml has `layout_config is None` — the
+    feature is opt-in and never fabricates a path (loud-or-nothing: a default
+    path would silently point at a nonexistent file)."""
+    project_paths = ProjectPaths(root=tmp_path)
+    paths = BuildTargetPaths(name="default", project_paths=project_paths)
+    assert paths.layout_config is None

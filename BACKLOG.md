@@ -273,17 +273,33 @@ Tier-2 真 router 2）。冻结 API：`pad_board_xy`、`insert_forced_via→Forc
 
 - [ ] **D2** layout.yaml 解析 + 校验。**落点**：`src/faebryk/exporters/pcb/layout/layout_plan.py`
   ——pydantic 模型 `LayoutPlan{rooms: list[Room], route_stages: list[RouteStage]}`，
-  `Room{module(=group 名/ato 地址), origin, rotation, size, source:"group", layers, anchor}`
-  （**全用 ato 地址不用位号**），`RouteStage{name, nets:[ato 地址], mode: "diff"|"single",
-  config: GridRouteOverride}`。`GridRouteOverride` = `routing_config.py:31-124` `GridRouteConfig`
-  字段的**可选子集**（字段名 1:1，见 §E1；YAML 键 == router kwargs，零翻译层）。
+  `Room{module(= ato 地址 = room sheetname), origin, rotation, size, layers, anchor}`
+  （**全用 ato 地址不用位号**；C3 后无 `source:"group"` 字段，room 载体是 sheetname），
+  `RouteStage{name, nets:[ato 地址], mode: "diff"|"single", config: GridRouteOverride}`。
+  **`GridRouteOverride` 的真 oracle = 两个 router 入口的入参 union，NOT `GridRouteConfig`
+  【2026-06-16 独立验证纠偏，旧"= GridRouteConfig 字段子集、字段名 1:1、零翻译"作废】**：
+  实测 `route.py:batch_route` / `route_diff.py:batch_route_diff_pairs` 收的是**扁平 kwargs**，
+  函数内部才 `config = GridRouteConfig(**kwargs)`（`route.py:312`）并**改名翻译**——故 kwarg 才是
+  API 面，GridRouteConfig 是内部对象。两者**有偏差**：batch_route 66 knob vs GridRouteConfig 70 字段、
+  交集仅 51；① 15 个 router-only knob 不在 dataclass（`ordering_strategy`/`disable_bga_zones`/
+  `enable_layer_switch`/`mps_*`/`net_clearances`/`power_nets`…）；② 19 个 dataclass-only 字段
+  batch_route 不收（`diff_pair_gap`/`fix_polarity`/`gnd_via_enabled`/`min_turning_radius`…，
+  当 kwarg 展开会 TypeError）；③ **2 处改名**：kwarg `impedance`→字段 `impedance_target`、
+  `power_nets_widths`→`power_net_widths`。**mode 互斥**：`guide_corridor_*` 仅单端入口收、
+  `diff_pair_*`/`fix_polarity`/`gnd_via_*` 仅差分入口收、`keepout_enabled` 两入口都收。
+  **就地解决（不下放 E1）**：GridRouteOverride model 层用 union 放行；**D2 parse 期按 stage `mode`
+  拒错键**——config 键若不被该 mode 分派到的入口接受（如 `mode:single` 写 `diff_pair_gap`、
+  `mode:diff` 写 `guide_corridor_enabled`）即响亮抛（自测 ④，按真 router 签名定 mode 归属、漂移即红）。
+  E1 只 dispatch，不再重复校验。
   **吃 B**：net 引用经桥②（`signal_nets`）地址→net 名解析；裸 net 名 / 无稳定地址 net（I4）
   **响亮抛**（对齐 S5a，事实 2/8）；未知 yaml 键响亮（不静默吞，S5a 纪律）。
   **E·F 怎么用**：`route_stages` 是 E1 的唯一输入；`mode` 显式驱动 §C 边界事实 1 的双入口分派
   （耦合 vs 独立，非自动猜）。**自测**：`test/exporters/pcb/layout/test_layout_plan_contract.py`
   strict-xfail 棘轮（同 B/C）：① 模型解析 + 未知键/裸 net 名/无地址 net 响亮；② **消费者-oracle**：
   yaml 里每个 net 地址引用解析出的 net 名 == 现役 `signal_nets`（在 `examples/layout_reuse` 上）；
-  ③ GridRouteOverride 子集键 ⊆ GridRouteConfig 字段（防 yaml 写出 router 不认的键，漂移即红）。
+  ③ GridRouteOverride 键 ⊆ **两 router 入口入参 union**（AST 取签名、不 import 避 scipy；防 yaml 写出
+  router 不认的 kwarg，漂移即红）；④ **mode/entry 一致性**：mode 互斥键放对 mode 接受、放错 mode 响亮
+  （正负成对、premise 按真 router 签名复核——下游若裸 `**override` 不按 mode 过滤，负向用例即转红）。
 
 - [ ] **D3** rule area + room 边界几何生成器（**前置 = C3 完成；无 zig 改动**）。**落点**：
   `src/faebryk/exporters/pcb/layout/rule_area.py` ——`generate_rule_areas(pcb, plan, ir)`：每 room
@@ -326,8 +342,9 @@ consumer-oracle（`signal_nets`）+ GridRouteOverride 漂移钉 + KiCad 交叉�
 
 ### E.【需 §C + §D】KiCadRoutingTools fork
 E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶段能力。E3 全程并行先搭。
-- [ ] **E1** `layout_plan_runner.py`：route_stages → `GridRouteConfig`（字段与 YAML 一一对应，
-  `routing_config.py:31-124`）→ 多次路由调用，阶段间 pcb_data 累积。产 `route_report.json`。
+- [ ] **E1** `layout_plan_runner.py`：route_stages → 按 mode 展开成 `batch_route`/
+  `batch_route_diff_pairs` 的 **kwargs**（字段名 = router 入口入参，**非** GridRouteConfig；翻译在 router
+  内部，见 D2 纠偏）→ 多次路由调用，阶段间 pcb_data 累积。产 `route_report.json`。
   - **按 net 类型分派入口（§C 边界事实 1/设计决策，不合并算法）**：单端 → `route.py:batch_route`、
     差分对 → `route_diff.py:batch_route_diff_pairs`；聚合按共有键 `failed`/`successful`/`total_vias`
     归一、分类型键各自解析。mode 来自 `route_stages`（D2），不自动猜测。
@@ -335,12 +352,16 @@ E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶
     batch 输入剔除；聚合不得假设每条输入 net 都有 summary。
   - **不为 §C 预置几何加 lock**（边界事实 2）：它们是已连通铜、router 自动不动；E2 锁定面向
     *本阶段新布*的几何。
-  - **GridRouteOverride → kwargs 零翻译**：`RouteStage.config`（D2 的 GridRouteConfig 字段子集）原样
-    展开成 `batch_route`/`batch_route_diff_pairs` 的同名 kwargs（两入口签名即 GridRouteConfig 全字段）——
-    E1 不维护映射表，新增 router 字段只需 D2 的 GridRouteOverride 放行。
+  - **GridRouteOverride → kwargs 原样展开（按 mode 校验）**：`RouteStage.config`（D2 的 override，键 ⊆
+    两入口入参 union，**非 GridRouteConfig**，见 D2 纠偏）原样展开成 `batch_route`（单端）/
+    `batch_route_diff_pairs`（差分）的同名 kwargs——E1 不维护映射表（**翻译在 router 内部**，如
+    `impedance`→`impedance_target`，E1 不碰）。**键合法性已由 D2 parse 期 mode-aware 校验保证**
+    （D2 自测 ④：错 mode 键 parse 即响亮），故 E1 按 stage `mode` 选入口后可信地展开 `**override`；
+    E1 不重复校验。新增 router 字段只需 D2 override 放行。
   - **按 stage 启用 §C/§D 的 User 层约束**（边界事实 4）：stage 可置 `guide_corridor_enabled`
-    （读 §C 的 User.1 引导）/ `keepout_enabled`（读 §D 的 User.2 room 边界），默认关、由 route_stages
-    显式开——这是把 §C/§D 几何变成布线约束的唯一通道。
+    （读 §C 的 User.1 引导，**注：仅 `batch_route` 单端入口收，差分入口无此 kwarg**）/ `keepout_enabled`
+    （读 §D 的 User.2 room 边界，两入口都收），默认关、由 route_stages 显式开——这是把 §C/§D 几何变成
+    布线约束的唯一通道。
 - [ ] **E2** 几何所有权/阶段锁定：`Segment`/`Via` 加 `_metadata`（内存态）；`rip_up_net`
   （`rip_up_reroute.py:60-72`）加阶段守卫；`lock_after` 阶段后续不可撕。
 - [ ] **E3** 独立回归台（全程并行先搭 = §E 的 S0 底座）：无需装 KiCad，预编译 Rust 二进制 +
