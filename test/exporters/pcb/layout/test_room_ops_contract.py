@@ -389,7 +389,7 @@ def _add_segment(pcb, net_number: int, start, end, *, layer="F.Cu", width=0.2):
         width=width,
         layer=layer,
         net=net_number,
-        uuid=kicad.gen_uuid(mark="FBRK"),
+        uuid=kicad.gen_uuid(),
     )
     kicad.insert(pcb, "segments", pcb.segments, seg)
     return seg

@@ -8,7 +8,10 @@ Pins the two fixes against the CloudFront WAF, using a stubbed httpx transport
   1. requests carry a WAF-allowlisted User-Agent, NOT the upstream
      `easyeda2kicad v<version>` that gets 403'd deterministically;
   2. a WAF block (403, or HTML where JSON is expected) is retried with backoff,
-     while a genuine 200 success:false is returned immediately (no hammering).
+     while a genuine 200 success:false is returned immediately (no hammering);
+  3. pacing is proactive: every GET (even the first, even on the happy path) is
+     preceded by a jittered initial delay so a cold serial fetch stream is spaced
+     from the start, not only after the first 403.
 """
 
 import httpx
@@ -77,9 +80,22 @@ def test_retries_waf_block_then_succeeds(_no_real_sleep_or_jitter):
 
     assert data == _GOOD_JSON["result"]
     assert len(seen) == 3  # two blocks + one success
-    assert len(_no_real_sleep_or_jitter) == 2  # backed off before each retry
-    # full-jitter exponential: ceilings 0.5, 1.0 for attempts 0, 1
-    assert _no_real_sleep_or_jitter == [0.5, 1.0]
+    # proactive initial jitter (ceiling INITIAL_JITTER_S) before the first GET,
+    # then full-jitter exponential backoff (ceilings 0.5, 1.0) before each retry.
+    # uniform is monkeypatched to return the window's max, so we see the ceilings.
+    initial = er.ResilientEasyedaApi.INITIAL_JITTER_S
+    assert _no_real_sleep_or_jitter == [initial, 0.5, 1.0]
+
+
+def test_happy_path_is_paced_proactively(_no_real_sleep_or_jitter):
+    """Even a single successful GET (no WAF block) is preceded by the proactive
+    initial jitter — that's what spaces a cold serial burst from the start."""
+    api, seen = _api_with_responses([_json_resp(_GOOD_JSON)])
+    api.get_cad_data_of_component(lcsc_id="C1")
+
+    assert len(seen) == 1  # no retries
+    # exactly one sleep: the proactive initial jitter, no reactive backoff
+    assert _no_real_sleep_or_jitter == [er.ResilientEasyedaApi.INITIAL_JITTER_S]
 
 
 def test_genuine_not_found_is_not_retried():

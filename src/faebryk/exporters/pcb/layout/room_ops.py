@@ -178,7 +178,7 @@ def _guide_line(start: tuple[float, float], end: tuple[float, float]):
         layer=GUIDE_LAYER,
         layers=[GUIDE_LAYER],
         locked=False,
-        uuid=kicad.gen_uuid(mark="FBRK"),
+        uuid=kicad.gen_uuid(),
     )
 
 
@@ -221,7 +221,7 @@ def insert_forced_via(
         width=track_width,
         layer=in_layer,
         net=number,
-        uuid=kicad.gen_uuid(mark="FBRK"),
+        uuid=kicad.gen_uuid(),
     )
     seg_out = kicad.pcb.Segment(
         start=kicad.pcb.Xy(x=vx, y=vy),
@@ -229,7 +229,7 @@ def insert_forced_via(
         width=track_width,
         layer=out_layer,
         net=number,
-        uuid=kicad.gen_uuid(mark="FBRK"),
+        uuid=kicad.gen_uuid(),
     )
     via = kicad.pcb.Via(
         at=kicad.pcb.Xy(x=vx, y=vy),
@@ -245,7 +245,7 @@ def insert_forced_via(
         tenting=None,
         free=None,
         locked=None,
-        uuid=kicad.gen_uuid(mark="FBRK"),
+        uuid=kicad.gen_uuid(),
     )
     guides = [
         _guide_line((p0[0], p0[1]), (vx, vy)),
@@ -301,7 +301,7 @@ def copy_room_layout(
             continue  # not this room's intra-room copper — do not cross the boundary
         tgt_name = net_map[src_net.name]
         new_track = kicad.copy(track)
-        new_track.uuid = kicad.gen_uuid(mark="FBRK")
+        new_track.uuid = kicad.gen_uuid()
         new_track.net = _net_number(target_pcb, tgt_name)
         if isinstance(new_track, kicad.pcb.Zone):
             new_track.net_name = tgt_name

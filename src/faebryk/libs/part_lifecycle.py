@@ -35,6 +35,7 @@ from faebryk.libs.picker.lcsc import (
     PickedPartLCSC,
 )
 from faebryk.libs.util import (
+    ConfigFlag,
     KeyErrorNotFound,
     find,
     indented_container,
@@ -44,6 +45,18 @@ from faebryk.libs.util import (
     re_in,
     robustly_rm_dir,
     sanitize_filepath_part,
+)
+
+# When set, a part already in the on-disk cache is authoritative and is NEVER
+# re-fetched from EasyEDA, regardless of how old its query_time is. This makes
+# builds/tests fully offline once the cache is warm — "download the first day,
+# never again every run" — instead of the default 1-day-TTL refresh that re-hits
+# the WAF (and 403s under rate-limit) on any run >1 day after the cache was seeded.
+# Tests set FBRK_PARTS_NO_REFRESH=y; CI/users wanting freshness leave it unset.
+PARTS_NO_REFRESH = ConfigFlag(
+    "PARTS_NO_REFRESH",
+    default=False,
+    descr="Treat the on-disk EasyEDA part cache as authoritative; never refresh",
 )
 
 logger = logging.getLogger(__name__)
@@ -110,6 +123,10 @@ class PartLifecycle:
         def shall_refresh(self, partno: str) -> bool:
             if not self._exists(partno):
                 return True
+            # offline mode: a cached part is authoritative, never re-fetched
+            # (download-once semantics — see PARTS_NO_REFRESH above)
+            if PARTS_NO_REFRESH:
+                return False
             date_queried = self.load(partno).query_time
             return date_queried < datetime.now() - self.DELTA_REFRESH
 
@@ -636,7 +653,7 @@ class PartLifecycle:
                     value=prop_value,
                     at=kicad.pcb.Xyr(x=0, y=0, r=0),
                     layer="User.9",
-                    uuid=PCB_Transformer.gen_uuid(mark=True),
+                    uuid=PCB_Transformer.gen_uuid(),
                     unlocked=None,
                     hide=True,
                     effects=None,

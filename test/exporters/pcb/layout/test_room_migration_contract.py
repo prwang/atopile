@@ -13,7 +13,7 @@ construction (there is no atopile group code left to over-reach).
 
 Room model:
   * room IDENTITY  = footprint `sheetname` (+ `sheetfile`), synthesized at build
-    time = exactly the old `_get_group_name(sub_addr, fp)` value, e.g.
+    time = exactly the `_get_room_name(sub_addr, fp)` value, e.g.
     "sub_chains[0]"; the full instance address, so it stays globally unique — a
     leaf name would collide. KiCad preserves `sheetname`/`sheetfile` VERBATIM
     through `pcb upgrade` even with no .kicad_sch (C3.4). It does NOT preserve
@@ -50,11 +50,13 @@ layout_sync.py:
     -  _clean_group(name)            + _clean_room(name)   # deletes by intra-room
                                                            # net, not membership
     -  _is_managed_group()           (deleted — the gen_uuid name-overflow hack's
-                                      last live reader; BACKLOG 遗留3)
-       _get_group_name()             (kept — already address-derived; becomes the
-                                      sheetname value)
+                                      last live reader; BACKLOG §G)
+    -  _get_group_name()             + _get_room_name()    # address-derived; the
+                                                           # sheetname value
+    -  gen_uuid(mark=...) / is_marked (deleted — uuids are opaque, no flag in/out;
+                                      BACKLOG §G)
 
-transformer.py:  insert_group() retired.
+transformer.py:  _add_group() / is_marked() retired (no ato->group mapping).
 
 == THE RATCHET (S0 discipline, mirrors test_layout_ir_contract / room_ops) ==
 
@@ -238,16 +240,10 @@ def _load(text: str) -> kicad.pcb.PcbFile:
 
 
 def _rooms_member_addrs(ir) -> dict[str, set[str]]:
-    """{room name -> set(member ato addresses)}, reading whichever era's IR is
-    present: native ir['rooms'] post-C3, else the address-bearing groups in
-    ir['groups'] (a manual group has member_addrs == [] and self-excludes)."""
-    if "rooms" in ir:
-        return {name: set(r["member_addrs"]) for name, r in ir["rooms"].items()}
-    return {
-        name: set(g["member_addrs"])
-        for name, g in ir.get("groups", {}).items()
-        if g["member_addrs"]
-    }
+    """{room name -> set(member ato addresses)} from the native post-C3 IR.
+    atopile has no ato->group mapping: rooms are read from `ir['rooms']` (sheetname
+    derived), never from any KiCad group."""
+    return {name: set(r["member_addrs"]) for name, r in ir["rooms"].items()}
 
 
 def _prefix_members(ir, room_name: str) -> set[str]:
@@ -259,10 +255,15 @@ def _prefix_members(ir, room_name: str) -> set[str]:
 
 
 # ===========================================================================
-# C3.1 — MIGRATION EQUIVALENCE (GREEN NOW). The keystone safety net: the
-# address-prefix derivation reproduces the legacy group membership exactly, so
-# the group path can be deleted without losing information. Era-bridging, so it
-# also becomes the permanent "rooms == address-prefix grouping" invariant.
+# C3.1 — ROOM == ADDRESS-PREFIX GROUPING (GREEN, permanent invariant). Room
+# identity is the footprint sheetname (= the ato address prefix); membership is
+# exactly the managed footprints under that prefix. atopile has NO ato->group
+# mapping path, so this is asserted purely on sheetname-derived `ir['rooms']`.
+# (The one-time group->sheetname migration-equivalence proof that read legacy
+# `pcb.groups` as a room source has been RETIRED — keeping it would perpetuate the
+# very ato->group coupling C3 removed. User manual-group round-trip fidelity, the
+# only legitimate group semantics, lives in
+# test_group_determinism.py::test_manual_edits_preserved (A4).)
 # ===========================================================================
 
 
@@ -291,37 +292,11 @@ def test_C3_1_inline_room_equals_address_prefix_grouping():
         )
 
 
-@pytest.mark.parametrize("stem", _CORPUS)
-def test_C3_1_corpus_groups_are_address_prefix_recoverable(stem):
-    """On every committed fixture: each atopile room (a legacy GROUP whose members
-    carry addresses, read straight from the pcb) is EXACTLY the managed footprints
-    under its name's address prefix. This is the migration safety net — it proves
-    group -> sheetname loses no information — and it reads the legacy groups
-    directly (the fixtures keep them: atopile must still parse group-bearing
-    boards), so it needs no fixture rewrite. A manual user group (members with no
-    atopile_address) self-excludes."""
-    path = (V10_PCB_DIR / f"{stem}.kicad_pcb")
-    if not path.exists():
-        path = V9_PCB_DIR / f"{stem}.kicad_pcb"
-    pcb = _load(path.read_text()).kicad_pcb
-    ir = layout_ir(pcb)
-    addr_by_uuid = {c["footprint_uuid"]: a for a, c in ir["components"].items()}
-
-    legacy: dict[str, set[str]] = {}
-    for g in pcb.groups:
-        if not g.name:
-            continue
-        addrs = {a for m in g.members if (a := addr_by_uuid.get(m)) is not None}
-        if addrs:  # an address-bearing (atopile room) group
-            legacy[g.name] = addrs
-    if not legacy:
-        pytest.skip(f"{stem}: no atopile room groups")
-
-    for name, members in legacy.items():
-        assert members == _prefix_members(ir, name), (
-            f"{stem}: group {name!r} members {sorted(members)} != address-prefix "
-            f"{sorted(_prefix_members(ir, name))} — group->sheetname would lose info"
-        )
+# (RETIRED) test_C3_1_corpus_groups_are_address_prefix_recoverable: the one-time
+# migration proof that read committed fixtures' legacy `pcb.groups` as a room
+# source. Removed per the no-ato->group-mapping rule (BACKLOG §G / §C3). Parser
+# round-trip of group-bearing boards is still covered by test_fileformats_corpus
+# (groups treated as opaque user content, not as a room source).
 
 
 # ===========================================================================

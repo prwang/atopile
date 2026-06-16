@@ -39,9 +39,9 @@ class LayoutSync:
         ]
 
         # rooms: reuse-instance footprints grouped by room name (= sheetname,
-        # BACKLOG §C3). The carrier moved from KiCad groups to footprint
-        # sheetname; the room name itself is still _get_group_name.
-        self.rooms = groupby(sub_fps, lambda x: self._get_group_name(x[1], x[0]))
+        # BACKLOG §C3). The carrier is the footprint sheetname; the room name is
+        # derived purely from the ato address (no KiCad group is ever involved).
+        self.rooms = groupby(sub_fps, lambda x: self._get_room_name(x[1], x[0]))
         for room_name, fps in self.rooms.items():
             pcb_names = {x[1].pcb_address for x in fps}
             assert len(pcb_names) == 1, (
@@ -65,7 +65,7 @@ class LayoutSync:
         path = gcfg.project.paths.root / pcb_address
         return kicad.loads(kicad.pcb.PcbFile, path).kicad_pcb
 
-    def _get_group_name(self, sub_addr: SubAddress, fp: Footprint) -> str:
+    def _get_room_name(self, sub_addr: SubAddress, fp: Footprint) -> str:
         base_addr = self._get_footprint_addr(fp)
         assert base_addr
         inner = sub_addr.module_address
@@ -406,7 +406,7 @@ class LayoutSync:
         # remove intra-room copper from involved rooms before re-adding (clean by
         # net, not by group membership which no longer exists).
         involved_rooms = {
-            self._get_group_name(addr, fp)
+            self._get_room_name(addr, fp)
             for fp, _ in fps
             for addr in self._get_all_sub_addresses(fp)
         }

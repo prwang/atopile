@@ -22,6 +22,9 @@ def exec_build(args: list[str], cwd: Path) -> tuple[str, str, subprocess.Popen]:
             **os.environ,
             "NONINTERACTIVE": "1",
             "FBRK_SKIP_SOLVING": "y",
+            # cached parts are authoritative — never re-fetch from EasyEDA, so
+            # e2e builds stay offline & WAF-immune (download-once semantics).
+            "FBRK_PARTS_NO_REFRESH": "y",
         },
         stdout=print,
         stderr=print,

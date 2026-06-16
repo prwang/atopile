@@ -226,22 +226,15 @@ class kicad:
         return raw
 
     @staticmethod
-    def gen_uuid(mark: str = ""):
+    def gen_uuid():
         import uuid
 
-        # format: d864cebe-263c-4d3f-bbd6-bb51c6d2a608
-        value = uuid.uuid4().hex
-
-        suffix = mark.encode().hex()
-        if suffix:
-            value = value[: -len(suffix)] + suffix
-
-        DASH_IDX = [8, 12, 16, 20]
-        formatted = value
-        for i, idx in enumerate(DASH_IDX):
-            formatted = formatted[: idx + i] + "-" + formatted[idx + i :]
-
-        return UUID(formatted)
+        # Opaque random uuid4 (format: d864cebe-263c-4d3f-bbd6-bb51c6d2a608).
+        # INVARIANT (BACKLOG §G): atopile NEVER encodes metadata into a uuid and
+        # NEVER reads a flag back out of one. A uuid is a 128-bit opaque id, not a
+        # metadata side-channel. Provenance/ownership lives in the `atopile_address`
+        # property (and the `FBRK:notouch` fp_text lock) — never in the uuid.
+        return UUID(str(uuid.uuid4()))
 
     @staticmethod
     def fp_get_base_name(fp: footprint.Footprint | pcb.Footprint) -> str:

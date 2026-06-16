@@ -15,18 +15,23 @@ rules that the upstream ``easyeda2kicad.EasyedaApi`` walks straight into:
    column 1`` (historically misread as "empty JSON / rate limit").
 
 2. A per-IP rate/reputation rule. Bursts (a cold build fetches every uncached
-   part back-to-back, with no client-side spacing whatsoever) trip CloudFront,
-   after which even an allowed UA gets a 403 whose body is the
-   ``Request blocked / too much traffic`` HTML page.
+   part back-to-back) trip CloudFront, after which even an allowed UA gets a 403
+   whose body is the ``Request blocked / too much traffic`` HTML page.
 
-This subclass fixes both: it sends a WAF-allowlisted User-Agent, and it routes
-every GET through full-jitter exponential backoff that treats a WAF block (403,
-or an HTML body where JSON was expected) as retryable. A genuine 200 ``{"success":
-false}`` (part not found) is *not* a WAF block and is returned immediately — we
-don't hammer the API for parts that don't exist.
+This subclass fixes both: it sends a WAF-allowlisted User-Agent, and it paces
+every GET. Pacing is *proactive*, not only reactive: before the first attempt of
+each GET we sleep a small conservative jitter (``INITIAL_JITTER_S``) so a cold
+serial fetch stream is spaced out from the start rather than firing back-to-back
+and only recovering after the first 403. On top of that, a WAF block (403, or an
+HTML body where JSON was expected) is retried with full-jitter exponential
+backoff. A genuine 200 ``{"success": false}`` (part not found) is *not* a WAF
+block and is returned immediately — we don't hammer the API for parts that don't
+exist.
 
-The 1-day on-disk cache (``part_lifecycle.EasyEDA_API``) still means warm builds
-make zero API calls; this only governs the cold-fetch path.
+Why proactive spacing is essentially free here: the 1-day on-disk cache
+(``part_lifecycle.EasyEDA_API``, made authoritative by ``FBRK_PARTS_NO_REFRESH``)
+means warm builds make zero API calls, so the only path that ever pays the
+initial jitter — or any of this retry logic — is a genuine cold fetch.
 """
 
 import logging
@@ -53,6 +58,12 @@ class ResilientEasyedaApi(_ee.EasyedaApi):
     BASE_DELAY_S = 0.5
     MAX_DELAY_S = 8.0
     TIMEOUT_S = 30.0
+    # Proactive pacing: every GET is preceded by a jittered delay in
+    # [0, INITIAL_JITTER_S) so even a cold, fully-serial fetch stream is spaced
+    # from the start (not just recovered-after-403). Conservative on purpose;
+    # warm builds hit the cache and make zero calls, so this never costs steady
+    # state anything.
+    INITIAL_JITTER_S = 0.3
 
     def __init__(self) -> None:
         super().__init__()
@@ -87,11 +98,16 @@ class ResilientEasyedaApi(_ee.EasyedaApi):
         return httpx.Client(verify=self._ssl_context, timeout=self.TIMEOUT_S)
 
     def _get_with_retry(self, url: str, headers: dict) -> httpx.Response:
-        """GET with full-jitter exponential backoff while CloudFront blocks us.
-        Returns the last response either way (callers keep their existing
-        success/empty handling); transport errors are retried too."""
+        """GET with proactive initial jitter + full-jitter exponential backoff
+        while CloudFront blocks us. Returns the last response either way (callers
+        keep their existing success/empty handling); transport errors are retried
+        too."""
         last: httpx.Response | None = None
         for attempt in range(self.MAX_ATTEMPTS):
+            if attempt == 0:
+                # proactive: space the very first hit too, so a cold serial burst
+                # is paced from the start rather than only after a 403
+                time.sleep(random.uniform(0.0, self.INITIAL_JITTER_S))
             try:
                 with self._make_client() as client:
                     last = client.get(url=url, headers=headers)

@@ -17,12 +17,13 @@ zones, nets, the untouched footprints, every pad's net) stays intact AND the
 rewritten board is still a v10 file KiCad-cli can run DRC on. Edit ≠ re-save.
 
 The fidelity set under test = the minimal set decided 2026-06-13: footprints,
-manually-named groups, rule-area placement, zones (the layout_reuse_top fixture
-carries 9 footprints incl. grouped ones, 4 groups incl. manual_human_group, and
-zones). The warning set (teardrop / generated meander / via padstack v10 shape
-variations) is out of the fidelity set; the last test pins that an unmodeled key
-inside such a construct is reported loudly (no silent failure) rather than
-dropped — the demo script avoids these constructs.
+manually-named groups, zones (the base is an input corpus sample with 6
+footprints, 2 zones and a via; the manual user group is created by the test rig,
+not baked into a committed generated board — see the work_board fixture). The
+warning set (teardrop / generated meander / via padstack v10 shape variations) is
+out of the fidelity set; the last test pins that an unmodeled key inside such a
+construct is reported loudly (no silent failure) rather than dropped — the demo
+script avoids these constructs.
 """
 
 import json
@@ -38,7 +39,16 @@ from faebryk.libs.kicad.fileformats import kicad
 from faebryk.libs.kicad.semantic_view import semantic_view
 from faebryk.libs.test.fileformats import FILEFORMATS_PATH
 
-V10_FIXTURE = FILEFORMATS_PATH / "v10" / "pcb" / "layout_reuse_top.kicad_pcb"
+# A committed *input* corpus sample (an external KiCad board, present across
+# v8/v9/v10) — NOT an atopile-generated artifact. 6 footprints, 2 zones, 1 via,
+# and crucially ZERO groups, so the only group on the board is the one the test
+# rig creates below: group provenance is unambiguous and the test owns it.
+BASE_SAMPLE = FILEFORMATS_PATH / "v10" / "pcb" / "test.kicad_pcb"
+
+# The user group the RIG creates (simulating manual grouping in the KiCad GUI;
+# kicad-cli has no group-create command, so the rig builds it via the fileformats
+# API). Its survival across a managed edit is the property under test.
+MANUAL_GROUP = "user_drawn_group"
 
 NEEDS_KICAD_CLI = pytest.mark.skipif(
     shutil.which("kicad-cli") is None, reason="requires kicad-cli"
@@ -61,8 +71,25 @@ def _refs(view: dict) -> set[tuple[str, str]]:
 
 @pytest.fixture
 def work_board(tmp_path) -> Path:
-    work = tmp_path / V10_FIXTURE.name
-    shutil.copy2(V10_FIXTURE, work)
+    """A board the test fully controls and can regenerate: the input corpus sample
+    copied to tmp, into which the RIG creates a manual user group via the
+    fileformats API (the KiCad-GUI manual-grouping action, which kicad-cli cannot
+    perform). The group is the test's own construct — nothing relies on a frozen,
+    baked-in group in a committed generated board."""
+    work = tmp_path / "board.kicad_pcb"
+    shutil.copy2(BASE_SAMPLE, work)
+
+    bf = kicad.loads(kicad.pcb.PcbFile, work.read_text())
+    pcb = bf.kicad_pcb
+    pcb.groups.append(
+        kicad.pcb.Group(
+            name=MANUAL_GROUP,
+            members=[pcb.footprints[0].uuid],
+            uuid=kicad.gen_uuid(),
+            locked=False,
+        )
+    )
+    work.write_text(kicad.dumps(bf))
     return work
 
 
@@ -91,7 +118,7 @@ def test_managed_move_persists_and_loses_nothing(work_board: Path):
     assert moved.y == pytest.approx(new_y)
 
     # 2. nothing else was lost: every non-positional construct is identical
-    assert after["groups"] == before["groups"]  # incl. manual_human_group
+    assert after["groups"] == before["groups"]  # incl. the rig-created user group
     assert after["zones"] == before["zones"]
     assert after["nets"] == before["nets"]
     assert after["segments"] == before["segments"]
@@ -109,7 +136,7 @@ def test_managed_move_leaves_grouped_footprint_in_its_group(work_board: Path):
     mgr = PcbManager()
     mgr.load(work_board)
     members_before = {g.name or "": sorted(g.members) for g in mgr.pcb.groups}
-    assert "manual_human_group" in members_before
+    assert MANUAL_GROUP in members_before
 
     # move a footprint that belongs to a group
     grouped_uuids = {u for ms in members_before.values() for u in ms}

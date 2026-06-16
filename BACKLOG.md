@@ -84,13 +84,15 @@ E3 回归台（全程并行先搭 = §E 的 S0 底座；最小切片【✅ 已�
 
 ### 确定性边界
 
-6. **UUID 随机、靠回读稳定**：`gen_uuid`（`fileformats.py:150-165`）= uuid4 + "FBRK" 后缀；
-   确定性目标 = **增量稳态**（同工作副本连续 build 字节一致），非 clean-checkout 可重现。
-   `.kicad_pcb` 必须入库；确定性测试 = "在已有布局上 build→build→diff"。
-7. **`gen_uuid` 变长-mark 溢出（类型 hack，根因/根治见遗留问题 3）**：mark >16 字节时
-   `gen_uuid`（`fileformats.py:228-244`）静默产畸形 uuid（`UUID=str` 无校验）。已**活跃**于
-   `layout_sync.py:128 gen_uuid(group_name)`——长 ato 地址的 room/group 现在就触发。**根除**
-   （非提高上限，遗留问题 3），room/D3 前必清。
+6. **UUID 不透明 ⟹ 确定性 = 语义等价（非字节）【2026-06-15 重定，旧"uuid4+FBRK 后缀 / 增量稳态
+   字节一致 / .kicad_pcb 必须入库"作废】**：`gen_uuid`（`fileformats.py`）= 纯 uuid4、无 mark
+   （§G/事实 7）。uuid 既随机又无意义 ⟹ **不可 desire 字节等价**，确定性测试一律用 `semantic_view`
+   （位置+net 名连通性+结构，剔 uuid/net 编号）；生成态 `.kicad_pcb` 不必作字节锚入库（CI 可两次
+   从零构建比 semantic）。完整推论见 §G。
+7. **uuid 不透明 = 不塞元数据/不读 flag（FBRK 侧信道已删，2026-06-15）**：`gen_uuid`
+   （`fileformats.py`）现无 `mark` 参数、纯返回 uuid4；`transformer.py` 的 `gen_uuid(mark)`/
+   `is_marked`/`_add_group` 已清。旧"变长-mark 塞进定长 uuid 静默畸形"的根因（往 uuid 塞数据）随之
+   消失。provenance 走 `atopile_address` property + `FBRK:notouch` fp_text。常驻不变量见 §G。
 8. **`keep_net_names` 默认随 `frozen`**（`config.py:594,623-624`）：常态每次 build 重 derive
    net 名——名字漂移源头。v10 下名字漂移 = 几何归属漂移（事实 2）。
 
@@ -163,7 +165,7 @@ build 步骤产 `build/builds/<t>/<t>.layout_ir.json`（`build_steps.py` 注册 
 - net 名解析复用 `semantic_view._NetTable`（I3 与第二读者同源，非独立 derive）。
 - **bridge②（`signal_nets`, I4b）是唯一需 graph 的部分**，pcb-only IR 不含——故 §C 不阻塞于它。
 - **消费者-oracle**：仅用 IR 重建 `_generate_net_map` 必 == 现役（`layout_sync.py`）——C2 重写
-  须守此等价（与遗留问题 5 绑定）。
+  须守此等价（与遗留问题 3 绑定）。
 
 ### §C room 几何（forced via / room 复制）【✅ 2026-06-14 全绿；room 表示由 C3 改（C3.6 回开）】
 实现 = `src/faebryk/exporters/pcb/layout/room_ops.py`（模块 docstring 即行为权威）；
@@ -237,7 +239,8 @@ Tier-2 真 router 2）。冻结 API：`pad_board_xy`、`insert_forced_via→Forc
    不变量，与 C3 无关 → 4 passed 原样。原「防绿失义」改它的计划随 fixture 不迁移而**作废**。
 4. **`test_group_determinism.py` 改造保留（非删）**：fresh-determinism→C3.3、upgrade-group→C3.4 删去；
    **增量 determinism + A4 手工保留** = C3 未覆盖的 A 不变量，留下升级到 room 世界（防覆盖蒸发）。
-5. `transformer.py` `insert_group`/`is_marked` **留**（dead、无测试触及；遗留3 防御性硬化时再清）。
+5. `transformer.py` `_add_group`/`is_marked`/`gen_uuid(mark)` **已删**（2026-06-15，§G uuid 不透明
+   原则）——atopile 无 ato→group 映射、uuid 不塞 flag。
 6. offset 等价不单钉契约层（inline 无法忠实复现 sub-address+源 pcb 解析，**显式不静默**）：由 C3.3 增量
    build 覆盖（错 offset 在 pull 后落位显形）。
 
@@ -256,7 +259,7 @@ Tier-2 真 router 2）。冻结 API：`pad_board_xy`、`insert_forced_via→Forc
 - B build 产物 `<t>.layout_ir.json`（含桥②，build_steps.py "layout-ir" 步骤）——D 直接消费。
 - 不变量依赖：I4（无稳定地址 net 响亮）、I6（地址前缀层级）、**I7′（room=address 前缀派生，C3）**。
 - **room rule area 走 `(placement (sheetname "<addr>"))`——无 zig 改动**（事实 10/14）；footprint
-  sheetname/path 由 C3 写好。**P-uuid 不再阻塞 D**（room 无 group uuid；gen_uuid 类型 hack 降为遗留3 硬化项）。
+  sheetname/path 由 C3 写好。**P-uuid 不再阻塞 D**（room 无 group uuid；gen_uuid mark hack 已删，§G）。
 
 > **命名空间澄清**：net 名（电气网络，v10 唯一键）、room 名（= ato 地址，元件分组，C3 后载体 = sheetname
 > 而非 group）、uuid（对象身份）是三个互不相干的命名空间。
@@ -358,6 +361,19 @@ E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶
     总数须**重读输出 .kicad_pcb** 数。
 
 ### G. 不做 / 暂缓
+- ❌ **hack uuid = 绝对禁止**（不可逾越原则）：uuid 是 128bit 不透明 id，atopile **既不往里写
+  任何非标内容、也不从里读任何 flag**。旧 `gen_uuid(mark="FBRK")` 写 + `is_marked` 读的 FBRK
+  uuid 侧信道**已从代码彻底删除**（`fileformats.py gen_uuid` 无 mark 参数、纯 uuid4；
+  `transformer.py` `gen_uuid`/`is_marked`/`_add_group` 已清）。provenance/所有权只走合法载体：
+  footprint `atopile_address` property（受管判定）+ `FBRK:notouch` fp_text（用户锁）。
+  *（这是原"遗留问题 3 gen_uuid 变长-mark 溢出"的终局：根因 = 把元数据塞进 uuid，根治 = 不塞，
+  故整条从遗留问题移到此处作为常驻不变量。）*
+  - **推论（不可 desire 字节等价）**：uuid 不透明 ⟹ 两次 build 可字节不同而语义相同 ⟹ **任何
+    断言字节等价的测试都是范畴错误，必须改语义等价**（`semantic_view`：位置+net 名连通性+结构，
+    剔 uuid/net 编号）。已改 `test_group_determinism.py` + `test_room_migration_e2e.py::test_C3_3`
+    三处 byte 断言。**再推论**：生成态 `.kicad_pcb` 不必作字节锚入库——CI 可两次从零构建比 semantic；
+    仅**输入态**布局（`examples/layout_reuse/.../sub.kicad_pcb`）+ parser 语料样本仍入库。
+    残留：`semantic_view` group 成员仍按 uuid 表达，完整 oracle 应改按成员地址（未排期）。
 - ❌ fork KiCad 10；❌ 旧 SWIG 绑定；❌ **v9 写出/双向方言 shim**（v10-only 决策）；
   ❌ 盲随机语法 fuzz（危险类 bug = "合法文件静默误绑"，由 corrupter + property 测试覆盖）；
   ❌ KiCad 原生 design block 库；❌ 调 GUI Repeat Layout。
@@ -368,39 +384,10 @@ E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶
   验收 = 从"警告集"挪进"保真集"。
 
 ## 遗留问题（未完成 / 硬化项）
-2. **net 名漂移**（自动编号 `unnamed[N]`，事实 8）：v10 下名字 = 唯一键，漂移 = 几何归属漂移。
+1. **net 名漂移**（自动编号 `unnamed[N]`，事实 8）：v10 下名字 = 唯一键，漂移 = 几何归属漂移。
    已焊进 B 的 I4（无稳定地址 net 响亮标记、不可引用）+ 验收"稳态重建下全部 net 名字节稳定"。
-3. **`gen_uuid` 变长-mark 塞进定长 uuid = 类型 hack（事实 7）——根除，非提高上限**：
-   **状态更新（C3 后）**：唯一的变长 mark 调用点 `layout_sync.py:128 gen_uuid(group_name)` 随 C3
-   去 group 化**被删除** → 溢出的活跃触发消失，本条**降为防御性硬化**（不再阻塞 D）。仍值得做
-   `gen_uuid` 对 >16 字节 mark 抛错 + 返回校验过的合法 uuid，杜绝未来再有人往 uuid 塞变长数据。
-   以下为完整根因记录（geometry provenance 的 FBRK 路径仍在）：
-   **根因**：uuid 概念上是 128 定长 bit（`8-4-4-4-12` hex），但 `UUID = str`
-   （`other_fileformats.py:27`）与 zig `uuid: ?str` 两层都建模成无界字符串、零校验；`gen_uuid`
-   （`fileformats.py:228-244`）靠「把 `mark.encode().hex()` 覆写到 32 字符 uuid4 尾部」实现标记——
-   只在 mark ≤16 字节成立，超出则尾切片塌空、总长 >32、连字符错位 → **静默写出畸形 uuid**。
-   **design intent（当初为何这么 hack）**：mark 是藏在 uuid 里的元数据侧信道，两个消费者：
-   - (a) **provenance**：`gen_uuid(mark="FBRK")` 写 / `is_marked(obj,"FBRK")` 读
-     （`transformer.py:73-79,395,398-401`）——rebuild 时只增删 atopile 自己插的 footprint/track/via、
-     不动手工件。mark = 4 字节，**永不溢出**。
-   - (b) **group 受管身份**：`gen_uuid(group_name)` 写（`layout_sync.py:128`）/ `_is_managed_group`
-     读 `uuid endswith hex(name)`（`layout_sync.py:164-169`）——即 A4 修复（手工 group 必须存活、
-     atopile 空 group 才清）。mark = 变长地址 → **唯一溢出源**。
-   走侧信道是因为 KiCad 拒未知 token（事实 3），group 又只有 `{name,uuid,members,locked}`、无
-   `property` 槽，uuid 成了唯一可塞元数据处。
-   **根治（折叠 (b) 进 (a)）**：受管身份不需要把名字塞进 uuid，只需「是不是 atopile 的」——固定
-   4 字节 `"FBRK"` tag 已能回答且永远合法。① group 创建改 `gen_uuid(mark="FBRK")`；
-   ② `_is_managed_group` 改 `is_marked(group,"FBRK")`；③ `gen_uuid` 对 >16 字节 mark **抛错** +
-   返回校验过的合法 `8-4-4-4-12`（杜绝静默畸形，落实类型契约）。唯一变长 mark 调用点消失 →
-   溢出结构性不可能。
-   **下游再验**：A4 行为（`test/end_to_end/test_group_determinism.py`：手工 group 存活 / 空受管
-   group 清）保持绿 + **加 >16 字节长名 group 用例**；`is_marked` 的 footprint provenance 路径不受
-   影响（仍 4 字节）；`gen_uuid` >16 字节抛错单测（`test_fileformats.py`）。
-   **一次性迁移**：旧受管 group 带 name-suffix、不带 FBRK——过渡期 `_is_managed_group` 认两者
-   （旧 name-suffix ∨ FBRK），下次写出 re-stamp 成 FBRK，之后删旧分支。group uuid 一次性 diff
-   （头本就随机，仅尾 hex(name)→FBRK+随机），与事实 6 增量稳态不冲突（板入库后即稳）。
-4. 是否向 KiCad 上游提 DRC JSON 增强补丁（见 §G）。
-5. **`_generate_net_map` 并列判据死代码**（`layout_sync.py:238`）：
+2. 是否向 KiCad 上游提 DRC JSON 增强补丁（见 §G）。
+3. **`_generate_net_map` 并列判据死代码**（`layout_sync.py:238`）：
    `mapping_counts[src][tgt] > max(values())` 自增后恒 false → 注释写"最频映射"实为"首次胜"。
    当前 pull 迭代序确定故未发病，歧义映射下是休眠隐患。修法：并列取字典序最小 tgt + 迭代按
    src_addr/pad 排序。**注**：B/C 的消费者-oracle 以现役 `_generate_net_map` 为真值；此处硬化改

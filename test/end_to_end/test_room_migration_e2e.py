@@ -11,11 +11,12 @@ its determinism invariant subsumed by C3.3 below).
   * C3.2  atopile creates ZERO groups and writes the room onto footprint
           sheetname (the A4 "manual group deleted" failure mode stops existing
           because there is no atopile group code left).
-  * C3.3  determinism THROUGH THE PULL PATH: the byte-stability that used to come
+  * C3.3  determinism THROUGH THE PULL PATH: the stability that used to come
           from sorting group.members (the A1/A3 fix, layout_sync.py:495-500) now
           rides on route/zone insertion order, since there are no members to
           sort. So this MUST exercise the pull path (top layout absent), or it
-          covers sync but not pull.
+          covers sync but not pull. Asserted SEMANTICALLY (semantic_view), never
+          on bytes: uuids are opaque (§G) so byte-equality is a category error.
 
 S0 ratchet: `_C3_LANDED` is the same symbol probe as the contract file; until C3
 lands both tests strict-xfail (the build still emits groups).
@@ -30,6 +31,7 @@ import pytest
 
 from faebryk.exporters.pcb.layout.layout_sync import LayoutSync
 from faebryk.libs.kicad.fileformats import Property, kicad
+from faebryk.libs.kicad.semantic_view import semantic_view
 from faebryk.libs.util import repo_root as _repo_root
 from faebryk.libs.util import run_live
 
@@ -49,7 +51,13 @@ needs_c3 = pytest.mark.xfail(
 def _build(cwd: Path, hashseed: str) -> None:
     stdout, stderr, _ = run_live(
         [sys.executable, "-m", "atopile", "build", "-v"],
-        env={**os.environ, "NONINTERACTIVE": "1", "PYTHONHASHSEED": hashseed},
+        env={
+            **os.environ,
+            "NONINTERACTIVE": "1",
+            "PYTHONHASHSEED": hashseed,
+            # seeded part cache is authoritative — never re-fetch (offline tests)
+            "FBRK_PARTS_NO_REFRESH": "y",
+        },
         cwd=cwd,
         stdout=print,
         stderr=print,
@@ -109,7 +117,7 @@ def test_C3_3_determinism_through_pull_without_groups(
     )
 
     _build(example_copy, hashseed="0")
-    first = (example_copy / TOP_PCB).read_bytes()
+    first = semantic_view(_load_pcb(example_copy / TOP_PCB).kicad_pcb)
 
     pcb = _load_pcb(example_copy / TOP_PCB).kicad_pcb
     managed_uuids = {fp.uuid for fp in _managed(pcb)}
@@ -118,8 +126,9 @@ def test_C3_3_determinism_through_pull_without_groups(
             "pull path created an atopile group"
         )
 
-    # byte-stable across hash seeds — determinism now rides on insertion order,
-    # not group.members sorting (which no longer exists)
+    # SEMANTICALLY stable across hash seeds (NOT byte-identical: uuids are opaque,
+    # BACKLOG §G). The pull path must place + net deterministically regardless of
+    # dict/set hash ordering; the sorted, uuid-free semantic view is the oracle.
     _build(example_copy, hashseed="1")
-    second = (example_copy / TOP_PCB).read_bytes()
-    assert first == second, "fresh build then rebuild must be byte-identical"
+    second = semantic_view(_load_pcb(example_copy / TOP_PCB).kicad_pcb)
+    assert first == second, "fresh build then rebuild must be semantically identical"

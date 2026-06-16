@@ -70,13 +70,8 @@ Point = Geometry.Point
 Point2D = Geometry.Point2D
 
 
-def gen_uuid(mark: str = "") -> UUID:
-    return kicad.gen_uuid(mark)
-
-
-def is_marked(uuid: UUID, mark: str):
-    suffix = mark.encode().hex()
-    return uuid.replace("-", "").endswith(suffix)
+def gen_uuid() -> UUID:
+    return kicad.gen_uuid()
 
 
 T = TypeVar("T", kicad.pcb.Xy, kicad.pcb.Xyz, kicad.pcb.Xyr)
@@ -391,14 +386,8 @@ class PCB_Transformer:
         return [(x, (y + 180) % 360) for x, y in reversed(input_list)]
 
     @staticmethod
-    def gen_uuid(mark: bool = False):
-        return gen_uuid(mark="FBRK" if mark else "")
-
-    @staticmethod
-    def is_marked(obj) -> bool:
-        if not hasattr(obj, "uuid"):
-            return False
-        return is_marked(obj.uuid, "FBRK")
+    def gen_uuid():
+        return gen_uuid()
 
     # Getter ---------------------------------------------------------------------------
     @staticmethod
@@ -678,7 +667,7 @@ class PCB_Transformer:
     @staticmethod
     def mark[R](node: R) -> R:
         if hasattr(node, "uuid"):
-            node.uuid = PCB_Transformer.gen_uuid(mark=True)  # type: ignore
+            node.uuid = PCB_Transformer.gen_uuid()  # type: ignore
 
         return node
 
@@ -754,7 +743,7 @@ class PCB_Transformer:
             drill=size_drill[1],
             layers=["F.Cu", "B.Cu"],
             net=net,
-            uuid=self.gen_uuid(mark=True),
+            uuid=self.gen_uuid(),
             remove_unused_layers=False,
             keep_end_layers=False,
             zone_layer_connections=[],
@@ -795,7 +784,7 @@ class PCB_Transformer:
                 justify=alignment,
                 hide=None,
             ),
-            uuid=self.gen_uuid(mark=True),
+            uuid=self.gen_uuid(),
         )
         return kicad.insert(self.pcb, "gr_texts", self.pcb.gr_texts, text_o)
 
@@ -818,7 +807,7 @@ class PCB_Transformer:
                     width=width,
                     layer=layer,
                     net=net_id,
-                    uuid=self.gen_uuid(mark=True),
+                    uuid=self.gen_uuid(),
                 )
                 kicad.insert(self.pcb, "arcs", self.pcb.arcs, arc_o)
         else:
@@ -829,7 +818,7 @@ class PCB_Transformer:
                     width=width,
                     layer=layer,
                     net=net_id,
-                    uuid=self.gen_uuid(mark=True),
+                    uuid=self.gen_uuid(),
                 )
                 kicad.insert(self.pcb, "segments", self.pcb.segments, segment)
 
@@ -844,7 +833,7 @@ class PCB_Transformer:
                     width=width, type=kicad.pcb.E_stroke_type.SOLID
                 ),
                 layer=layer,
-                uuid=self.gen_uuid(mark=True),
+                uuid=self.gen_uuid(),
                 fill=None,
                 locked=None,
                 layers=[],
@@ -911,7 +900,7 @@ class PCB_Transformer:
             net_name=net.name,
             layers=layers if len(layers) > 1 else [],
             layer=layers[0] if len(layers) == 1 else None,
-            uuid=self.gen_uuid(mark=True),
+            uuid=self.gen_uuid(),
             name=f"layer_fill_{net.name}",
             polygon=kicad.pcb.Polygon(
                 pts=kicad.pcb.Pts(xys=[point2d_to_coord(p) for p in polygon]),
@@ -921,7 +910,7 @@ class PCB_Transformer:
                 stroke=None,
                 fill=None,
                 locked=None,
-                uuid=self.gen_uuid(mark=True),
+                uuid=self.gen_uuid(),
             ),
             min_thickness=0.2,
             filled_areas_thickness=False,
@@ -965,16 +954,8 @@ class PCB_Transformer:
         )
         return kicad.insert(self.pcb, "zones", self.pcb.zones, zone)
 
-    # Groups ---------------------------------------------------------------------------
-    def _add_group(
-        self, members: list[UUID], name: Optional[str] = None, locked: bool = False
-    ) -> UUID:
-        group = kicad.pcb.Group(
-            name=name, members=members, uuid=self.gen_uuid(mark=True), locked=locked
-        )
-        group = kicad.insert(self.pcb, "groups", self.pcb.groups, group)
-        logger.debug(f"Added group {name} with members: {len(members)}")
-        return not_none(group.uuid)
+    # No group API: atopile creates ZERO KiCad groups (BACKLOG §C3). Room
+    # identity lives on footprint sheetname; groups are user-only constructs.
 
     # JLCPCB ---------------------------------------------------------------------------
     class JLCPBC_QR_Size(Enum):
@@ -1015,7 +996,7 @@ class PCB_Transformer:
                 stroke=kicad.pcb.Stroke(width=0.15, type="solid"),
                 fill="yes",
                 layer=layer,
-                uuid=self.gen_uuid(mark=True),
+                uuid=self.gen_uuid(),
                 layers=[],
                 solder_mask_margin=None,
                 locked=None,
@@ -1209,7 +1190,7 @@ class PCB_Transformer:
             end=arc_end,
             stroke=kicad.pcb.Stroke(width=0.05, type=kicad.pcb.E_stroke_type.SOLID),
             layers=["Edge.Cuts"],
-            uuid=self.gen_uuid(mark=True),
+            uuid=self.gen_uuid(),
             layer=None,
             solder_mask_margin=None,
             fill=None,
@@ -1222,7 +1203,7 @@ class PCB_Transformer:
             end=arc_start,
             stroke=kicad.pcb.Stroke(width=0.05, type=kicad.pcb.E_stroke_type.SOLID),
             layer="Edge.Cuts",
-            uuid=self.gen_uuid(mark=True),
+            uuid=self.gen_uuid(),
             solder_mask_margin=None,
             fill=None,
             locked=None,
@@ -1233,7 +1214,7 @@ class PCB_Transformer:
             end=line2.end,
             stroke=kicad.pcb.Stroke(width=0.05, type=kicad.pcb.E_stroke_type.SOLID),
             layer="Edge.Cuts",
-            uuid=self.gen_uuid(mark=True),
+            uuid=self.gen_uuid(),
             solder_mask_margin=None,
             fill=None,
             locked=None,
@@ -1284,7 +1265,7 @@ class PCB_Transformer:
                 end=kicad.pcb.Xy(x=origin[0] + width_mm, y=origin[1]),
                 stroke=kicad.pcb.Stroke(width=0.05, type=kicad.pcb.E_stroke_type.SOLID),
                 layer="Edge.Cuts",
-                uuid=self.gen_uuid(mark=True),
+                uuid=self.gen_uuid(),
                 layers=[],
                 solder_mask_margin=None,
                 fill=None,
@@ -1295,7 +1276,7 @@ class PCB_Transformer:
                 end=kicad.pcb.Xy(x=origin[0] + width_mm, y=origin[1] + height_mm),
                 stroke=kicad.pcb.Stroke(width=0.05, type=kicad.pcb.E_stroke_type.SOLID),
                 layer="Edge.Cuts",
-                uuid=self.gen_uuid(mark=True),
+                uuid=self.gen_uuid(),
                 layers=[],
                 solder_mask_margin=None,
                 fill=None,
@@ -1306,7 +1287,7 @@ class PCB_Transformer:
                 end=kicad.pcb.Xy(x=origin[0], y=origin[1] + height_mm),
                 stroke=kicad.pcb.Stroke(width=0.05, type=kicad.pcb.E_stroke_type.SOLID),
                 layer="Edge.Cuts",
-                uuid=self.gen_uuid(mark=True),
+                uuid=self.gen_uuid(),
                 layers=[],
                 solder_mask_margin=None,
                 fill=None,
@@ -1317,7 +1298,7 @@ class PCB_Transformer:
                 end=kicad.pcb.Xy(x=origin[0], y=origin[1]),
                 stroke=kicad.pcb.Stroke(width=0.05, type=kicad.pcb.E_stroke_type.SOLID),
                 layer="Edge.Cuts",
-                uuid=self.gen_uuid(mark=True),
+                uuid=self.gen_uuid(),
                 layers=[],
                 solder_mask_margin=None,
                 fill=None,
@@ -1538,7 +1519,7 @@ class PCB_Transformer:
             for p in lib_footprint.pads
         ]
 
-        lib_attrs["uuid"] = self.gen_uuid(mark=True)
+        lib_attrs["uuid"] = self.gen_uuid()
 
         footprint = KiCadPCBFootprint(
             at=at,

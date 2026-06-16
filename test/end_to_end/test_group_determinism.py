@@ -17,6 +17,17 @@ regress:
   * A4: a user's manual segment / named group / rule-area zone survives rebuilds
     (atopile must never touch a non-atopile construct — now guaranteed by
     construction since sync_rooms creates/edits no groups at all).
+
+DETERMINISM ORACLE = SEMANTIC, NOT BYTES. uuids are opaque (random uuid4, no
+metadata — BACKLOG §G), so two builds may differ byte-for-byte while being
+identical in every way that matters. Asserting raw bytes (the old
+`read_bytes() == baseline`) would assert the meaningless random-id part and is a
+category error under the opaque-uuid principle. These tests assert
+`semantic_view()` equality instead: placement + connectivity (net *names*) +
+structure, with uuids and net numbers excluded. (Caveat: semantic_view still
+encodes group membership as member uuids; harmless here — steady-state has no
+groups and the manual test's group holds a fixed test-chosen uuid — but a fuller
+oracle would key group membership by member address.)
 """
 
 import os
@@ -27,6 +38,7 @@ from pathlib import Path
 import pytest
 
 from faebryk.libs.kicad.fileformats import Property, kicad
+from faebryk.libs.kicad.semantic_view import semantic_view
 from faebryk.libs.util import repo_root as _repo_root
 from faebryk.libs.util import run_live
 
@@ -41,6 +53,9 @@ def _build(cwd: Path, hashseed: str) -> None:
             **os.environ,
             "NONINTERACTIVE": "1",
             "PYTHONHASHSEED": hashseed,
+            # seeded part cache is authoritative — never re-fetch from EasyEDA
+            # (download-once; keeps these tests offline & WAF-immune)
+            "FBRK_PARTS_NO_REFRESH": "y",
         },
         cwd=cwd,
         stdout=print,
@@ -53,6 +68,17 @@ def _build(cwd: Path, hashseed: str) -> None:
 def _load_pcb(pcb_path: Path) -> "kicad.pcb.PcbFile":
     # parse from text so these tests are independent of the loads Path cache
     return kicad.loads(kicad.pcb.PcbFile, pcb_path.read_text())
+
+
+def _semantic(pcb_path: Path) -> dict:
+    """The uuid-independent semantic view of a built board: footprints/pads with
+    placements and net *names*, copper geometry, zones, groups — never uuids,
+    never net numbers. This is the ONLY legitimate determinism oracle: uuids are
+    opaque (random uuid4), so two builds may differ byte-for-byte while being
+    semantically identical. Asserting raw bytes would assert the meaningless part;
+    asserting this view asserts what determinism actually means (same placement +
+    connectivity + structure modulo opaque ids)."""
+    return semantic_view(_load_pcb(pcb_path).kicad_pcb)
 
 
 def _assert_rooms_tagged_no_atopile_groups(pcb_path: Path) -> None:
@@ -89,16 +115,19 @@ def example_copy(tmp_path: Path) -> Path:
 def test_steady_state_and_incremental_add_deterministic(
     example_copy: Path, save_tmp_path_on_failure: None
 ):
-    """Steady-state rebuilds stay identical; adding a module instance triggers
-    the pull path for the new room only, and the next build must not move
-    bytes. Pre-existing designators must survive the addition
-    (keep_designators default)."""
+    """Steady-state rebuilds stay SEMANTICALLY identical (same placement +
+    connectivity + structure modulo opaque uuids — NOT byte-identical, which would
+    assert the meaningless random-uuid part); adding a module instance triggers the
+    pull path for the new room only, and the next build is semantically stable.
+    Pre-existing designators must survive the addition (keep_designators default).
+    The two builds use different PYTHONHASHSEED on purpose: a hash-order-dependent
+    result would diverge, and the sorted semantic view would catch it."""
     _build(example_copy, hashseed="0")
-    baseline = (example_copy / TOP_PCB).read_bytes()
+    baseline = _semantic(example_copy / TOP_PCB)
 
-    # steady state
+    # steady state: a rebuild is semantically identical (uuids may differ)
     _build(example_copy, hashseed="1")
-    assert (example_copy / TOP_PCB).read_bytes() == baseline
+    assert _semantic(example_copy / TOP_PCB) == baseline
 
     pcb_file_before = _load_pcb(example_copy / TOP_PCB)
     refs_before = {
@@ -111,12 +140,12 @@ def test_steady_state_and_incremental_add_deterministic(
     src.write_text(src.read_text().replace("new Sub[3]", "new Sub[4]"))
 
     _build(example_copy, hashseed="0")
-    after_add = (example_copy / TOP_PCB).read_bytes()
+    after_add = _semantic(example_copy / TOP_PCB)
     _assert_rooms_tagged_no_atopile_groups(example_copy / TOP_PCB)
 
     _build(example_copy, hashseed="1")
-    assert (example_copy / TOP_PCB).read_bytes() == after_add, (
-        "build after adding an instance must already be in canonical order"
+    assert _semantic(example_copy / TOP_PCB) == after_add, (
+        "build after adding an instance must already be in canonical semantic order"
     )
 
     pcb_file_after = _load_pcb(example_copy / TOP_PCB)
@@ -223,7 +252,10 @@ def test_manual_edits_preserved(example_copy: Path, save_tmp_path_on_failure: No
             f"atopile group {g.name!r} contains managed footprints"
         )
 
-    # manual elements must not disturb steady-state byte determinism
-    stable = pcb_path.read_bytes()
+    # manual elements must not disturb steady-state semantic determinism
+    # (semantic, not bytes: opaque uuids may churn without meaning). The manual
+    # group's member here is the fixed test-chosen MANUAL_SEG_UUID, so the group
+    # section of the view is stable across the rebuild.
+    stable = _semantic(pcb_path)
     _build(example_copy, hashseed="0")
-    assert pcb_path.read_bytes() == stable
+    assert _semantic(pcb_path) == stable
