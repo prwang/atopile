@@ -42,6 +42,15 @@ Shape (the interface D2 lands; field names are the pinned contract):
                                    # {stage name -> [kicad net name]}, each net
                                    # address resolved through ir["signal_nets"]
 
+== FORM: declarative placement + ORDERED routing pipeline =================
+
+`rooms` is declarative (a set of regions; order-free). `route_stages` is an
+ORDERED PIPELINE: stages run in list order over accumulating board state, so the
+order IS part of the intent — reordering is a semantic change, never cosmetic.
+It is a `list`, never a set, and the order is preserved verbatim through
+parse + resolve (pinned by `test_route_stage_order_is_preserved`). See the
+`layout_plan` module docstring for the full why-data-not-a-script rationale.
+
 == LOUD-OR-NOTHING (S5a) ==================================================
 
 Nothing is silently dropped or coerced. The following are hard errors, not
@@ -195,6 +204,30 @@ def test_parses_well_formed_plan():
     assert stages["usb"].mode == "diff"
     assert isinstance(stages["power"].config, GridRouteOverride)
     assert stages["power"].nets == ["top.power_supply_3v3.vout"]
+
+
+# ===========================================================================
+# D2.1b — route_stages is an ORDERED PIPELINE, not a set. The list order is the
+# intent (earlier stages claim copper later ones avoid), so it must survive parse
+# AND resolve verbatim — in BOTH orderings, so a sort/set refactor goes red.
+# ===========================================================================
+@needs_d2
+@pytest.mark.parametrize(
+    "order",
+    [["alpha", "beta", "gamma"], ["gamma", "beta", "alpha"]],
+    ids=["forward", "reversed"],
+)
+def test_route_stage_order_is_preserved(order):
+    bridge = {"top.a.x": "VNET1"}
+    stages = "".join(
+        f"  - name: {n}\n    mode: single\n    nets: [top.a.x]\n    config: {{}}\n"
+        for n in order
+    )
+    plan = _plan(f"rooms: []\nroute_stages:\n{stages}")
+    # parse order == declared order (not sorted, not deduped-into-a-set)
+    assert [s.name for s in plan.route_stages] == order
+    # resolve preserves it too (dict insertion order == stage order)
+    assert list(plan.resolve_nets(_ir(bridge)).keys()) == order
 
 
 # ===========================================================================
@@ -463,11 +496,15 @@ def layout_reuse_signal_nets(tmp_path_factory) -> dict[str, str]:
 def test_resolve_nets_matches_real_signal_nets(layout_reuse_signal_nets):
     bridge = layout_reuse_signal_nets
     assert bridge, "no signal nets on a routed design"
-    # take a couple of real signal addresses and resolve them through D2
+    # take a couple of real signal addresses and resolve them through D2. Real
+    # addresses carry instance indices (e.g. "sub_chains[0].r_chain[0]..."), and
+    # the `[` makes a YAML FLOW sequence (`[a, b]`) unparseable — so nets must be
+    # a BLOCK list (the representative authoring form for indexed addresses).
     addrs = sorted(bridge)[:2]
+    nets_block = "".join(f"      - {a}\n" for a in addrs)
     yaml_text = (
         "rooms: []\nroute_stages:\n  - name: s\n    mode: single\n"
-        f"    nets: [{', '.join(addrs)}]\n    config: {{}}\n"
+        f"    nets:\n{nets_block}    config: {{}}\n"
     )
     plan = _plan(yaml_text)
     resolved = plan.resolve_nets({"signal_nets": bridge})

@@ -134,9 +134,16 @@ def test_layout_plan_artifact_is_produced_and_well_formed(built_with_plan):
     assert "rooms" in plan and "route_stages" in plan
     assert plan["rooms"], "no rooms in the resolved plan"
     assert plan["route_stages"] == []
-    # the plan's room is a real hierarchical ato address
+    # the plan's rooms are REAL board rooms — every module is a footprint
+    # sheetname present in the build's IR (the §C3 room channel). NB: a top-level
+    # room is a single address segment (e.g. "sub_chains[0]"), not necessarily
+    # dotted — `_get_room_name` strips the inner suffix, so a hierarchy/"." check
+    # would be a false premise about the example data.
+    real_rooms = set(json.loads((built_with_plan / IR_JSON).read_text())["rooms"])
     for room in plan["rooms"]:
-        assert "." in room["module"], f"room module {room['module']!r} not hierarchical"
+        assert room["module"] in real_rooms, (
+            f"room module {room['module']!r} is not a real board room {real_rooms}"
+        )
 
 
 @needs_d4

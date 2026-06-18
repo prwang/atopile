@@ -887,6 +887,49 @@ def generate_layout_ir(ctx: BuildStepContext) -> None:
 
 
 @muster.register(
+    "layout-plan",
+    description="Applying layout plan (rule areas)",
+    dependencies=[generate_layout_ir],
+    produces_artifact=True,
+)
+def generate_layout_plan(ctx: BuildStepContext) -> None:
+    """Apply the build's layout.yaml (the layout-intent source, §D).
+
+    Opt-in: a build with no `layout_config` is a silent no-op. Otherwise parse &
+    validate the plan (D2), stamp one placement rule area per room onto the board
+    (D3, idempotent — re-emit replaces, never accretes), write the board back, and
+    emit the resolved plan to `<output_base>.layout_plan.json` for E1 to consume.
+    """
+    layout_config = config.build.paths.layout_config
+    if layout_config is None:
+        logger.debug("No layout_config for this build; skipping layout-plan step")
+        return
+
+    from faebryk.exporters.pcb.layout.layout_plan import load_layout_plan
+    from faebryk.exporters.pcb.layout.rule_area import generate_rule_areas
+    from faebryk.libs.kicad.layout_ir import layout_ir
+
+    app = ctx.require_app()
+    pcb = ctx.require_pcb()
+    kicad_pcb = pcb.pcb_file.kicad_pcb
+
+    plan = load_layout_plan(layout_config)
+    ir = layout_ir(kicad_pcb, app)
+
+    generate_rule_areas(kicad_pcb, plan, ir)
+    # the rule areas mutate the board after `update_layout` already wrote it —
+    # persist the change so the on-disk layout carries them.
+    kicad.dumps(pcb.pcb_file, config.build.paths.layout)
+
+    artifact = plan.model_dump(mode="json")
+    artifact["resolved_nets"] = plan.resolve_nets(ir)
+    out_path = config.build.paths.output_base.with_suffix(".layout_plan.json")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n")
+    logger.info(f"Wrote layout plan to {out_path}")
+
+
+@muster.register(
     "bom",
     dependencies=[build_design],
     produces_artifact=True,
@@ -1205,6 +1248,7 @@ def generate_datasheets(ctx: BuildStepContext) -> None:
         # generate_power_tree,
         generate_datasheets,
         generate_layout_ir,
+        generate_layout_plan,
     ],
     virtual=True,
 )

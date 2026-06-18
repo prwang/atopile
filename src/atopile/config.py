@@ -296,7 +296,18 @@ class BuildTargetPaths(BaseConfigModel):
     documentation: Path
     """Build-target documentation directory"""
 
+    layout_config: Path | None = None
+    """Build-target layout.yaml (the layout-intent source, peer of `layout` =
+    the .kicad_pcb). Opt-in: None when the build declares no layout.yaml. The
+    layout-plan build step (§D) reads it via `config.build.paths.layout_config`."""
+
     def __init__(self, name: str, project_paths: ProjectPaths, **data: Any):
+        if layout_config_data := data.get("layout_config"):
+            layout_config = Path(layout_config_data)
+            if not layout_config.is_absolute():
+                layout_config = project_paths.root / layout_config
+            data["layout_config"] = layout_config.resolve().absolute()
+
         if layout_data := data.get("layout"):
             data["layout"] = BuildTargetPaths.find_layout(Path(layout_data))
         else:
@@ -604,10 +615,15 @@ class BuildTargetConfig(BaseConfigModel, validate_assignment=True):
     def init_paths(cls, data: dict) -> dict:
         match data.get("paths"):
             case dict() | None:
+                paths_data = dict(data.get("paths") or {})
+                # `layout_config` is declared at the build-target level in ato.yaml
+                # (peer of `entry`) but lives on the paths model — forward it.
+                if (layout_config := data.pop("layout_config", None)) is not None:
+                    paths_data.setdefault("layout_config", layout_config)
                 data["paths"] = BuildTargetPaths(
                     name=data["name"],
                     project_paths=data["_project_paths"],
-                    **data.get("paths", {}),
+                    **paths_data,
                 )
             case BuildTargetPaths():
                 pass

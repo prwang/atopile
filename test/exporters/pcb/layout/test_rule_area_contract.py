@@ -57,12 +57,16 @@ try:
         RouteStage,  # noqa: F401
     )
     from faebryk.exporters.pcb.layout.rule_area import (  # type: ignore
+        RuleAreaError,
         generate_rule_areas,
     )
 
     _D3_LANDED = True
 except Exception:
     _D3_LANDED = False
+
+    class RuleAreaError(Exception):  # placeholder so raises-tuples stay well-formed
+        ...
 
     def _unlanded(*_a, **_k):
         raise RuntimeError("D3 rule_area not landed (S0 ratchet)")
@@ -191,6 +195,57 @@ def test_placement_sheetname_round_trips():
     assert "(placement" in text and '(sheetname "top.r1")' in text
     reloaded = _load(text).kicad_pcb
     assert set(_placement_zones(reloaded)) == {"top.r1"}
+
+
+# ===========================================================================
+# D3.1b — the generated placement MUST NOT carry source_type/source. Those
+# ZonePlacement schema fields have no valid KiCad-10 grammar; emitting them
+# SEGFAULTS kicad-cli's loader (isolated 2026-06-16: a placement with source_type
+# crashes `pcb upgrade`, without it loads clean). `dumps` succeeds and KiCad dies
+# later — a silent footgun — so this guard goes RED the instant anyone "helpfully"
+# re-adds source_type, with a pointer to why. (D3.5 catches it end-to-end via
+# kicad-cli, but that's slow/gated; this is the fast always-on tripwire.)
+# ===========================================================================
+@needs_d3
+def test_generated_placement_has_no_source_type():
+    bf = _load(_board(_FPS))
+    pcb = bf.kicad_pcb
+    generate_rule_areas(
+        pcb, _plan_with([Room(module="top.r1", origin=(0.0, 0.0), size=(5.0, 5.0))]),
+        layout_ir(pcb),
+    )
+    z = _placement_zones(pcb)["top.r1"]
+    assert z.placement.source_type is None, (
+        "source_type emitted — this segfaults kicad-cli's loader (CLAUDE.md hazard)"
+    )
+    assert z.placement.source is None
+    # survives serialization too: the token must not reach the file
+    assert "source_type" not in kicad.dumps(bf)
+
+
+# ===========================================================================
+# D3.1c — S5a: a plan room whose module matches NO footprint sheetname must be
+# LOUD — in BOTH geometry modes. A rule area for a non-existent sheet groups
+# nothing (a silent half-output); explicit origin/size must not be a loophole.
+# This bites a real asymmetry found 2026-06-16: the derived path raised, but the
+# explicit path silently emitted an empty rule area. The positive cases (real
+# module accepted, below) prove this rejection is module-existence-based, not a
+# blanket failure.
+# ===========================================================================
+@needs_d3
+@pytest.mark.parametrize(
+    "geom",
+    [{"origin": (0.0, 0.0), "size": (5.0, 5.0)}, {}],
+    ids=["explicit", "derived"],
+)
+def test_unknown_room_module_is_loud(geom):
+    bf = _load(_board(_FPS))
+    pcb = bf.kicad_pcb
+    ir = layout_ir(pcb)
+    with pytest.raises(RuleAreaError):
+        generate_rule_areas(pcb, _plan_with([Room(module="top.NOPE", **geom)]), ir)
+    # nothing was emitted (loud, not a partial side effect)
+    assert _placement_zones(pcb) == {}
 
 
 # ===========================================================================

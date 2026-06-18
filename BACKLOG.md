@@ -17,7 +17,8 @@ SSOT），BACKLOG 只留"结论 + 代码指针"，绝不复述实现细节或调
 - fork 基线 = 本仓库 HEAD；同时 fork KiCadRoutingTools（§E）。
 - Python 3.14 开发环境 = **`uv sync`**（`ziglang==0.15.1` 由 pip 构建依赖提供）。克隆须
   `git fetch --tags` 否则 setuptools-scm 产非 SemVer 版本号、`ato` CLI 启动即崩。
-- room 来源固定 = KiCad named group（sheet 路线不存在，component class 后置）。
+- **room 来源 = footprint `sheetname`【C3 改定，旧"= KiCad named group"作废】**：group 有不可修补的
+  所有权缺陷（详见 §C3）；atopile 建零个 group。component class 源后置（D5，须先修 fileformats schema）。
 - **v10-only 路线（2026-06-13 用户拍板 Option B，upgrade-on-write）**：本分支目标方言 = v10；
   **前向兼容 v9 写出不做**（v9 仅只读，读入即在写出时升级为 v10）。推论：(i) 无"写 v9"代码
   路径；(ii) net 名是文件内唯一键，名漂移 = 几何归属漂移；(iii) S7 后"单向门/只读不存"纪律
@@ -33,7 +34,8 @@ SSOT），BACKLOG 只留"结论 + 代码指针"，绝不复述实现细节或调
 | B | layout_ir（文本↔几何唯一接口） | ✅ |
 | C | room 几何（forced via / room 复制） | ✅ |
 | **C3** | **group→sheetname 迁移（room 去 group 化）** | ✅ 2026-06-15（见 §C3 代码指针） |
-| D–F | 功能开发——**章节字母 = 执行序** | ⬜（C3 已解锁） |
+| **D** | **layout.yaml 加载 + placement rule area（D1–D4）** | ✅ 2026-06-16（见 §D 代码指针）；D5 后置 |
+| E–F | 路由 fork + 诊断闭环——**章节字母 = 执行序** | ⬜（C3+D 已解锁 E） |
 | G | 不做 / 暂缓 | — |
 
 ### 依赖与关键路径（v10 数据模型推导；**章节字母 = 执行序**）
@@ -47,7 +49,7 @@ B layout_ir（✅ 基石）── addr↔uuid↔net名 桥表，下游全依赖
 ├─► C room 几何（✅ forced via / room 复制）
 └─► C3 group→sheetname 迁移（✅ 2026-06-15）room = footprint sheetname，atopile 不建/不删 group
                        │
-   C3 ─► D layout.yaml + rule area（room via (placement (sheetname)))
+   C3 ─► D layout.yaml + rule area（✅ 2026-06-16；room via (placement (sheetname)))
                        │
    C1 + D(plan+rule area) ─► E 路由 fork（E1 plan_runner→E2 锁定）─► F 诊断闭环
 E3 回归台（全程并行先搭 = §E 的 S0 底座；最小切片【✅ 已提前到 §C】当 router-oracle）
@@ -191,22 +193,62 @@ Tier-2 真 router 2）。冻结 API：`pad_board_xy`、`insert_forced_via→Forc
 4. **User.* 默认 router 不读**（只读铜层）——但 router 有原生开关
    （`KiCadRoutingTools/routing_config.py:117-123`）：`guide_corridor_enabled`（读 User.1 引导线，
    把 net 沿走廊牵引）+ `keepout_enabled`（读 User.2 禁布多边形，挡走线）。故 §C 的 User.1 引导
-   / §D 的 User.2 room 边界**可被 E1 显式启用为一等布线约束**（默认关、按 stage 开，见 §D2/§E1）——
-   非仅可视件。这两路与 §D3 的 placement rule area（KiCad 自身的分组/DRC，另一机制）不要混淆。
+   / §D 的 User.2 room 边界**可被 E1 显式启用为一等布线约束**（默认关、按 stage 开，见 §D/§E1）——
+   非仅可视件。这两路与 §D 的 placement rule area（KiCad 自身的分组/DRC，另一机制）不要混淆。
 - **设计决策（双入口非缺陷）**：两入口 = 两套真算法共享同一 Rust 网格内核
   （`grid_router:GridObstacleMap/GridRouter`）。差分 = `PoseRouter` 位姿法 + `diff_pair_gap`
   恒定间距 + `centerline_setback`（pad 附近自动 fanout/打散，对应 decoupling 抽头 / 连接器
   pitch）+ `fix_polarity` + `length/time_matching` + `gnd_via`；单端 = `route_multipoint_main`/
   `power_nets`。行业惯例（Altium 亦分差分/单线两器），**非 bug**。**不合并算法（合并=倒退，丢
-  耦合/极性/等长/位姿/centerline）**；mode 由 `route_stages` 显式声明（§D2/§E1）。
+  耦合/极性/等长/位姿/centerline）**；mode 由 `route_stages` 显式声明（§D/§E1）。
 - E3 薄片仅验**差分对** schema（`KiCadRoutingTools/tests/test_router_smoke_batch_route.py`）；
   单端 schema 待 §E3 补。
+
+### §C3 room 去 group 化（room = footprint sheetname）【✅ 2026-06-15】
+决策：room 不再 = KiCad group。atopile **建零个/删零个 group**（用户 group 按构造永存，A4 失效模式消失）；
+room 载体 = footprint `sheetname`(+`sheetfile`)（值 = ato 地址前缀，`_get_room_name` 派生；**不写 `path`**——
+KiCad 拥有并重写它，事实 10）；route/via/zone 归属 = 内部 net；rule area 走 `(placement (sheetname))`，无 zig 改动。
+协议 + 接口 delta = 代码 SSOT：
+- 契约 `test/exporters/pcb/layout/test_room_migration_contract.py`（模块 docstring = 协议全文 + 棘轮）；
+  e2e `test/end_to_end/test_room_migration_e2e.py`（建组数=0 / pull 语义确定性）。
+- 实现 `layout_ir.py`（`rooms` 派生）+ `layout_sync.py`（`sync_rooms`/`pull_room_layout`/`_clean_room`，
+  删 `_is_managed_group`）+ `room_ops.py`（`copy_room_layout` 只复制本 room）+ `build_steps.py`/`cli/kicad_ipc.py`。
+源码里看不到的结论：
+- committed fixtures **故意保留**旧 group（验证 atopile 仍能读 group-bearing 板）；C3.1 corpus 直接从 pcb
+  读旧 group 比对地址前缀 → 真数据覆盖、零 fixture 改动（原 C3.7 fixture 迁移取消）。
+- `transformer._add_group`/`is_marked`/`gen_uuid(mark)` 已删（§G uuid 不透明）——atopile 无 ato→group 映射。
+- cascade：§B I7→I7′（IR 去 `groups{}`）、§C room_ops 随新 IR 形状（契约钉 C3.6）。
+
+### §D layout.yaml 加载 + KiCad placement rule area（D1–D4）【✅ 2026-06-16】
+layout.yaml = 布局意图源（.ato 电路源 / .kicad_pcb 几何源的对等源）。D1 路径配置 → D2 解析校验成 `LayoutPlan`
+→ D3 每 room 落 placement rule area → D4 build 步骤接线 + 产 `<t>.layout_plan.json`（供 E1）。
+**架构（声明式 rooms + 有序 route_stages 流水线、为何用 yaml 非 .tcl）= `layout_plan.py` 模块 docstring「FORM」节（SSOT）。**
+实现：
+- `src/atopile/config.py`（`BuildTargetPaths.layout_config`，D1）。
+- `src/faebryk/exporters/pcb/layout/layout_plan.py`（`LayoutPlan/Room/RouteStage/GridRouteOverride` +
+  `load_layout_plan`/`resolve_nets`，D2；模块 docstring = 协议全文）。
+- `src/faebryk/exporters/pcb/layout/rule_area.py`（`generate_rule_areas`，D3）。
+- `src/atopile/build_steps.py`（`generate_layout_plan` 步骤，挂入 `generate_default`，D4）。
+契约：`test/test_config.py`（D1）、`test_layout_plan_contract.py`（D2）、`test_rule_area_contract.py`（D3）、
+`test/end_to_end/test_layout_plan_build.py`（D4）。
+源码里看不到的结论：
+- **`GridRouteOverride` 的 oracle = 两 router 入口入参 union，NOT `GridRouteConfig`**【2026-06-16 独立验证纠偏】：
+  `route.py:batch_route`/`route_diff.py:batch_route_diff_pairs` 收扁平 kwargs，内部才建 `GridRouteConfig`
+  并改名（`impedance`→`impedance_target` 等）。mode 互斥键（`guide_corridor_*` 单端 /
+  `diff_pair_*`·`fix_polarity`·`gnd_via_*` 差分）在 **D2 parse 期按 mode 拒错键**，E1 不重复校验。漂移钉 =
+  `test_layout_plan_contract` 的 union drift guard + mode 一致性自测（AST 取真 router 签名，漂移即红）。
+- 实施期查出并修的两个真缺陷：① placement 写 `source_type`/`source` → **SEGFAULT KiCad loader**（错建的内存/
+  protobuf 字段，文件语法无此 token；见「关键事实」placement 条 + 回归 `test_generated_placement_has_no_source_type`）；
+  ② 显式 origin/size 的未知 room module 曾**静默落空 rule area**（S5a 违规）→ 改为两 geometry mode 都响亮
+  （回归 `test_unknown_room_module_is_loud`）。
+- D 的产物 = E/F 输入：`<t>.layout_plan.json`（resolved route_stages + room 元数据）给 E1；板上 rule area 供
+  KiCad placement/DRC + F-diag 命中测试。E1 把 `RouteStage.config` 原样展开成入口 kwargs（翻译在 router 内）。
 
 ---
 
 ## 未完成任务
 
-执行序 = 章节字母：C/D 并行（✅ C 已完成）→ E 依赖 C+D → F 最后。
+执行序 = 章节字母：C3+D 已完成（✅）→ E 依赖 C+D → F 最后。
 
 ### P0.2 S7 flag-day 终验剩余（写 v10 代码已落 + 单测/e2e determinism 已绿）
 - [ ] examples/fixtures/probe 工程 `.kicad_pcb` 一次性 v9→v10 升级提交；build→build→diff 确认
@@ -215,130 +257,12 @@ Tier-2 真 router 2）。冻结 API：`pad_board_xy`、`insert_forced_via→Forc
 - [ ] 改写 `/kicad_wksp/CLAUDE.md` 与 `KicadDecisions.md` 的"单向门/只读不存"约束为
   "已迁移，v9 只读、写即升级 v10"（事实 1）。
 
-### C3. room 去 group 化：迁移到 sheetname【✅ 2026-06-15】
-
-**决策**：room 不再 = KiCad group。atopile **建零个/删零个 group**（用户 group 完全不碰 → A4 问题按
-构造消失）。room 载体 = 每 footprint 的 `sheetname`(+`sheetfile`)（值 = `_get_group_name` = ato 地址前缀；
-**不写 `path`**——KiCad 拥有并重写它成 UUID，事实 10）；route/via/zone 归属 = **内部 net**（所有 pad 都属
-该 room footprint 的 net），inter-room net 不归任一 room。rule area 走 `(placement (sheetname))`，无 zig 改动。
-
-**协议 + 接口 delta = 代码 SSOT**（勿在此重复维护）：
-- `test/exporters/pcb/layout/test_room_migration_contract.py` 模块 docstring = 协议全文 + 接口 delta +
-  棘轮说明；契约 C3.1/C3.4/C3.5a/C3.5b/C3.9/C3.10（7 passed/3 skipped）。
-- `test/end_to_end/test_room_migration_e2e.py`：C3.2（建组数=0+sheetname）、C3.3（pull 路径字节确定性）。
-- 实现：`layout_ir.py`（`rooms`，docstring SSOT）+ `layout_ir.schema.json`（v2）+ `layout_sync.py`
-  （`sync_rooms`/`pull_room_layout`/`_calculate_room_offset`/`_clean_room`，删 `_is_managed_group`）+
-  `room_ops.py`（`copy_room_layout` 只复制本 room）+ `build_steps.py`/`cli/kicad_ipc.py`（room API）。
-
-**实施期与计划的偏差（as-built，须知）**：
-1. **committed fixtures 未迁移**（原 C3.7 取消）：改 v9/v10 .kicad_pcb 会撞方言纪律（S7 前不重写受管板）。
-   改为 **C3.1 corpus 直接从 pcb 读旧 group** 比对 address 前缀 → 真数据覆盖不变、零 fixture 改动；
-   fixtures 仍带旧 group = **故意保留**（验证 atopile 仍能读 group-bearing 板）。
-2. **semantic_view 不改**（保 I3 oracle 独立）；快照零漂移（未动 fixture）。
-3. **`test_gui_edit_roundtrip` 不改**：它对 fixture（仍带 group）做 GUI move 断言 group 保持 = 合法 GUI
-   不变量，与 C3 无关 → 4 passed 原样。原「防绿失义」改它的计划随 fixture 不迁移而**作废**。
-4. **`test_group_determinism.py` 改造保留（非删）**：fresh-determinism→C3.3、upgrade-group→C3.4 删去；
-   **增量 determinism + A4 手工保留** = C3 未覆盖的 A 不变量，留下升级到 room 世界（防覆盖蒸发）。
-5. `transformer.py` `_add_group`/`is_marked`/`gen_uuid(mark)` **已删**（2026-06-15，§G uuid 不透明
-   原则）——atopile 无 ato→group 映射、uuid 不塞 flag。
-6. offset 等价不单钉契约层（inline 无法忠实复现 sub-address+源 pcb 解析，**显式不静默**）：由 C3.3 增量
-   build 覆盖（错 offset 在 pull 后落位显形）。
-
-**回归（2026-06-15，用户要求查 A/B 倒退，无倒退）**：B 全绿（layout_ir 契约 + fileformats 语料 + 快照
-零漂移）；fast 全量 231 passed/8 skipped；A 增量 determinism + A4 手工保留 + C3 e2e 真构建全绿（EasyEDA
-403 仅环境速率，退避后转绿）。
-
-**cascade（C3 回开 B 与 C）**：B 的 `layout_ir.groups`→`rooms`（C3.5）、C 的 room_ops 随新 IR 形状
-（C3.6）。已完成块 §B（I7）/§C（room 表示）相应标注「由 C3 取代」。
-
-### D.【需 C3：room=sheetname】layout.yaml 加载 + KiCad 10 对象生成
-
-**与上游接口**：
-- `layout_ir.py`：`layout_ir(pcb)→dict`——C3 后读 `rooms`（address 前缀派生）+ `components{addr→at/pads}`
-  算 room 包围盒；`signal_nets(app)→{信号地址:net名}` = **桥②**（地址→net 名，禁裸 net 名）；`LayoutIRError`。
-- B build 产物 `<t>.layout_ir.json`（含桥②，build_steps.py "layout-ir" 步骤）——D 直接消费。
-- 不变量依赖：I4（无稳定地址 net 响亮）、I6（地址前缀层级）、**I7′（room=address 前缀派生，C3）**。
-- **room rule area 走 `(placement (sheetname "<addr>"))`——无 zig 改动**（事实 10/14）；footprint
-  sheetname/path 由 C3 写好。**P-uuid 不再阻塞 D**（room 无 group uuid；gen_uuid mark hack 已删，§G）。
-
-> **命名空间澄清**：net 名（电气网络，v10 唯一键）、room 名（= ato 地址，元件分组，C3 后载体 = sheetname
-> 而非 group）、uuid（对象身份）是三个互不相干的命名空间。
-
-- [ ] **D1** layout.yaml 路径配置。**落点**：`src/atopile/config.py` 给 `BuildTargetPaths`
-  （非 BuildTargetConfig——路径字段自动绝对化，对齐既有 `paths.layout`=.kicad_pcb）加
-  `layout_config: Path | None = None` + 在 `__init__`/`make_paths_absolute`（~299-320）相对
-  project root 解析。**E·F 怎么用**：build 步骤经 `config.build.paths.layout_config` 取。
-  **自测**：`test/test_config.py` 仿 `test_roundtrip` 加一例（build 带 `layout_config:
-  ./layout.yaml` → 解析为绝对路径；缺省 = None）。
-
-- [ ] **D2** layout.yaml 解析 + 校验。**落点**：`src/faebryk/exporters/pcb/layout/layout_plan.py`
-  ——pydantic 模型 `LayoutPlan{rooms: list[Room], route_stages: list[RouteStage]}`，
-  `Room{module(= ato 地址 = room sheetname), origin, rotation, size, layers, anchor}`
-  （**全用 ato 地址不用位号**；C3 后无 `source:"group"` 字段，room 载体是 sheetname），
-  `RouteStage{name, nets:[ato 地址], mode: "diff"|"single", config: GridRouteOverride}`。
-  **`GridRouteOverride` 的真 oracle = 两个 router 入口的入参 union，NOT `GridRouteConfig`
-  【2026-06-16 独立验证纠偏，旧"= GridRouteConfig 字段子集、字段名 1:1、零翻译"作废】**：
-  实测 `route.py:batch_route` / `route_diff.py:batch_route_diff_pairs` 收的是**扁平 kwargs**，
-  函数内部才 `config = GridRouteConfig(**kwargs)`（`route.py:312`）并**改名翻译**——故 kwarg 才是
-  API 面，GridRouteConfig 是内部对象。两者**有偏差**：batch_route 66 knob vs GridRouteConfig 70 字段、
-  交集仅 51；① 15 个 router-only knob 不在 dataclass（`ordering_strategy`/`disable_bga_zones`/
-  `enable_layer_switch`/`mps_*`/`net_clearances`/`power_nets`…）；② 19 个 dataclass-only 字段
-  batch_route 不收（`diff_pair_gap`/`fix_polarity`/`gnd_via_enabled`/`min_turning_radius`…，
-  当 kwarg 展开会 TypeError）；③ **2 处改名**：kwarg `impedance`→字段 `impedance_target`、
-  `power_nets_widths`→`power_net_widths`。**mode 互斥**：`guide_corridor_*` 仅单端入口收、
-  `diff_pair_*`/`fix_polarity`/`gnd_via_*` 仅差分入口收、`keepout_enabled` 两入口都收。
-  **就地解决（不下放 E1）**：GridRouteOverride model 层用 union 放行；**D2 parse 期按 stage `mode`
-  拒错键**——config 键若不被该 mode 分派到的入口接受（如 `mode:single` 写 `diff_pair_gap`、
-  `mode:diff` 写 `guide_corridor_enabled`）即响亮抛（自测 ④，按真 router 签名定 mode 归属、漂移即红）。
-  E1 只 dispatch，不再重复校验。
-  **吃 B**：net 引用经桥②（`signal_nets`）地址→net 名解析；裸 net 名 / 无稳定地址 net（I4）
-  **响亮抛**（对齐 S5a，事实 2/8）；未知 yaml 键响亮（不静默吞，S5a 纪律）。
-  **E·F 怎么用**：`route_stages` 是 E1 的唯一输入；`mode` 显式驱动 §C 边界事实 1 的双入口分派
-  （耦合 vs 独立，非自动猜）。**自测**：`test/exporters/pcb/layout/test_layout_plan_contract.py`
-  strict-xfail 棘轮（同 B/C）：① 模型解析 + 未知键/裸 net 名/无地址 net 响亮；② **消费者-oracle**：
-  yaml 里每个 net 地址引用解析出的 net 名 == 现役 `signal_nets`（在 `examples/layout_reuse` 上）；
-  ③ GridRouteOverride 键 ⊆ **两 router 入口入参 union**（AST 取签名、不 import 避 scipy；防 yaml 写出
-  router 不认的 kwarg，漂移即红）；④ **mode/entry 一致性**：mode 互斥键放对 mode 接受、放错 mode 响亮
-  （正负成对、premise 按真 router 签名复核——下游若裸 `**override` 不按 mode 过滤，负向用例即转红）。
-
-- [ ] **D3** rule area + room 边界几何生成器（**前置 = C3 完成；无 zig 改动**）。**落点**：
-  `src/faebryk/exporters/pcb/layout/rule_area.py` ——`generate_rule_areas(pcb, plan, ir)`：每 room
-  按 origin/size/成员包围盒生成 `Zone(keepout=..., placement=ZonePlacement(sheetname="<地址>",
-  enabled=True), polygon=...)`（**sheetname 源，非 group**；C3 已给 footprint 打好同名 sheetname），
-  经 `kicad.insert(pcb,"zones",pcb.zones,zone)` 插入（**复用 `transformer.py:909-966 insert_zone`
-  范式**）。可选：按 stage 额外吐 User.2 禁布多边形（喂 E1 `keepout_enabled`，§C 边界事实 4）。
-  **约束**：禁自定义 token（事实 3）；引导/标记几何只放 User.x（事实 9）；铜层几何挂真实 net（事实 9）。
-  **E·F 怎么用**：rule area 落板供 KiCad placement/DRC + F-diag rule-area 命中测试；User.2 边界供 E1
-  约束 room 内布线。**自测**：`test/exporters/pcb/layout/test_rule_area_contract.py`：① 构造→
-  `kicad.dumps`→`loads` 后 `(placement (sheetname "<地址>"))` 逐字存活；② polygon == room origin/size；
-  ③ **`kicad-cli pcb upgrade --force` 逐字保真 + `drc` 跑通**（KiCad 真吃下去，>16 字节 room 名，复用 C3.4）。
-
-- [ ] **D4** CLI + build 步骤接线。**落点**：(a) `src/atopile/cli/layout.py` 新 Typer 子 app
-  `resolve|emit`（`resolve` = layout.yaml × IR → 解析后 plan json；`emit` = 把 rule area 落板），
-  在 `cli/cli.py` 经 `app.add_typer(layout.layout_app, name="layout")` 注册（仿 create/serve）；
-  (b) `src/atopile/build_steps.py` `@muster.register("layout-plan", dependencies=[<sync 后的步骤>],
-  produces_artifact=True)`，函数收 `ctx: BuildStepContext`（`ctx.require_app()/require_pcb()`），
-  读 `config.build.paths.layout_config`，调 D2/D3，写 `<output_base>.layout_plan.json`（resolved
-  plan，供 E1）+ 把 rule area 写回板。**自测**：`test/end_to_end/test_layout_plan_build.py`
-  仿 `test_layout_ir_build.py`（subprocess `[sys.executable,"-m","atopile","build","-v"]`，PATH 前置
-  venv bin 防 footgun，断言 "Build successful! 🚀"）：① artifact 良构（rooms/route_stages 解析齐）；
-  ② 板上有 group rule area；③ **build→build→diff 逐字节稳**（事实 6）；④ DRC 干净。
-
-- [ ] **D5（后置）** component class 支持（需写 `.kicad_pro`，事实 10 之外的通道）。
-
-**§D 覆盖补强（审计 2026-06-15，对照「编码与测试纪律」补三处）**：现有 D1–D4 自测已含棘轮 +
-consumer-oracle（`signal_nets`）+ GridRouteOverride 漂移钉 + KiCad 交叉验证 + build→build 字节稳；补：
-- **D2**：room 几何字段**校验**钉——`size`≤0 / 缺 `origin` / 非法 `mode`（非 diff|single）必响亮（loud-or-nothing，
-  非仅"解析成功"）；mode 解析后驱动 §C 双入口分派的取值集封闭。
-- **D3**：① **派生包围盒**用例（`size` 省略 → polygon 由 IR 成员 pad 实测包住，不只测显式 origin/size 这条）；
-  ② **多 room**用例（N room → N 个 sheetname 各对、互不串）——按构造定答案，呼应 C3.10 防"单 room 假绿"。
-- **D4**：**re-emit 幂等**钉——对已落 rule area 的板再 `emit` 一次：zone 数不增、字节稳（比 build→build 更尖，
-  直接咬"重复落盘不去重"这类 bug）。
-
-> **D 的产物 = E/F 的全部输入**：`<t>.layout_plan.json`（resolved route_stages + room 元数据）
-> 给 E1；板上 rule area + User.1/User.2 几何给 E1（约束）+ F-diag（命中测试）；net 反查仍走
-> B 的 `<t>.layout_ir.json`（事实 11，F-diag）。E1 把 RouteStage.config 的 GridRouteOverride
-> 子集**原样**展开成 `batch_route`/`batch_route_diff_pairs` 的 kwargs（字段名同名，§E1）。
+### D5. component class placement（后置）
+component_class 源的 placement rule area。**前置 = 修 fileformats schema**：走 `(component_class "X")`
+token，**不是** `ZonePlacement.source_type`/`source`（错建的内存/protobuf 字段，写出即 SEGFAULT KiCad——
+见「关键事实」placement 条 + 回归 `test_generated_placement_has_no_source_type`）。须给 zig `ZonePlacement`
+加 `component_class` 字段（或把 type+source 融成单 token），sheetname/component_class/group 三源各自一个 token。
+另需写 `.kicad_pro`（事实 10 之外的通道）。
 
 ### E.【需 §C + §D】KiCadRoutingTools fork
 E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶段能力。E3 全程并行先搭。
