@@ -35,7 +35,9 @@ SSOT），BACKLOG 只留"结论 + 代码指针"，绝不复述实现细节或调
 | C | room 几何（forced via / room 复制） | ✅ |
 | **C3** | **group→sheetname 迁移（room 去 group 化）** | ✅ 2026-06-15（见 §C3 代码指针） |
 | **D** | **layout.yaml 加载 + placement rule area（D1–D4）** | ✅ 2026-06-16（见 §D 代码指针）；D5 后置 |
-| E–F | 路由 fork + 诊断闭环——**章节字母 = 执行序** | ⬜（C3+D 已解锁 E） |
+| **D-Tier2** | **bundle 总线传输 schema + `batch_route_bundle` 契约（D/E 边界先冻）** | ⬜ **必须先于 E-Tier2**（consumer-oracle 共冻契约） |
+| **Tier0** | **corridor-as-data（纯 schema 旁支，零 router 改动）** | ⬜ 低成本、可独立做 |
+| E–F | 路由 fork + 诊断闭环——**章节字母 = 执行序** | ⬜（C3+D 已解锁 E；**E-Tier2 = bundle 路由实现**） |
 | G | 不做 / 暂缓 | — |
 
 ### 依赖与关键路径（v10 数据模型推导；**章节字母 = 执行序**）
@@ -53,6 +55,12 @@ B layout_ir（✅ 基石）── addr↔uuid↔net名 桥表，下游全依赖
                        │
    C1 + D(plan+rule area) ─► E 路由 fork（E1 plan_runner→E2 锁定）─► F 诊断闭环
 E3 回归台（全程并行先搭 = §E 的 S0 底座；最小切片【✅ 已提前到 §C】当 router-oracle）
+
+   D ─► D-Tier2 契约冻结（bundle schema + batch_route_bundle oracle，先 xfail）
+            │  （consumer-oracle：D 的 bundle schema 钉在尚不存在的 router entry 上，
+            │    故 D 与 E 必须共冻同一契约——不能先做 E 再倒逼 schema 重构）
+            └─► E-Tier2 实现该契约（E2 硬锁定 + batch_route_bundle + breakout 扇出）
+   E1 dispatch 从一开始就按「single / diff / bundle」三类 stage 设计（勿事后改）
 ```
 
 **C3 为何在 D 前（已完成的背景）**：room=KiCad group 有不可修补的所有权缺陷——group 是通用选择原语
@@ -61,6 +69,8 @@ E3 回归台（全程并行先搭 = §E 的 S0 底座；最小切片【✅ 已�
 
 **双向钉死纪律**（写消费者前先用消费者的真接口把上游验收钉死）：B→C 用
 `_generate_net_map` consumer-oracle（已钉）；C→E 用真 router consumer-oracle（E3 薄片已提前）。
+**D-Tier2→E-Tier2 方向反转（契约先行 co-design）**：`batch_route_bundle` 今天不存在，无现成接口可钉，故由
+D 先定义并 strict-xfail 钉死契约、E 照此实现（不能先做 E 再倒逼 schema 重构，见 §D-Tier2）。
 
 ---
 
@@ -248,7 +258,9 @@ layout.yaml = 布局意图源（.ato 电路源 / .kicad_pcb 几何源的对等�
 
 ## 未完成任务
 
-执行序 = 章节字母：C3+D 已完成（✅）→ E 依赖 C+D → F 最后。
+执行序：C3+D（✅）→ **D-Tier2 契约冻结 → E（E1→E2→E-Tier2 bundle）→ F**。**D-Tier2 必须先于 E-Tier2**
+（共冻 `batch_route_bundle` 契约）。Tier0（corridor，零 router 改动）与 D5（component_class，需 fileformats
+前置，后置）均可与主线并行/择机做，不挡关键路径。
 
 ### P0.2 S7 flag-day 终验剩余（写 v10 代码已落 + 单测/e2e determinism 已绿）
 - [ ] examples/fixtures/probe 工程 `.kicad_pcb` 一次性 v9→v10 升级提交；build→build→diff 确认
@@ -264,14 +276,109 @@ token，**不是** `ZonePlacement.source_type`/`source`（错建的内存/protob
 加 `component_class` 字段（或把 type+source 融成单 token），sheetname/component_class/group 三源各自一个 token。
 另需写 `.kicad_pro`（事实 10 之外的通道）。
 
+### D-Tier2. bundle 总线传输（mixed single/diff）+ `batch_route_bundle` 契约【先于 E-Tier2】
+**问题**：现 `route_stages` 的最小单元 = 一条 net 整条路由到完成，无法表达"两端 fanout、中间一条 bus
+平行同形走线"这类布线意图（手工布线核心模式：BGA 先扇出成两端都接受的公共顺序，中段整把 bus 平行拉过去、
+零调序；或两远端先到近 checkpoint 再汇合）。`pitch` 标量也错——DDR byte lane 是 **single+diff 混编**的
+异构横截面（8 根 DQ 单端 + 2 对时钟 diff，线宽/阻抗/对内 gap 各异）。
+**抽象**：bundle = `centerline`（trunk 轴）+ **有序 lanes**（每 lane 单端或差分、各带宽度）+ **两端 breakout**
+（发散区）。一次 `batch_route_bundle` 调用把 breakout A + trunk + breakout B 全路由完（成员 pad-to-pad 连通，故
+**不需要** partial-route/route-to-point）；搜索只在两端 breakout（pad→槽位、按序避交叉）+ trunk 过渡段（见下）。
+**层级约束模型（不展平、不替代）**：L0 单 net=track；L1 **diff lane** = 两 net 的内在耦合约束（对内 gap/skew/极性
+`fix_polarity`）= **原样复用 `route_diff` 机理**；L2 **bundle** = 有序 lanes + spacing profile + breakout。沿线任一
+点**所有在场层级约束同时成立** ⟹ diff lane 在 bundle 里**绝不退化成两条独立平行单端**，始终成对带耦合。bundle 只在
+外层加"顺序 + lane 间距"，无权解散 L1。
+**trunk = 刚性段 / 过渡段 序列（profile 沿线可变）**：`lanes`（成员/**顺序**/每 diff lane 对内 gap·width）是 bundle
+全局不变量；可变的只是 **spacing**，按 centerline **顶点分段**——相邻顶点 spacing 相等=**刚性段**（offset 给死、无搜索），
+不等=**过渡段**（顺序不变、间距 morph，转弯 neck-down 即此）。
+**过渡段 = trunk 内唯一 auto-route 处，且两层约束同时在**：两端 cross-section（profile-A/B 的 offset）都给死，只搜中间
+morph 路径（范围被两端钉死、很小）；其中**外层 bundle 顺序/不交叉 + 内层每 diff lane 耦合不散**必须同时生效。
+= router 现有 `diff_pair_centerline_setback`（pad 附近受约束聚/散）从 pad 边推广到中段、并叠 bundle 顺序约束——非新发明。
+**显式几何**路线（2026-06-19 用户拍板）：刚性段 offset 由 D 纯函数累加得出、确定可单测；过渡段两端给死、只 E 搜 morph。
+**D/E co-design（consumer-oracle）**：bundle 的 config 字段只能钉在下游 `batch_route_bundle` 真接受的 kwargs
+上，而该 entry **今天 router 不存在** ⟹ D-Tier2 的核心交付之一 = **先定义并 strict-xfail 钉死该 entry 契约**
+（D/E 边界），D 与 E 都照同一份冻结契约实现，杜绝"先做 E 再倒逼 schema 重构"。tests-first S0 棘轮。
+**与现有 D2 实现的兼容性（改动面——bundle 是模型重构，非纯增量；实现前必读）**：
+- `route_stages: list[RouteStage]` → **判别联合** `list[RouteStage | BundleStage]`：现 `RouteStage`
+  （`layout_plan.py:180`）必填 `mode` 且 `extra="forbid"`，`type: bundle` 塞不进现模型——须加 `kind`/`type`
+  判别字段或拆出 `BundleStage` 类；`RouteStage`(single/diff) 语义不变（不破 D1–D4）。
+- `LayoutPlan.resolve_nets`（`layout_plan.py:219`）现假设 `stage.nets`，bundle 无 `.nets` 会 AttributeError——
+  须按 stage 类型分支：bundle 把 `lanes` **按序**摊平成成员 net（diff lane P/N 都出），仍是"地址→net 名"纯
+  委托 bridge②、不引入变换（守 `resolve_nets` 现 docstring 不变量）。
+- bundle 的 router override **不是** `GridRouteOverride`（那钉在 batch_route/diff 两入口）——bundle 钉
+  `batch_route_bundle`，须新建 bundle config 模型（per-bundle + per-lane 两级），T-B1 独立 drift guard。
+- `LayoutPlan` 加 `anchors` 字段（D-t2.1，可后置）。
+- `build_steps.generate_layout_plan`（D4）须扩：写 `<t>.layout_plan.json` 时调 D-t2.2b 把**算好的 offset** 注入
+  产物（现产物 = `model_dump`+`resolved_nets`、不含 offset；T-A5 要求含）。
+- 与 D3 rule area / placement **正交**：bundle 是布线侧，不碰 placement（仍只 enabled+sheetname，事实 10）。
+- [ ] **D-t2.2** `bundle` stage 类型（与 `mode: single|diff` 并列的第三类 `type: bundle`）：
+  - `lanes`（**有序、bundle 全局不变量**：每条 `{net: addr}` 或 `{diff: [p,n], gap, width?, impedance?}`）；
+  - `trunk.centerline` = **带 spacing 的顶点序列**（每顶点 `{at: [x,y], spacing}`，≥2 点）——相邻顶点 spacing
+    相等=刚性段、不等=过渡段；可选 `spacing_overrides`（`{after: <lane>, gap}` 调单条 lane 间距）；
+  - `config`（bundle 默认，lane 可覆盖）、`lock`、`breakouts`（**正好 2 个**，`{at: <room 地址>}` 缺省 order 由
+    ato 引脚序派生 / `{at, order: [按 escape 序排的成员]}` 显式覆盖）。
+  loud 校验（S5a）：lanes≥1、diff lane 正好 2 net、gap/width/spacing>0、centerline≥2 顶点、`spacing_overrides.after`
+  指真实 lane、breakout.at 是真实 room、显式 order 必是 bundle 成员的一个排列、两端 order 自洽。docstring 记：
+  fanout 语义=把两端原生序搬成 trunk 公共序（trunk 零交叉）；diff lane 全程不解散（L1 内在约束）。
+- [ ] **D-t2.2b** 纯函数 `(lanes, segment_spacing) → [(net, signed_offset, width, kind, diff_partner?, polarity?)]`
+  **逐刚性段**算偏移（默认以 centerline 居中累加），并输出**过渡段的两端 offset 边界**（A/B profile）供 E morph。
+  bundle 几何 SSOT。测：混编横截面**手算 offset 当 oracle**的最小 fixture（按构造定答案）+ 变异自检（动一条 lane
+  宽度/gap/段 spacing，下游对应 offset 必变，否则红）。
+- [ ] **D-t2.3** 冻结 `batch_route_bundle` 契约（**D/E 边界，strict-xfail oracle，先于 E**）：入参 = **分段 trunk**
+  （centerline 顶点序列 + 每段 spacing；刚性段成员 offset 给死、过渡段两端 offset 给死）+ 有序成员表（net/offset/
+  width/kind，diff 项带 P/N 配对 + 极性）+ 两端 breakout（part + order）+ 共享几何 kwargs（track_width/clearance/
+  via_*）；`return_results` 结构按 `batch_route` 同构、**逐成员**报 routed/blocked。钉 = 像 D2 `GridRouteOverride`
+  那样 AST 取真 entry 签名做 union drift guard（E-Tier2 实现后翻绿）。
+- [ ] **D-t2.4** `resolve_nets`/anchor 解析扩展：bundle 成员**按序**经 bridge② 解析；diff lane 的 P/N 都要解析。
+- [ ] **D-t2.1（可分离旁支）** `anchors`：命名几何点/线，供"两远端单线打 checkpoint 再汇合"这类**非 bundle**
+  用例（route-to-point）。与 bundle 正交，可后置；bundle 自带 trunk 端点不依赖它。
+
+**测试计划与判据（D-Tier2；tests-first S0，先全红、实现靠移除/失活 xfail 翻绿）**——三桶分明：标注 D 内可自测项
++ 判据，与"E 读取实现的接口模板"（后者须 docstring 写全协议 + 接口 delta，= 本仓"协议写在契约测试 docstring"纪律）。
+共用 mixed DDR fixture：8 单端 DQ + 2 对时钟 diff + 一处转角 neck-down 分段（刚性—过渡—刚性）。
+- **桶① D 内可自测（无 router / 无 KiCad；纯函数 + schema + 真 build IR fixture）**
+  - [ ] **T-A1 schema 正向**：fixture 解析成 typed model。判据：lanes 顺序/类型、分段 spacing、breakout order
+    逐字段断言 == 期望（非"跑通即绿"）。
+  - [ ] **T-A2 schema 负向（loud-or-nothing，逐条独立 case 证明会拒）**：diff lane≠2 net / gap·width·spacing≤0 /
+    centerline<2 顶点 / `spacing_overrides.after` 悬空 / 显式 order 非成员排列 / 两端 order 不自洽 / 未知键
+    (`extra=forbid`)。判据：每畸形输入抛**指定异常类型 + 消息含定位**，且对应合法输入不抛（正负成对）。
+  - [ ] **T-A3 `profile→offset` 纯函数（几何 SSOT，最关键）**：① 按构造 oracle——**手算** mixed 横截面 offset 表
+    == 输出（容差）；② **变异自检（必配，防失明）**——动一条 lane width/gap/段 spacing，对应下游 offset 必变
+    （断言 before≠after），不变 = 测试 bug；③ 居中不变量——profile 关于 centerline 对称（或按 reference 规则）；
+    ④ 过渡段输出两端 offset 边界 A/B。判据：== 手算 且 变异传播 且 居中成立。
+  - [ ] **T-A4 `resolve_nets`（consumer-oracle，真 build IR 的 `signal_nets`，无 router）**：bundle 成员**按序**
+    解析 == bridge②；diff lane 的 P/N 都解析；缺失地址响亮（`LayoutPlanError`）。判据：有序列表逐项 == ir 期望
+    + 负例抛错。
+  - [ ] **T-A5 artifact schema（D 产 `<t>.layout_plan.json`）= E1 的【文件】接口模板**：产物含分段 trunk + 算好的
+    offset / 有序成员表 / breakout order / resolved nets；JSON schema 校验 + 关键字段非空。**`.schema.json` +
+    docstring = E1 读取的文件接口 SSOT，须写全（这是 E 开始时照着读的模板之一）。**
+- **桶② D/E 契约（strict-xfail，E 实现前恒红）= E 读取实现的【Python】接口模板（须 docstring 写全签名 + result schema）**
+  - [ ] **T-B1 `batch_route_bundle` 签名 drift guard**：AST 取真 entry 签名，断言 bundle config 字段 ⊆ entry
+    kwargs union（同 D2 `GridRouteOverride` 钉法）。E 未建 entry → red → strict-xfail；E 建后翻绿。模块 docstring
+    写全签名 delta（分段 trunk / 成员表 / breakout 怎么传）。
+  - [ ] **T-B2 调用 + 结果 shape**：构造契约输入（分段 trunk / 成员表 / breakout）→ 断言 `return_results` 结构
+    （逐成员 routed/blocked，按 `batch_route` 同构）。strict-xfail 至 E-Tier2。docstring 写全 result schema。
+- **桶③ 端到端（E-Tier2 落地后，属 §E DoD，不在 D）**：真 router 跑 mixed DDR bundle，重读输出板 `semantic_view`
+  验：刚性段 offset 落位 == plan、**过渡段 diff 全程不散（P/N 间距 == gap±tol）**、breakout 按 order 零 trunk 交叉。
+
+### Tier0. corridor-as-data（纯 schema 旁支，零 router 改动，低成本先行）
+现 `guide_corridor_enabled` 只开关、引导线几何藏在板上 User.1（§C 边界事实 4）。把路径搬进 plan：stage 加
+`corridor: [[x,y],...]`，build 画到 User.1 再置 `guide_corridor_enabled`。软牵引（可被阻挡绕开、不停在
+checkpoint），但"把 bus 沿空走廊牵引、缩小搜索空间"这个值零 router 改动即得。仅 `batch_route` 单端入口收
+`guide_corridor_*`（差分入口无，见 §D2 mode 互斥）。
+- [ ] stage `corridor` 字段（block-list 坐标）+ build 画 User.1 polyline + 置 `guide_corridor_enabled`。
+- [ ] loud：corridor ≥2 点；仅 single mode 可用（diff stage 给 corridor 即响亮拒）。
+
 ### E.【需 §C + §D】KiCadRoutingTools fork
 E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶段能力。E3 全程并行先搭。
-- [ ] **E1** `layout_plan_runner.py`：route_stages → 按 mode 展开成 `batch_route`/
-  `batch_route_diff_pairs` 的 **kwargs**（字段名 = router 入口入参，**非** GridRouteConfig；翻译在 router
-  内部，见 D2 纠偏）→ 多次路由调用，阶段间 pcb_data 累积。产 `route_report.json`。
-  - **按 net 类型分派入口（§C 边界事实 1/设计决策，不合并算法）**：单端 → `route.py:batch_route`、
-    差分对 → `route_diff.py:batch_route_diff_pairs`；聚合按共有键 `failed`/`successful`/`total_vias`
-    归一、分类型键各自解析。mode 来自 `route_stages`（D2），不自动猜测。
+**E1 dispatch 从一开始按「single / diff / bundle」三类 stage 设计**（D-Tier2 契约冻结后填 bundle 实现，勿事后改）。
+- [ ] **E1** `layout_plan_runner.py`：route_stages → **按 stage 类型**展开成 `batch_route`/
+  `batch_route_diff_pairs`/`batch_route_bundle` 的 **kwargs**（字段名 = router 入口入参，**非** GridRouteConfig；
+  翻译在 router 内部，见 D2 纠偏）→ 多次路由调用，阶段间 pcb_data 累积。产 `route_report.json`。
+  - **按 stage 类型分派入口（§C 边界事实 1/设计决策，不合并算法）**：single → `route.py:batch_route`、
+    diff → `route_diff.py:batch_route_diff_pairs`、**bundle → `batch_route_bundle`（D-t2.3 契约，E-Tier2 实现）**；
+    聚合按共有键 `failed`/`successful`/`total_vias` 归一、各类型键各自解析。类型来自 `route_stages`（D2/D-t2.2），
+    不自动猜测。
   - **容忍缺失 `JSON_SUMMARY`**（边界事实 2）：已被 §C 完全连通的 net 不再路由，应在路由前从
     batch 输入剔除；聚合不得假设每条输入 net 都有 summary。
   - **不为 §C 预置几何加 lock**（边界事实 2）：它们是已连通铜、router 自动不动；E2 锁定面向
@@ -288,6 +395,18 @@ E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶
     布线约束的唯一通道。
 - [ ] **E2** 几何所有权/阶段锁定：`Segment`/`Via` 加 `_metadata`（内存态）；`rip_up_net`
   （`rip_up_reroute.py:60-72`）加阶段守卫；`lock_after` 阶段后续不可撕。
+  **硬锁定 = bundle 的底座**：现 router 只有*软* ripped-route avoidance（`max_rip_up_count>0` 后续 stage 能撕前序），
+  bundle/有序流水线要确定性必须让前序铜**不可撕**（锁定铜 = 硬障碍、豁免 rip-up 候选）。这就是"前一条线占了空间、
+  后面用不了"从倾向变保证。**先于 E-Tier2 的 bundle 实现做。**
+- [ ] **E-Tier2 `batch_route_bundle`**（实现 D-t2.3 冻结契约，混编 + 分段平行传输）：
+  - **刚性段**：单端按给定 offset 平行铺、diff 成对按 offset 铺并走差分机理（耦合/`fix_polarity`）——offset 由 D
+    给死，**不搜索**；diff lane 不可退化成两条独立单端（丢耦合/极性）。
+  - **过渡段**：两端 cross-section（offset）给死，中间 morph 路径**有界 auto-route**，**两层约束同时在**：外层 bundle
+    顺序/不交叉 + 内层每 diff lane 耦合不散。= 把 `diff_pair_centerline_setback`（pad 附近受约束聚/散）推广到中段、
+    叠 bundle 顺序约束。
+  逐成员结构化结果（routed/blocked）。
+- [ ] **E-Tier2 breakout 扇出**：两端各把成员 pad→trunk 槽位按 order（缺省派生 / 显式覆盖）路由、局部化交叉、
+  零 trunk 交叉；复用/扩展 `bga_fanout.py`/`qfn_fanout.py`（现为独立脚本，非 router 参数——需收进 entry）。
 - [ ] **E3** 独立回归台（全程并行先搭 = §E 的 S0 底座）：无需装 KiCad，预编译 Rust 二进制 +
   内置测试板 + numpy/scipy/shapely；失败注入 + 报告 schema 校验。
   - 最小切片已提前到 §C【✅】：`KiCadRoutingTools/tests/test_router_smoke_batch_route.py`
