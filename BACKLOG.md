@@ -353,6 +353,12 @@ morph 路径（范围被两端钉死、很小）；其中**外层 bundle 顺序/
 **测试计划与判据（D-Tier2；tests-first S0，先全红、实现靠移除/失活 xfail 翻绿）**——三桶分明：标注 D 内可自测项
 + 判据，与"E 读取实现的接口模板"（后者须 docstring 写全协议 + 接口 delta，= 本仓"协议写在契约测试 docstring"纪律）。
 共用 mixed DDR fixture：8 单端 DQ + 2 对时钟 diff + 一处转角 neck-down 分段（刚性—过渡—刚性）。
+**棘轮已落地（2026-06-19，全红）**：`test/exporters/pcb/layout/test_bundle_contract.py`（23 strict-xfail，
+T-A1–T-A5 + T-B1/T-B2；冻结的接口名 + 横截面约定 + result schema 全写在模块 docstring）。桶①gated on `_DT2_LANDED`
+（layout_plan 的 bundle 符号 + 新 `bundle_geometry` 模块），桶②additionally gated on `_E_TIER2_LANDED`（AST 探
+router `route_bundle.batch_route_bundle`，缺则红、router repo 全缺则响亮 skip）。负向用例与 base-bundle 正向控制
+**成对**（落地前控制即抛 → 干净 XFAIL，杜绝 D2 把 `type: bundle` 当未知 stage 拒掉造成的 wrong-reason XPASS）。
+实现靠移除/失活 xfail 翻绿，各项 `- [ ]` 仍待实现勾选。
 - **桶① D 内可自测（无 router / 无 KiCad；纯函数 + schema + 真 build IR fixture）**
   - [ ] **T-A1 schema 正向**：fixture 解析成 typed model。判据：lanes 顺序/类型、分段 spacing、breakout order
     逐字段断言 == 期望（非"跑通即绿"）。
