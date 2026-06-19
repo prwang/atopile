@@ -34,7 +34,7 @@ from faebryk.libs.kicad.fileformats import kicad
 
 PCB = kicad.pcb.KicadPcb
 
-# Router corridor layers (BACKLOG 事实 9 / KicadDecisions): guide geometry only.
+# Router corridor layers (BACKLOG 事实 9): guide geometry only.
 GUIDE_LAYER = "User.1"
 GUIDE_LAYERS = {"User.1", "User.2"}
 

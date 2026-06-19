@@ -4,8 +4,9 @@
 
 在 atopile + KiCad 10 + KiCadRoutingTools 之上构建确定性、以文本为唯一事实来源的
 PCB 布局布线工作流：`.ato` = 电路事实源，`layout.yaml` = 布局意图事实源，KiCad 工程
-为派生产物；工具输出结构化 JSON 诊断，供 **PCB Layout SKILL** 迭代。调研/验证证据见
-`/kicad_wksp/KicadDecisions.md`（含文件:行号引用）。
+为派生产物；工具输出结构化 JSON 诊断，供 **PCB Layout SKILL** 迭代。架构总览见
+`CLAUDE.md`「架构总览」；关键事实均自包含于下文，证据 = 各条就地标注的 KiCad 源 / 代码
+文件:行号（原可行性调研报告 KicadDecisions.md 已于 2026-06-19 退役，活性内容已折叠入此两处）。
 
 **本文档纪律（不允许熵增）**：只保留 ① 已定决策 ② 改代码前必读的当前有效事实 ③ 未完成
 任务。**已完成功能按 atopile 约定文档写在代码里**（模块 docstring / 同名测试 / schema =
@@ -77,7 +78,7 @@ D 先定义并 strict-xfail 钉死契约、E 照此实现（不能先做 E 再�
 
 ---
 
-## 关键事实与约束（改代码前必读；全部实测，证据见 KicadDecisions.md）
+## 关键事实与约束（改代码前必读；全部实测，证据 = 各条就地标注的 KiCad 源 / 代码 文件:行号）
 
 ### 文件方言与解析器
 
@@ -177,7 +178,7 @@ v10-only（upgrade-on-write）落地：写方言=v10、版本守卫、tenting �
 两个 CONFIRMED+FIXED bug 已带回归测试，调试 narrative 不留 BACKLOG：
 - **BUG-2** v10 读侧不回填 pad net 名 → rebuild 丢 room 布线：修在 `pcb.zig PcbFile.loads`
   合成 net 表后回填 `pad.net.name`，回归 `test_v10_acceptance.py::test_v10_read_backfills_pad_net_names`。
-  （教训"pull≠sync 增量稳态"由 e2e determinism 测试钉；PATH footgun 已记 `/kicad_wksp/CLAUDE.md`。）
+  （教训"pull≠sync 增量稳态"由 e2e determinism 测试钉；PATH footgun 已记 `CLAUDE.md`。）
 - **BUG-1** 测试写回源 fixture：`app` fixture 改 `shutil.copy2` 到 tmp 副本。
 
 ### §B layout_ir（文本↔几何唯一接口）【✅ 2026-06-14 全绿；I7 将由 C3 取代为 I7′】
@@ -278,11 +279,9 @@ layout.yaml = 布局意图源（.ato 电路源 / .kicad_pcb 几何源的对等�
 板级 net-class/DRC 表、铜皮 pour、非 placement 禁布、丝印（缺失须 loud、不缺省）可与主线并行/择机做，不挡关键路径。
 
 ### P0.2 S7 flag-day 终验剩余（写 v10 代码已落 + 单测/e2e determinism 已绿）
-- [ ] examples/fixtures/probe 工程 `.kicad_pcb` 一次性 v9→v10 升级提交；build→build→diff 确认
+- [ ] examples/fixtures 工程 `.kicad_pcb` 一次性 v9→v10 升级提交；build→build→diff 确认
   增量稳态（事实 6）。
 - [ ] BOM / 制造产物 / DRC smoke。
-- [ ] 改写 `/kicad_wksp/CLAUDE.md` 与 `KicadDecisions.md` 的"单向门/只读不存"约束为
-  "已迁移，v9 只读、写即升级 v10"（事实 1）。
 
 ### D5. component class placement（后置）
 component_class 源的 placement rule area。**前置 = 修 fileformats schema**：走 `(component_class "X")`

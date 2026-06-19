@@ -4,7 +4,7 @@
 
 - **禁止不透明的 auto-memory**：不要写入 `~/.claude/.../memory/` 等用户不可见的持久化记忆。所有跨会话需要记住的偏好、决策、约束，一律写进本文件（`./CLAUDE.md`），随项目可见、可审、可版本控制。
 - **后台进程必须回收**：每次 `git commit` 前、以及每次向用户交付（结束回合）前，**不得留下任何在跑或挂死的后台进程/监控 shell**（`ato build`、pytest、`until … sleep` 轮询、被自动 background 的任务等）。规则：① 用 `run_in_background` 起的活就要等它跑完或显式 kill；② 监控用 `until <cond>; do sleep N; done` 一次性等到位，别留轮询；③ 交付/commit 前跑一次 `ps` 自检，确认无 `/tmp` 工作区或 ato/pytest 残留再继续。教训：PATH 顺序错配（`~/.local/bin/ato` 旧版排在 venv 前）会让 BuildQueue spawn 旧 worker、orchestrator 崩在 pydantic/sqlite 但主进程挂死空转——这类僵尸最易遗漏。
-- **长期文档 = 单一现状定义，禁止补丁摞补丁**：BACKLOG.md / CLAUDE.md / KicadDecisions.md 等长期文档是「我与未来 agent 的唯一权威」，误读后果严重——**歧义本身就是 bug**。每条事实只能存在**一份最新、精确、自包含、无歧义**的定义。**禁止**：① 用删除线（`~~…~~`）保留旧错误文字与新结论并列；② 把同一事实写成「旧结论（日期A）→ 更正（日期B）→ 再更正（日期C）」的日期补丁层叠。**更正即就地重写**那条定义本身，使读者无需追溯历史即可读到唯一正确版本。允许且仅允许保留一处**简短的「曾因 X 踩坑」教训行**（帮助理解为何如此规定），但绝不能让过时结论与现行结论并存、互相矛盾。写入前自检：若一个新读者只读这一段、不看 git 历史，会不会被误导？会则重写。
+- **长期文档 = 单一现状定义，禁止补丁摞补丁**：BACKLOG.md / CLAUDE.md 等长期文档是「我与未来 agent 的唯一权威」，误读后果严重——**歧义本身就是 bug**。每条事实只能存在**一份最新、精确、自包含、无歧义**的定义。**禁止**：① 用删除线（`~~…~~`）保留旧错误文字与新结论并列；② 把同一事实写成「旧结论（日期A）→ 更正（日期B）→ 再更正（日期C）」的日期补丁层叠。**更正即就地重写**那条定义本身，使读者无需追溯历史即可读到唯一正确版本。允许且仅允许保留一处**简短的「曾因 X 踩坑」教训行**（帮助理解为何如此规定），但绝不能让过时结论与现行结论并存、互相矛盾。写入前自检：若一个新读者只读这一段、不看 git 历史，会不会被误导？会则重写。
 
 ## 编码与测试纪律（写代码/测试前必读）
 
@@ -20,7 +20,7 @@
 
 **项目**：在 atopile + KiCad 10 + KiCadRoutingTools 之上构建确定性文本化布局工作流（`.ato` = 电路事实来源，`layout.yaml` = 布局事实来源，KiCad 文件为派生产物，结构化 JSON 诊断供 PCB Layout SKILL 迭代）。
 
-- 调研报告：`/kicad_wksp/KicadDecisions.md`；任务清单：`/kicad_wksp/atopile/BACKLOG.md`。
+- 架构总览见下节（其活性内容已折叠自原可行性调研报告，该报告 2026-06-19 退役、不再维护）；任务清单：`BACKLOG.md`（同仓）；atopile monorepo 自身说明见 `OPERATING.md`。
 - **已定决策**（2026-06-12）：
   - 不 fork KiCad 10；
   - fork 基线 = atopile 仓库 HEAD（最后 commit 2026-03，bugfix，稳定）；
@@ -30,6 +30,39 @@
   - **P0.1 已完成**（2026-06-12）：88 通过 + 26 strict-xfail（xfail 即 P0.2 的验收开关）。变异自检证实:自然语料快照对"按位置绑定"类 bug 大多失明（4 个里 3 个照常通过），corrupter 是必需件而非锦上添花。
   - **P0.2 S0–S4 已完成**（2026-06-12）：v10 读侧闭环（net 编号按名排序合成,Python 模型零变化）,转绿 21 开关,剩 8 xfail = S5 的 7 + S7 的 DRC oracle。
   - **GUI 演示范围决策**（2026-06-13）：① 一切不支持构造**不得静默失败**——S5a 未知键响亮化机制兜底（警告/strict 抛错）；② S5b 保真集 = 最小集（group + rule area placement + 既有清单）,teardrop/蛇形等长/via padstack 仅警告（schema 补全立 P1+ 条目）,GUI 演示脚本回避这三类操作；③ S7 增设"GUI 编辑回环验收"门（模拟编辑→受管重写→无损 + DRC）,**未绿不演示**。详见 BACKLOG §P0.2 S5/S7。
+
+## 架构总览（数据流 + 模块图；实现细节以 code 为 SSOT）
+
+**可行性结论**（静态调研 + 运行时验证，2026-06）：**不 fork KiCad 10**——room placement
+rule area / group / component-class 赋值所需的全部 KiCad 对象均可由外部生成、且经
+`kicad-cli pcb upgrade` 完整 round-trip（实测）。方案 = **fork atopile**（加 layout sidecar 层）
++ **vendor KiCadRoutingTools**（加分阶段执行 + 结构化诊断；现为 submodule `vendor/KiCadRoutingTools`）。
+
+**数据流**：`.ato`（电路真相）+ `layout.yaml`（布局真相）→ `ato build` 生成派生
+`.kicad_pcb` + `layout_ir.json` → KiCadRoutingTools 分阶段布线 → 结构化 JSON 诊断 →
+PCB Layout SKILL 改文本 → 重建。命令式反馈（"这条没布通、空间没了，怎么办"）活在文件**外**的
+build→诊断→SKILL 改 plan→重建闭环里，**不在** `layout.yaml` 内（理由见 `layout_plan.py` 模块 docstring）。
+
+**atopile build pipeline**（SSOT = `src/atopile/build_steps.py`）：实例化 app（ANTLR→Zig
+TypeGraph→实例图）→ load_pcb → pick_parts → prepare_nets → update_pcb（transformer + room
+sheetname 同步）→ `generate_layout_plan`（§D：placement rule area + `<t>.layout_plan.json`）→ bom/manifest。
+
+**layout sidecar 模块**（`src/faebryk/exporters/pcb/layout/`，各带契约测试，细节读 code/docstring）：
+- `layout_sync.py` — 从板回读 room（sheetname）布局（`pull_room_layout`，`_get_room_name:68`）。
+- `layout_plan.py` — `layout.yaml` 意图模型（D2 `rooms`/`route_stages`；D-Tier2 `BundleStage` 待落地）。
+- `rule_area.py` — 每 room 一个 placement zone（D3，**只** `enabled`+`sheetname`，见约束 §source_type）。
+- `room_ops.py` — 强制 via / room copy / `pad_board_xy` 坐标变换（room 局部→板坐标，含 rotate；§C 已实现）。
+- `bundle_geometry.py` — D-Tier2 bundle 横截面 offset 几何 SSOT（**待实现**，契约见 `test_bundle_contract.py`）。
+- `libs/kicad/layout_ir.py` — `layout_ir.json` = **bridge②**（ato 地址 → net/pad/room）；布线与诊断按地址定位，不解析 KiCad 文件。
+
+**布线器**（submodule `vendor/KiCadRoutingTools`，跑在 **system python3**，非 venv——rust 内核 ext 未为 venv 构建）：
+`route.py:batch_route` / `route_diff.py:batch_route_diff_pairs`（+ E-Tier2 新增 `route_bundle.py:batch_route_bundle`）；
+`return_results=True` 结构化结果 + stdout `JSON_SUMMARY` + `BlockingInfo`；`build_router.py` 下载预编译二进制。
+**跨 stage 前序铜 = 不可撕的硬障碍**（白送的优先级锁），优先级由 stage 顺序表达（BACKLOG 关键事实 16）。
+
+**诊断（§F，规划中）**：聚合 `results_data` + `BlockingInfo` + `kicad-cli pcb drc --format json`
+→ 经 layout_ir 用 uuid/地址反查 → `diagnostics.json`。风格基线可借鉴沙盒参考 clone：kicad-happy 的
+`rule_id`/`severity`/`report_context`/`confidence` schema、Ki-Stack 的"改动后渲染 + DRC 验证"流程。
 
 ## 关键实测约束（改代码前必读）
 
@@ -96,7 +129,7 @@ C3.1 的"地址前缀推导复现 legacy atopile-group"是**一次性迁移证�
 
 ## 沙盒环境现状
 
-- `/kicad_wksp` 下已克隆：atopile、KiCadRoutingTools、packages、ReplicateLayout、kicad-happy、Ki-Stack、kicad（GitLab 浅克隆）。
+- `/kicad_wksp` 下：**`atopile` = fork 主仓**（KiCadRoutingTools 现为其 submodule `atopile/vendor/KiCadRoutingTools`，URL `git@github.com:prwang/KiCadRoutingTools.git`）；仅供参考的旁支 clone：`packages`、`ReplicateLayout`、`kicad-happy`、`Ki-Stack`、`kicad`（GitLab 浅克隆）。
 - 已安装：kicad-cli 10.0.3（PPA `kicad/kicad-10.0-releases`）、rust router 预编译二进制（`build_router.py` 自动下载）、python3-numpy/scipy/shapely（apt）。
 - **atopile = 唯一一份,fork 的 venv**（2026-06-14 去熵）：bootstrap 的 `uv tool install atopile 0.15.7`（曾在 `~/.local/bin/ato`）**已 `uv tool uninstall atopile` 卸除**——它是 PATH footgun 源头（旧版排在 venv 前→挂死 build "Picking parts" + 旧 schema 重建 `build_history.db`）。现在**没有任何 `ato` 在 PATH 上**；fork 一律显式调用 `/kicad_wksp/atopile/.venv/bin/ato` 或 `/kicad_wksp/atopile/.venv/bin/python -m atopile`（subprocess 构建需把该 `.venv/bin` 前置进子进程 PATH，见 BACKLOG §B B1b）。要装回:`uv tool install --python 3.14 atopile`（可逆）。
-- 运行时验证用工程：`/kicad_wksp/probe/layout_reuse`（含注入的 rule area / group / 手工线段，对应 KicadDecisions.md 附录的验证项）。
+- 运行时验证用例已固化为测试（`test_group_determinism` / `test_room_migration_e2e` / `test_rule_area_contract` / `test_router_smoke_batch_route` 等）+ 入库的 `examples/layout_reuse`（被复用的源布局）；旧 `probe/layout_reuse` 手工验证工程已于 2026-06-19 退役删除（其验证项均已迁入上述测试）。
