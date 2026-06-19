@@ -82,7 +82,7 @@ D 先定义并 strict-xfail 钉死契约、E 照此实现（不能先做 E 再�
 
 ### 文件方言与解析器
 
-1. **写方言 = v10**（S7 后）：`PcbFile.dumps`（`core/zig/src/sexp/kicad/pcb.zig`）恒写 v10、
+1. **写方言 = v10**（S7 后）：`PcbFile.dumps`（`src/faebryk/core/zig/src/sexp/kicad/pcb.zig`）恒写 v10、
    stamp `version=20260206`；v9/v5 可读，读入后写出即升级 v10（upgrade-on-write）。
    `KICAD_PCB_VERSION/KICAD_FP_VERSION = 20260206`（`pcb.zig:12-15`）。
 2. **v10 net 模型**：v10 文件**无顶层 net 表**——net 只在引用处 `(net "名")`；无 `net_name`
@@ -109,7 +109,7 @@ D 先定义并 strict-xfail 钉死契约、E 照此实现（不能先做 E 再�
    （`fileformats.py`）现无 `mark` 参数、纯返回 uuid4；`transformer.py` 的 `gen_uuid(mark)`/
    `is_marked`/`_add_group` 已清。旧"变长-mark 塞进定长 uuid 静默畸形"的根因（往 uuid 塞数据）随之
    消失。provenance 走 `atopile_address` property + `FBRK:notouch` fp_text。常驻不变量见 §G。
-8. **`keep_net_names` 默认随 `frozen`**（`config.py:594,623-624`）：常态每次 build 重 derive
+8. **`keep_net_names` 默认随 `frozen`**（`config.py:605-606,639-640`）：常态每次 build 重 derive
    net 名——名字漂移源头。v10 下名字漂移 = 几何归属漂移（事实 2）。
 
 ### KiCad 行为
@@ -215,7 +215,7 @@ Tier-2 真 router 2）。冻结 API：`pad_board_xy`、`insert_forced_via→Forc
    C2 复制段同理（普通已连通铜）自动保留，**§E 无需 lock/preserve §C 预置几何**。
 3. **`total_vias` 只计 router 新增 via**，不含预置 forced via——存活/板上总数须**重读输出板**。
 4. **User.* 默认 router 不读**（只读铜层）——但 router 有原生开关
-   （`KiCadRoutingTools/routing_config.py:117-123`）：`guide_corridor_enabled`（读 User.1 引导线，
+   （`vendor/KiCadRoutingTools/routing_config.py:117-123`）：`guide_corridor_enabled`（读 User.1 引导线，
    把 net 沿走廊牵引）+ `keepout_enabled`（读 User.2 禁布多边形，挡走线）。故 §C 的 User.1 引导
    / §D 的 User.2 room 边界**可被 E1 显式启用为一等布线约束**（默认关、按 stage 开，见 §D/§E1）——
    非仅可视件。这两路与 §D 的 placement rule area（KiCad 自身的分组/DRC，另一机制）不要混淆。
@@ -225,7 +225,7 @@ Tier-2 真 router 2）。冻结 API：`pad_board_xy`、`insert_forced_via→Forc
   pitch）+ `fix_polarity` + `length/time_matching` + `gnd_via`；单端 = `route_multipoint_main`/
   `power_nets`。行业惯例（Altium 亦分差分/单线两器），**非 bug**。**不合并算法（合并=倒退，丢
   耦合/极性/等长/位姿/centerline）**；mode 由 `route_stages` 显式声明（§D/§E1）。
-- E3 薄片仅验**差分对** schema（`KiCadRoutingTools/tests/test_router_smoke_batch_route.py`）；
+- E3 薄片仅验**差分对** schema（`test/exporters/pcb/layout/test_router_smoke_batch_route.py`，shell-out 至 system py3 跑 `vendor/KiCadRoutingTools`）；
   单端 schema 待 §E3 补。
 
 ### §C3 room 去 group 化（room = footprint sheetname）【✅ 2026-06-15】
@@ -238,8 +238,11 @@ KiCad 拥有并重写它，事实 10）；route/via/zone 归属 = 内部 net；r
 - 实现 `layout_ir.py`（`rooms` 派生）+ `layout_sync.py`（`sync_rooms`/`pull_room_layout`/`_clean_room`，
   删 `_is_managed_group`）+ `room_ops.py`（`copy_room_layout` 只复制本 room）+ `build_steps.py`/`cli/kicad_ipc.py`。
 源码里看不到的结论：
-- committed fixtures **故意保留**旧 group（验证 atopile 仍能读 group-bearing 板）；C3.1 corpus 直接从 pcb
-  读旧 group 比对地址前缀 → 真数据覆盖、零 fixture 改动（原 C3.7 fixture 迁移取消）。
+- committed fixtures 仍含旧 group，但**已无任何测试把 group 当 room 源读**：曾经的一次性迁移证明
+  `test_C3_1_corpus_groups_are_address_prefix_recoverable`（从 pcb 读旧 group 比对地址前缀）**已退役**
+  （`test_room_migration_contract.py` 注释记其移除——保留会延续 C3 已废除的 ato→group 耦合）；现役
+  `test_C3_1_inline_room_equals_address_prefix_grouping` 只读 sheetname 派生的 `ir['rooms']`。含 group 的板
+  仅由 parser corpus（`test_fileformats_corpus`）当不透明用户内容回环覆盖。
 - `transformer._add_group`/`is_marked`/`gen_uuid(mark)` 已删（§G uuid 不透明）——atopile 无 ato→group 映射。
 - cascade：§B I7→I7′（IR 去 `groups{}`）、§C room_ops 随新 IR 形状（契约钉 C3.6）。
 
@@ -499,7 +502,7 @@ E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶
   零 trunk 交叉；复用/扩展 `bga_fanout.py`/`qfn_fanout.py`（现为独立脚本，非 router 参数——需收进 entry）。
 - [ ] **E3** 独立回归台（全程并行先搭 = §E 的 S0 底座）：无需装 KiCad，预编译 Rust 二进制 +
   内置测试板 + numpy/scipy/shapely；失败注入 + 报告 schema 校验。
-  - 最小切片已提前到 §C【✅】：`KiCadRoutingTools/tests/test_router_smoke_batch_route.py`
+  - 最小切片已提前到 §C【✅】：`test/exporters/pcb/layout/test_router_smoke_batch_route.py`
     钉死差分对 C→E 接口（`return_results=True` 四元组 / `results_data` 几何字段 / `JSON_SUMMARY`
     schema）。整台 E3（失败注入 + 多板矩阵）仍待此处。
   - **待补：单端 `route.py:batch_route` 的 JSON_SUMMARY schema 校验**（边界事实 1）——薄片只验
