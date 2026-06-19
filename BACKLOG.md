@@ -36,6 +36,8 @@ SSOT），BACKLOG 只留"结论 + 代码指针"，绝不复述实现细节或调
 | **C3** | **group→sheetname 迁移（room 去 group 化）** | ✅ 2026-06-15（见 §C3 代码指针） |
 | **D** | **layout.yaml 加载 + placement rule area（D1–D4）** | ✅ 2026-06-16（见 §D 代码指针）；D5 后置 |
 | **D-Tier2** | **bundle 总线传输 schema + `batch_route_bundle` 契约（D/E 边界先冻）** | ⬜ **必须先于 E-Tier2**（consumer-oracle 共冻契约） |
+| **D-Tier3** | **自包含：摆放（room 相对坐标）+ 板框 outline + 完整叠层** | ⬜ **关键路径**（完整叠层 = 差分阻抗硬依赖）；net-class/pour/keepout/silk 进 §F |
+| **增量执行** | **route_stages `--up-to` 断点 + stage name 唯一** | ⬜ 增量可调试，配 §F 诊断闭环 |
 | **Tier0** | **corridor-as-data（纯 schema 旁支，零 router 改动）** | ⬜ 低成本、可独立做 |
 | E–F | 路由 fork + 诊断闭环——**章节字母 = 执行序** | ⬜（C3+D 已解锁 E；**E-Tier2 = bundle 路由实现**） |
 | G | 不做 / 暂缓 | — |
@@ -59,7 +61,8 @@ E3 回归台（全程并行先搭 = §E 的 S0 底座；最小切片【✅ 已�
    D ─► D-Tier2 契约冻结（bundle schema + batch_route_bundle oracle，先 xfail）
             │  （consumer-oracle：D 的 bundle schema 钉在尚不存在的 router entry 上，
             │    故 D 与 E 必须共冻同一契约——不能先做 E 再倒逼 schema 重构）
-            └─► E-Tier2 实现该契约（E2 硬锁定 + batch_route_bundle + breakout 扇出）
+            └─► E-Tier2 实现该契约（batch_route_bundle + breakout 扇出；跨 stage 锁是 router 白送的硬障碍，
+                 见「关键事实」16，E2 只暴露 stage 内 rip-up 旋钮、不新建锁）
    E1 dispatch 从一开始就按「single / diff / bundle」三类 stage 设计（勿事后改）
 ```
 
@@ -128,13 +131,23 @@ D 先定义并 strict-xfail 钉死契约、E 照此实现（不能先做 E 再�
 
 13. **KiCadRoutingTools 已有结构化结果**（`return_results=True`、`JSON_SUMMARY`、`BlockingInfo`）：
     诊断层是聚合+映射；其解析器独立、v9/v10 兼容、不解析 groups——不受本仓库迁移影响。
-14. **~~rule area 需 zig 改加 `group` 源~~【作废：C3 改走 sheetname 源】**：room rule area 改用
-    `(placement (sheetname ...))`，`ZonePlacement.sheetname`（`pcb.zig:828`）已存在 → **不需要改 zig**。
-    原计划的 `group` 枚举/字段（`pcb.zig:322/824`）随 group 方案一并弃用（见 §C3）。
+14. **room rule area 走 sheetname 源，不改 zig**：room rule area 用 `(placement (sheetname ...))`，
+    `ZonePlacement.sheetname`（`pcb.zig:828`）已存在 → 不需要改 zig。（曾计划给 zig 加 `group` 枚举/字段
+    `pcb.zig:322/824` 当 room 源，C3 改走 sheetname 后弃用——group 无 provenance 槽，见 §C3。）
 15. **EasyEDA 取件 = CloudFront WAF（非"限流"）【✅ D1】**：(a) UA 拒绝名单——`easyeda2kicad`
     硬编码 UA / `python-requests` / `Mozilla` 全 403，`curl/*`、node UA 放行；(b) 按 IP 速率——
     突发后即便放行 UA 也短时全 403（响应体 `Request blocked` HTML → `r.json()` 抛
     `Expecting value: line 1 column 1`）。修复见 `easyeda_resilient.py`；warm build 走 1 天缓存零调用。
+16. **router 锁定模型 = 跨 stage 硬障碍（白送）+ stage 内软互撕（唯一可调）+ 无 per-net 锁**【源码实测
+    2026-06-19】：E1 把每个 route stage 作为**独立** `batch_route`/`batch_route_diff_pairs`/`batch_route_bundle`
+    调用、逐 stage 累积 pcb_data。① **跨 stage = 硬障碍、撕不动**：建障碍图时凡不在本次 `nets_to_route` 的
+    segment/via/pad 一律当硬障碍（`obstacle_map.py:82-120`：segment :82-96 / via :98- / pad :114-），rip-up 只动本次 `net_ids` 内的 net
+    （`rip_up_reroute.py`）——前序 stage 的铜对后续 stage 天然不可撕。故"有序流水线 = 布线优先级**硬保证**"
+    无需在 router 加任何锁，**把要保护的 net 放进更早 stage 即不可撕**。② **stage 内（同一次 batch）兄弟 net
+    可软互撕**，且这是**唯一可调**项：`max_rip_up_count`（默认 3）/`ripped_route_avoidance_cost`/`_radius`
+    （`routing_config.py:60/83-84`）。③ router **无任何 per-net `lock/fixed/frozen` 原语**（已搜证）。
+    **推论**：layout.yaml 表达"优先级/不可撕"的正确手段 = **stage 拆分与排序**，不是 per-net 标志；想让一条线
+    连兄弟都不动 → 给它单独的更早 stage。
 
 ---
 
@@ -259,8 +272,10 @@ layout.yaml = 布局意图源（.ato 电路源 / .kicad_pcb 几何源的对等�
 ## 未完成任务
 
 执行序：C3+D（✅）→ **D-Tier2 契约冻结 → E（E1→E2→E-Tier2 bundle）→ F**。**D-Tier2 必须先于 E-Tier2**
-（共冻 `batch_route_bundle` 契约）。Tier0（corridor，零 router 改动）与 D5（component_class，需 fileformats
-前置，后置）均可与主线并行/择机做，不挡关键路径。
+（共冻 `batch_route_bundle` 契约）。D-Tier3（摆放 room 相对坐标 + 板框 outline + **完整叠层**）= 生成式 flow
+**关键路径**、与路由主线并行做——其中完整叠层是 D-Tier2 差分阻抗的硬依赖，**不可后置/不可退化为仅层数**。增量执行
+（`--up-to` 断点）配 §F；Tier0（corridor，零 router 改动）、D5（component_class，需 fileformats 前置）、以及 §F 的
+板级 net-class/DRC 表、铜皮 pour、非 placement 禁布、丝印（缺失须 loud、不缺省）可与主线并行/择机做，不挡关键路径。
 
 ### P0.2 S7 flag-day 终验剩余（写 v10 代码已落 + 单测/e2e determinism 已绿）
 - [ ] examples/fixtures/probe 工程 `.kicad_pcb` 一次性 v9→v10 升级提交；build→build→diff 确认
@@ -315,8 +330,10 @@ morph 路径（范围被两端钉死、很小）；其中**外层 bundle 顺序/
   - `lanes`（**有序、bundle 全局不变量**：每条 `{net: addr}` 或 `{diff: [p,n], gap, width?, impedance?}`）；
   - `trunk.centerline` = **带 spacing 的顶点序列**（每顶点 `{at: [x,y], spacing}`，≥2 点）——相邻顶点 spacing
     相等=刚性段、不等=过渡段；可选 `spacing_overrides`（`{after: <lane>, gap}` 调单条 lane 间距）；
-  - `config`（bundle 默认，lane 可覆盖）、`lock`、`breakouts`（**正好 2 个**，`{at: <room 地址>}` 缺省 order 由
-    ato 引脚序派生 / `{at, order: [按 escape 序排的成员]}` 显式覆盖）。
+  - `config`（bundle 默认，lane 可覆盖）、`rip_up`（**per-stage 的 stage 内 rip-up 预算旋钮** =
+    `max_rip_up_count`/`ripped_route_avoidance_cost`/`_radius`；跨 stage 锁是白送的硬障碍、不在此表达，见「关键事实」16）、
+    `breakouts`（**正好 2 个**，`{at: <room 地址>}` 缺省 order 由 ato 引脚序派生 / `{at, order: [按 escape 序排的成员]}`
+    显式覆盖）。
   loud 校验（S5a）：lanes≥1、diff lane 正好 2 net、gap/width/spacing>0、centerline≥2 顶点、`spacing_overrides.after`
   指真实 lane、breakout.at 是真实 room、显式 order 必是 bundle 成员的一个排列、两端 order 自洽。docstring 记：
   fanout 语义=把两端原生序搬成 trunk 公共序（trunk 零交叉）；diff lane 全程不解散（L1 内在约束）。
@@ -361,6 +378,71 @@ morph 路径（范围被两端钉死、很小）；其中**外层 bundle 顺序/
 - **桶③ 端到端（E-Tier2 落地后，属 §E DoD，不在 D）**：真 router 跑 mixed DDR bundle，重读输出板 `semantic_view`
   验：刚性段 offset 落位 == plan、**过渡段 diff 全程不散（P/N 间距 == gap±tol）**、breakout 按 order 零 trunk 交叉。
 
+### D-Tier3. 自包含摆放 + 自包含性审计（layout.yaml 为生成式 flow 唯一权威）
+**原则（用户拍板 2026-06-19）**：在生成式 / agent 文本优先工作流里，`.ato`（电路）+ `layout.yaml`（布局）必须
+**自包含、是唯一权威**；**任何一项事实都不得以「只能 GUI 编辑 .kicad_pcb」或「只能 reuse 既有 .kicad_pcb」为唯一
+输入来源**——「为避免 GUI 必须先用 GUI」的循环依赖即设计缺陷。.kicad_pcb 是**派生产物**，reuse 仅作可选优化、
+不得是任何事实的唯一通道。
+
+**摆放语义（本节修，关键路径）**：
+- **坐标系 = room 相对**（用户拍板）：元件坐标相对其 room 的 origin/anchor，移动 room 整块跟随、块可复用；
+  可留一个板绝对坐标逃逸口。
+- `Room` 几何扩展：加 `polygon: [[x,y],...]`（loud：≥3 点、非自交）作为 `origin/size` 之外的第三种几何；KiCad
+  placement rule area 本就是 `Polygon` zone（`rule_area.py:128` 现只喂 4 个 bbox 角点），改动小。**并修一个现存
+  S5a 隐患**：`Room.rotation/layers/anchor`（`layout_plan.py:157-160`）现被解析却被 D3 完全忽略
+  （`_make_placement_rule_area` 只吃 bbox + 全信号层，`rule_area.py:83`）——要么接线生效（rotation→旋转矩形多边形、
+  layers/side→zone 层），要么删除，不留"声明却静默忽略"。
+- 新增 `placements` 段，按 **ato 地址** key（与全文一致，不用 designator）：`{component: <addr>, at: [x,y],
+  rotation: <deg>, side: F|B}`，room 相对。这是把 footprint `(at x y rot)` + layer 写进派生 .kicad_pcb 的**文本权威**，
+  取代受管 footprint 现在 build 时的自动网格摊开（`transformer.py:176` 默认 `(0,0,0)` → `:2013-2080` 按 parent
+  聚类、10mm 步进；非任何文本源可控）。须定 `placements` 与 reuse 的**优先级**（文本给值即覆盖 reuse，缺省回退 reuse）。
+
+**板级自包含（本节修，关键路径——不可后置）**：纯文本端到端跑一块板，下游（E router / F DRC / 制造）消费的板级
+通用事实必须有文本 schema。layout.yaml 加**板级 `board` 段**（与 `rooms`/`placements`/`route_stages` 平级）：
+- [ ] `board.outline`：`{origin, size}` 或 `polygon: [[x,y],...]`（loud：≥3 点、非自交）。**无 outline 现在是静默灾难**
+  ——router 在无界空间布线、铜溢出板外（`obstacle_map.py:393-395` 无 board_bounds 直接 `return`），F 的边界间距无可查、
+  板不可制造。必给 schema。
+- [ ] `board.stackup`：**完整叠层，不止层数**——有序 copper 层名 + 每介电层厚度/材料/Er。**为何完整、不可退化为"只给
+  层数"**：差分对受控阻抗依赖真实叠层（`route.py:256-258`：`impedance` 模式无 stackup 即 warn 退回固定线宽 =
+  **阻抗失控**）；**阻抗失败 = 板子失败 ⟹ D-Tier2 里差分对的分层耦合/阻抗规则全部白做**。故完整叠层是 **D-Tier2 的
+  硬依赖**，与铜层数同级 must-do、**不得倒退为仅层数**。
+- [ ] **单一层数权威**：`board.stackup` 的 copper 层集是唯一真相，**同时**喂 (a) atopile 生成板的 layer 表 与
+  (b) `route_stages.layers` 的默认。**landmine（必防，记给 E1）**：atopile 现默认板 = **2 层**（仅 F.Cu/B.Cu signal，
+  `config.py`），router 无 `layers` 入参时默认 **4 层** `DEFAULT_4_LAYER_STACK`（F.Cu/In1.Cu/In2.Cu/B.Cu，
+  `route.py:229-232`，且"层不可自动探测"）——两者不一致会让 router 往不存在的 In1/In2.Cu 布线。E1 必须由
+  `board.stackup` 显式传 `layers`，严禁吃 router 4 层默认。
+- **D sign-off 判据（loud-or-nothing）**：纯文本管线消费的每一项板级事实，**要么有文本 schema，要么缺失时响亮**
+  （warn/拒），**禁静默默认**。outline + 完整 stackup 本节给 schema；其余（审计表"进 §F"行）缺失时必 loud。
+
+**自包含性审计 — REUSE-ONLY / 无文本通道事实清单（= 设计缺陷，逐条立项）**【源码实测 2026-06-19】：
+| 事实 | 现状（唯一来源） | 证据 | 归属 |
+| --- | --- | --- | --- |
+| 元件摆放坐标 x/y | 新件 build 时自动摊开；已有件从板读回 | `transformer.py:176/1499/2013-2080`；`layout_ir.py:149` | **本 D-Tier3 修**（`placements`） |
+| 元件旋转（per-instance） | 同上，无 per-instance 文本通道 | `layout_ir.py:149`（读 `fp.at.r`） | **本 D-Tier3 修** |
+| 元件正反面 side | 库 footprint 默认层 / 复用件从板读 | `transformer.py:1872`（`lib_fp.layer`） | **本 D-Tier3 修**（`placements.side`） |
+| 板框 Edge.Cuts 几何 | 只能 GUI 画 / build-server agent 工具 / reuse；无文本源字段 | `tool_layout.py:112` 读、`tool_definitions.py:321` 仅 server-agent API；`config.py:458` 的 "Edge.Cuts" 只是层定义非几何 | **本 D-Tier3 修**（`board.outline`） |
+| 叠层 stackup（**完整**：层名+厚度/材料/Er） | 只能 KiCad PCB setup 配；atopile 只读不写 | `cost_estimation.py:278-283` 仅读；阻抗依赖 `route.py:256-258` | **本 D-Tier3 修**（`board.stackup`，完整，差分阻抗硬依赖） |
+| 布线 design rule（clearance/线宽/via/impedance） | 已是文本可授权 | `route_stages.config` = `GridRouteOverride`（D2） | **已覆盖** |
+| 铜走线 tracks / vias | reuse 或手工 | `layout_sync.py:252-286` | **§E route_stages 从文本生成**（fork 核心目标，非遗留缺陷） |
+| 板级 net-class / DRC 规则表（KiCad DRC 对齐） | 只能 KiCad Design Rules 配；atopile 源无 authoring | `grep net_class/design_rule src/atopile` = 空 | **进 §F**（DRC 对齐；缺失须 loud，不缺省） |
+| 铜皮 pour / 灌铜 zone 几何 | reuse-only（§E 只布线不灌铜） | `room_ops.py:296-307` | **进 §F**（缺失须 loud，不缺省） |
+| 禁布/rule area（非 placement 类） | placement rule area 由 §D 生成；其它禁布 zone reuse-only | §D rule_area.py（placement 类） | placement 类已有；其它 **进 §F**（不缺省） |
+| 丝印 / 文字 | reuse-only | `layout_sync.py:288-304` | **进 §F**（缺失须 loud，不缺省） |
+
+排期：D-Tier3 = 生成式 flow 必备、**关键路径**，含三件 must-do——摆放（room 相对坐标）+ 板框 outline + **完整叠层**
+（差分阻抗硬依赖，不可退化为仅层数）；铜走线由 §E 覆盖；板级 net-class/DRC 表、铜皮 pour、非 placement 禁布、丝印
+全部**进 §F**，且 **loud-or-nothing：缺失必响亮，禁静默默认**。
+
+### 增量执行 / 断点调试（route_stages 按号停-取-回退）
+**动机（用户）**：`layout.yaml` 是顺序文件，必须**增量可调试**——可只执行到第 N 号 stage、取该部分结果，由 agent/人
+检查→回退→改→重跑，确保整体布线优先级完整落实。这与「关键事实」16 的跨 stage 硬障碍天然契合：每 stage 产物 = 可
+**续跑的 checkpoint**。
+- [ ] build 加 `--up-to <stage-name|index>`：只跑 `route_stages[0..k]`、停下，写出**部分板 + `route_report.json`**
+  （F 诊断闭环的输入）。
+- [ ] **强制 stage `name` 唯一**（`layout_plan.py` 加 loud 校验）——按名寻址断点的前提；同时支持 1-based index 寻址。
+- [ ] checkpoint 续跑语义写进文档：改**更早** stage 须从该步重跑（铜累积）；改**更晚** stage 可从断点续。每 stage
+  的结构化诊断喂 SKILL/agent，构成 `layout_plan.py` docstring「FORM」节描述的 build→诊断→改 plan→重建 外层 loop。
+
 ### Tier0. corridor-as-data（纯 schema 旁支，零 router 改动，低成本先行）
 现 `guide_corridor_enabled` 只开关、引导线几何藏在板上 User.1（§C 边界事实 4）。把路径搬进 plan：stage 加
 `corridor: [[x,y],...]`，build 画到 User.1 再置 `guide_corridor_enabled`。软牵引（可被阻挡绕开、不停在
@@ -381,8 +463,8 @@ E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶
     不自动猜测。
   - **容忍缺失 `JSON_SUMMARY`**（边界事实 2）：已被 §C 完全连通的 net 不再路由，应在路由前从
     batch 输入剔除；聚合不得假设每条输入 net 都有 summary。
-  - **不为 §C 预置几何加 lock**（边界事实 2）：它们是已连通铜、router 自动不动；E2 锁定面向
-    *本阶段新布*的几何。
+  - **不为 §C 预置几何加 lock**（边界事实 2）：它们是已连通铜、router 自动不动。跨 stage 的前序铜同理是
+    不可撕硬障碍（锁定模型见「关键事实」16），E1 无需为任何已布几何加锁。
   - **GridRouteOverride → kwargs 原样展开（按 mode 校验）**：`RouteStage.config`（D2 的 override，键 ⊆
     两入口入参 union，**非 GridRouteConfig**，见 D2 纠偏）原样展开成 `batch_route`（单端）/
     `batch_route_diff_pairs`（差分）的同名 kwargs——E1 不维护映射表（**翻译在 router 内部**，如
@@ -393,11 +475,14 @@ E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶
     （读 §C 的 User.1 引导，**注：仅 `batch_route` 单端入口收，差分入口无此 kwarg**）/ `keepout_enabled`
     （读 §D 的 User.2 room 边界，两入口都收），默认关、由 route_stages 显式开——这是把 §C/§D 几何变成
     布线约束的唯一通道。
-- [ ] **E2** 几何所有权/阶段锁定：`Segment`/`Via` 加 `_metadata`（内存态）；`rip_up_net`
-  （`rip_up_reroute.py:60-72`）加阶段守卫；`lock_after` 阶段后续不可撕。
-  **硬锁定 = bundle 的底座**：现 router 只有*软* ripped-route avoidance（`max_rip_up_count>0` 后续 stage 能撕前序），
-  bundle/有序流水线要确定性必须让前序铜**不可撕**（锁定铜 = 硬障碍、豁免 rip-up 候选）。这就是"前一条线占了空间、
-  后面用不了"从倾向变保证。**先于 E-Tier2 的 bundle 实现做。**
+- [ ] **E2** 阶段锁定 = **依赖 router 既有的跨 stage 硬障碍，非新建锁**（锁定模型见「关键事实」16）：
+  跨 stage 的前序铜对后续 stage 天然不可撕，故 bundle/有序流水线的"前一条线占了空间、后面用不了"**已是硬保证**，
+  E2 **不需要**给 `Segment`/`Via` 加 `_metadata`、不需要给 `rip_up_net` 加跨 stage 守卫（那是在解一个不存在的问题）。
+  E2 的真实交付收窄为**暴露 stage 内 rip-up 旋钮**：把 `max_rip_up_count`/`ripped_route_avoidance_cost`/`_radius`
+  （`routing_config.py:60/83-84`）做成 per-stage config，让某 stage 内部也可"几乎不重排"。
+  - **D-t2.2 的 `lock` / 旧设想的 `lock_after` 一律重定义为"per-stage 的 stage 内 rip-up 预算旋钮"**（值 = 上面三
+    kwarg），**不**表示跨 stage 锁（跨 stage 锁是白送的）。
+  - **不为 §C 预置几何加 lock**（边界事实 2）：已连通铜 router 自动不动。
 - [ ] **E-Tier2 `batch_route_bundle`**（实现 D-t2.3 冻结契约，混编 + 分段平行传输）：
   - **刚性段**：单端按给定 offset 平行铺、diff 成对按 offset 铺并走差分机理（耦合/`fix_polarity`）——offset 由 D
     给死，**不搜索**；diff lane 不可退化成两条独立单端（丢耦合/极性）。
@@ -423,6 +508,16 @@ E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶
   constraint(JSON-pointer)/reason/blocking_nets/failed_endpoints/suggestions。schema 参考 kicad-happy。
   - **via/几何总数勿信 `JSON_SUMMARY.total_vias`**（边界事实 3）：只计 router 本次新增，板上真实
     总数须**重读输出 .kicad_pcb** 数。
+- [ ] **F-drc-rules** 板级 net-class / DRC 规则表文本化（从 D-Tier3 自包含审计移入）：让 KiCad DRC 有可对齐的
+  规则源（clearance/线宽类/via 类），而非吃 KiCad 工程默认。**loud-or-nothing：规则缺失时响亮（warn/拒），禁静默
+  默认**——否则 DRC"绿"是假绿（按内置默认而非设计意图判）。布线侧 design rule 已在 `route_stages.config`，此处是
+  **板级 DRC 对齐**（F 的 DRC 闭环消费），与布线侧不重复。
+- [ ] **F-fill** 铜皮 pour / 灌铜 zone 文本化（从审计移入；§E 只布线不灌铜，pour 现 reuse-only
+  `room_ops.py:296-307`）：地/电源覆铜的文本权威 + 重灌。缺失须 loud（不静默产无铜皮板）。
+- [ ] **F-keepout** 非 placement 类禁布 / rule area 文本化（从审计移入）：placement 类已由 §D 生成；其它禁布
+  zone 现 reuse-only。缺失须 loud。
+- [ ] **F-silk** 丝印 / 文字文本化（从审计移入；现 reuse-only `layout_sync.py:288-304`）：低优先，但仍 **不缺省、
+  缺失须 loud**（不静默产无丝印板当成已完成）。
 
 ### G. 不做 / 暂缓
 - ❌ **hack uuid = 绝对禁止**（不可逾越原则）：uuid 是 128bit 不透明 id，atopile **既不往里写
@@ -451,7 +546,7 @@ E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶
 1. **net 名漂移**（自动编号 `unnamed[N]`，事实 8）：v10 下名字 = 唯一键，漂移 = 几何归属漂移。
    已焊进 B 的 I4（无稳定地址 net 响亮标记、不可引用）+ 验收"稳态重建下全部 net 名字节稳定"。
 2. 是否向 KiCad 上游提 DRC JSON 增强补丁（见 §G）。
-3. **`_generate_net_map` 并列判据死代码**（`layout_sync.py:238`）：
+3. **`_generate_net_map` 并列判据死代码**（`layout_sync.py:183`，函数定义 `:116`）：
    `mapping_counts[src][tgt] > max(values())` 自增后恒 false → 注释写"最频映射"实为"首次胜"。
    当前 pull 迭代序确定故未发病，歧义映射下是休眠隐患。修法：并列取字典序最小 tgt + 迭代按
    src_addr/pad 排序。**注**：B/C 的消费者-oracle 以现役 `_generate_net_map` 为真值；此处硬化改
