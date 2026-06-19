@@ -81,7 +81,7 @@ needs_room_ops = pytest.mark.xfail(
 
 # Tier-2: the router lives in the sibling KiCadRoutingTools checkout and runs
 # under system python3 (its .so is not built for this venv).
-ROUTER_DIR = repo_root().parent / "KiCadRoutingTools"
+ROUTER_DIR = repo_root() / "vendor" / "KiCadRoutingTools"
 _ROUTER_AVAILABLE = (ROUTER_DIR / "route_diff.py").exists()
 needs_router = pytest.mark.skipif(
     not _ROUTER_AVAILABLE, reason=f"KiCadRoutingTools not present at {ROUTER_DIR}"

@@ -349,7 +349,11 @@ def _router_entry_kwargs_by_mode() -> dict[str, set[str]] | None:
     absent (tests then skip loudly). Deliberately NOT routing_config.GridRouteConfig:
     the entries take flat kwargs and translate some names internally (module
     docstring), so the dataclass is the wrong oracle."""
-    root = Path(os.environ.get("KICAD_ROUTING_TOOLS", "/kicad_wksp/KiCadRoutingTools"))
+    root = Path(
+        os.environ.get(
+            "KICAD_ROUTING_TOOLS", str(_repo_root() / "vendor" / "KiCadRoutingTools")
+        )
+    )
     entries = {"single": ("route.py", "batch_route"),
                "diff": ("route_diff.py", "batch_route_diff_pairs")}
     out: dict[str, set[str]] = {}

@@ -1,0 +1,3 @@
+[submodule "vendor/KiCadRoutingTools"]
+	path = vendor/KiCadRoutingTools
+	url = git@github.com:prwang/KiCadRoutingTools.git

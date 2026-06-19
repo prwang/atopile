@@ -188,7 +188,7 @@ _LOUD = (LayoutPlanError, ValidationError)
 # ---------------------------------------------------------------------------
 # S0 ratchet guard (D/E boundary): AST-probe the router's batch_route_bundle.
 # ---------------------------------------------------------------------------
-_ROUTER_ROOT = repo_root().parent / "KiCadRoutingTools"
+_ROUTER_ROOT = repo_root() / "vendor" / "KiCadRoutingTools"
 _ROUTER_PRESENT = (_ROUTER_ROOT / "route.py").exists()  # repo cloned at all?
 
 
