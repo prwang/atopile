@@ -73,10 +73,17 @@ protocol; the load-bearing facts:
 """
 
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal, Union
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Discriminator,
+    Field,
+    Tag,
+    model_validator,
+)
 
 
 class LayoutPlanError(Exception):
@@ -208,13 +215,182 @@ class RouteStage(BaseModel):
         return self
 
 
+# ---------------------------------------------------------------------------
+# BundleStage — the D-Tier2 BUS abstraction (BACKLOG §D-Tier2).
+#
+# A bundle is the unit the flat `route_stages` cannot express: ordered `lanes`
+# (single OR diff) + a segmented `trunk` + exactly 2 `breakouts`. Its constraints
+# are LEVELLED, never flattened — a diff lane stays a coupled pair (L1) inside the
+# bundle (L2 only adds order + inter-lane spacing). The geometry SSOT (the
+# cross-section the router materializes) lives in the sibling `bundle_geometry`
+# module; this model only carries the validated intent. The contract is pinned by
+# `test/exporters/pcb/layout/test_bundle_contract.py`.
+# ---------------------------------------------------------------------------
+
+
+class SingleLane(BaseModel):
+    """One single-ended member of a bundle (= an ato signal address). Its width is
+    the bundle default — a single lane carries no per-lane width."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    net: str
+
+
+class DiffLane(BaseModel):
+    """One differential member of a bundle: a (P, N) pair routed as the intrinsic
+    L1 coupling (REUSES route_diff downstream), never two parallel singles."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    diff: tuple[str, str]  # (P addr, N addr) — EXACTLY 2 (tuple arity is loud)
+    gap: float = Field(gt=0)  # intra-pair edge gap, > 0
+    width: float | None = Field(default=None, gt=0)  # else bundle default
+    impedance: float | None = Field(default=None, gt=0)
+
+
+class TrunkVertex(BaseModel):
+    """One centerline vertex: a board point + the inter-lane edge spacing there."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    at: tuple[float, float]
+    spacing: float = Field(gt=0)  # inter-lane edge gap, > 0
+
+
+class SpacingOverride(BaseModel):
+    """Override the inter-lane gap AFTER a named member (a non-uniform profile)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    after: str  # names an existing bundle member
+    gap: float = Field(gt=0)
+
+
+class Trunk(BaseModel):
+    """The segmented centerline: >= 2 vertices. Adjacent vertices with equal
+    spacing = a rigid segment; unequal = a transition (the neck-down)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    centerline: list[TrunkVertex] = Field(min_length=2)
+    spacing_overrides: list[SpacingOverride] = Field(default_factory=list)
+
+
+class Breakout(BaseModel):
+    """A fanout region at one end of the bundle (a real room address). `order`, if
+    given, is an explicit member permutation; else it is derived from lane order."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    at: str  # a real room address (sheetname)
+    order: list[str] | None = None  # a PERMUTATION of the members
+
+
+class RipUpBudget(BaseModel):
+    """Per-stage INTRA-stage rip-up budget — maps to the router's
+    max_rip_up_count / ripped_route_avoidance_cost / _radius knobs. CROSS-stage
+    prior copper is a free, un-rippable obstacle (BACKLOG 关键事实 16) and is NOT
+    expressed here; bundle priority comes from STAGE ORDER."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_rip_up_count: int | None = Field(default=None, ge=0)
+    ripped_route_avoidance_cost: float | None = None
+    ripped_route_avoidance_radius: float | None = None
+
+
+class BundleRouteConfig(BaseModel):
+    """Bundle-level router defaults. NOT GridRouteOverride: a bundle dispatches to
+    `batch_route_bundle`, whose kwargs differ. Every field here must be a real
+    `batch_route_bundle` kwarg (T-B1 AST drift guard). extra='forbid' ⇒ loud."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    track_width: float | None = None
+    clearance: float | None = None
+    via_size: float | None = None
+    via_drill: float | None = None
+    impedance: float | None = None
+    layers: list[str] | None = None
+
+
+class BundleStage(BaseModel):
+    """A bus: ordered lanes (single|diff) + a segmented trunk + exactly 2
+    breakouts. The discriminated third stage type alongside RouteStage."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["bundle"]  # the union discriminator
+    name: str
+    lanes: list[SingleLane | DiffLane] = Field(min_length=1)
+    trunk: Trunk
+    breakouts: tuple[Breakout, Breakout]  # EXACTLY 2 (tuple arity is loud)
+    config: BundleRouteConfig = Field(default_factory=BundleRouteConfig)
+    rip_up: RipUpBudget | None = None
+
+    def members(self) -> list[str]:
+        """The flattened member net addresses in lane order, diff P before N — the
+        bundle-global invariant order every downstream consumer reads."""
+        out: list[str] = []
+        for lane in self.lanes:
+            if isinstance(lane, DiffLane):
+                out.extend(lane.diff)
+            else:
+                out.append(lane.net)
+        return out
+
+    @model_validator(mode="after")
+    def _validate_bundle(self) -> "BundleStage":
+        members = self.members()
+        member_set = set(members)
+        # a spacing override must name a real member (no dangling profile point)
+        for ov in self.trunk.spacing_overrides:
+            if ov.after not in member_set:
+                raise ValueError(
+                    f"bundle {self.name!r}: spacing_overrides.after {ov.after!r} is "
+                    "not a bundle member"
+                )
+        # an explicit breakout order must be a permutation of the members (and so
+        # both ends necessarily cover the same set — self-consistent)
+        for bo in self.breakouts:
+            if bo.order is not None and sorted(bo.order) != sorted(members):
+                raise ValueError(
+                    f"bundle {self.name!r}: breakout {bo.at!r} order is not a "
+                    f"permutation of the bundle members {members}"
+                )
+        return self
+
+
+def _stage_kind(v: Any) -> str:
+    """Pick the route_stages union member: a `type: bundle` mapping (or a
+    BundleStage instance) is the bundle stage; everything else is a RouteStage
+    (which carries no `type` key — existing plans parse unchanged)."""
+    if isinstance(v, BundleStage):
+        return "bundle"
+    if isinstance(v, RouteStage):
+        return "route"
+    if isinstance(v, dict):
+        return "bundle" if v.get("type") == "bundle" else "route"
+    return "route"
+
+
+_Stage = Annotated[
+    Union[
+        Annotated[RouteStage, Tag("route")],
+        Annotated[BundleStage, Tag("bundle")],
+    ],
+    Discriminator(_stage_kind),
+]
+
+
 class LayoutPlan(BaseModel):
     """The whole layout.yaml: placement rooms + ordered route stages."""
 
     model_config = ConfigDict(extra="forbid")
 
     rooms: list[Room] = Field(default_factory=list)
-    route_stages: list[RouteStage] = Field(default_factory=list)
+    route_stages: list[_Stage] = Field(default_factory=list)
 
     def resolve_nets(self, ir: dict[str, Any]) -> dict[str, list[str]]:
         """{stage name -> [kicad net name]} resolving each ato signal ADDRESS
@@ -224,8 +400,13 @@ class LayoutPlan(BaseModel):
         signal_nets: dict[str, str] = ir["signal_nets"]
         resolved: dict[str, list[str]] = {}
         for stage in self.route_stages:
+            # a bundle flattens its lanes (diff P before N); a RouteStage uses its
+            # explicit net list. Both resolve verbatim through bridge②, in order.
+            addrs = (
+                stage.members() if isinstance(stage, BundleStage) else stage.nets
+            )
             names: list[str] = []
-            for addr in stage.nets:
+            for addr in addrs:
                 if addr not in signal_nets:
                     raise LayoutPlanError(
                         f"stage {stage.name!r}: net address {addr!r} is not a "

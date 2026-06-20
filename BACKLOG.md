@@ -36,8 +36,8 @@ SSOT），BACKLOG 只留"结论 + 代码指针"，绝不复述实现细节或调
 | C | room 几何（forced via / room 复制） | ✅ |
 | **C3** | **group→sheetname 迁移（room 去 group 化）** | ✅ 2026-06-15（见 §C3 代码指针） |
 | **D** | **layout.yaml 加载 + placement rule area（D1–D4）** | ✅ 2026-06-16（见 §D 代码指针）；D5 后置 |
-| **D-Tier2** | **bundle 总线传输 schema + `batch_route_bundle` 契约（D/E 边界先冻）** | ⬜ **必须先于 E-Tier2**（consumer-oracle 共冻契约） |
-| **D-Tier3** | **自包含：摆放（room 相对坐标）+ 板框 outline + 完整叠层** | ⬜ **关键路径**（完整叠层 = 差分阻抗硬依赖）；net-class/pour/keepout/silk 进 §F |
+| **D-Tier2** | **bundle 总线传输 schema + geometry（桶①）** | 🔶 桶① ✅ 2026-06-20（model+geometry 落地翻绿）；桶② `batch_route_bundle` 契约 strict-xfail，实现移 §E E-Tier2（用户拍板） |
+| **D-Tier3** | **自包含：摆放（room 相对坐标）+ 板框 outline + 完整叠层** | ⬜ **关键路径**（完整叠层 = 差分阻抗硬依赖）；测试计划已定（31 strict-xfail，见 §D-Tier3 测试计划）；net-class/pour/keepout/silk 进 §F |
 | **增量执行** | **route_stages `--up-to` 断点 + stage name 唯一** | ⬜ 增量可调试，配 §F 诊断闭环 |
 | **Tier0** | **corridor-as-data（纯 schema 旁支，零 router 改动）** | ⬜ 低成本、可独立做 |
 | E–F | 路由 fork + 诊断闭环——**章节字母 = 执行序** | ⬜（C3+D 已解锁 E；**E-Tier2 = bundle 路由实现**） |
@@ -294,6 +294,14 @@ token，**不是** `ZonePlacement.source_type`/`source`（错建的内存/protob
 另需写 `.kicad_pro`（事实 10 之外的通道）。
 
 ### D-Tier2. bundle 总线传输（mixed single/diff）+ `batch_route_bundle` 契约【先于 E-Tier2】
+**状态（2026-06-20）**：**桶①（D 内 model + geometry）已落地翻绿**——`layout_plan.py` 加 `BundleStage`/
+`SingleLane`/`DiffLane`/`Trunk`/`TrunkVertex`/`SpacingOverride`/`Breakout`/`BundleRouteConfig`/`RipUpBudget` +
+判别联合 `route_stages: list[RouteStage | BundleStage]`（`_stage_kind` 判别器，现存 single/diff 不变）+
+`resolve_nets` bundle 分支；新模块 `bundle_geometry.py`（`cross_section_offsets` 几何 SSOT + `bundle_artifact`）。
+契约测试 `test_bundle_contract.py` 桶① 21 项全绿、桶② 2 项仍 strict-xfail。**桶②（`batch_route_bundle` 实现 +
+breakout 扇出）= E-Tier2，用户 2026-06-20 拍板留到 §E**（实际路由实现复杂）；契约已由桶② 棘轮冻死、E 照此实现。
+**剩余 D 侧集成**：`build_steps.generate_layout_plan`（D4）尚未对 bundle stage 调 `bundle_artifact` 注入 offset 进
+`<t>.layout_plan.json`（现产物仍 `model_dump`+`resolved_nets`，不含 offset）——配 e2e 时补；不挡桶①单元绿。
 **问题**：现 `route_stages` 的最小单元 = 一条 net 整条路由到完成，无法表达"两端 fanout、中间一条 bus
 平行同形走线"这类布线意图（手工布线核心模式：BGA 先扇出成两端都接受的公共顺序，中段整把 bus 平行拉过去、
 零调序；或两远端先到近 checkpoint 再汇合）。`pitch` 标量也错——DDR byte lane 是 **single+diff 混编**的
@@ -328,7 +336,7 @@ morph 路径（范围被两端钉死、很小）；其中**外层 bundle 顺序/
 - `build_steps.generate_layout_plan`（D4）须扩：写 `<t>.layout_plan.json` 时调 D-t2.2b 把**算好的 offset** 注入
   产物（现产物 = `model_dump`+`resolved_nets`、不含 offset；T-A5 要求含）。
 - 与 D3 rule area / placement **正交**：bundle 是布线侧，不碰 placement（仍只 enabled+sheetname，事实 10）。
-- [ ] **D-t2.2** `bundle` stage 类型（与 `mode: single|diff` 并列的第三类 `type: bundle`）：
+- [x] **D-t2.2** `bundle` stage 类型（与 `mode: single|diff` 并列的第三类 `type: bundle`）：
   - `lanes`（**有序、bundle 全局不变量**：每条 `{net: addr}` 或 `{diff: [p,n], gap, width?, impedance?}`）；
   - `trunk.centerline` = **带 spacing 的顶点序列**（每顶点 `{at: [x,y], spacing}`，≥2 点）——相邻顶点 spacing
     相等=刚性段、不等=过渡段；可选 `spacing_overrides`（`{after: <lane>, gap}` 调单条 lane 间距）；
@@ -339,42 +347,42 @@ morph 路径（范围被两端钉死、很小）；其中**外层 bundle 顺序/
   loud 校验（S5a）：lanes≥1、diff lane 正好 2 net、gap/width/spacing>0、centerline≥2 顶点、`spacing_overrides.after`
   指真实 lane、breakout.at 是真实 room、显式 order 必是 bundle 成员的一个排列、两端 order 自洽。docstring 记：
   fanout 语义=把两端原生序搬成 trunk 公共序（trunk 零交叉）；diff lane 全程不解散（L1 内在约束）。
-- [ ] **D-t2.2b** 纯函数 `(lanes, segment_spacing) → [(net, signed_offset, width, kind, diff_partner?, polarity?)]`
+- [x] **D-t2.2b** 纯函数 `(lanes, segment_spacing) → [(net, signed_offset, width, kind, diff_partner?, polarity?)]`
   **逐刚性段**算偏移（默认以 centerline 居中累加），并输出**过渡段的两端 offset 边界**（A/B profile）供 E morph。
   bundle 几何 SSOT。测：混编横截面**手算 offset 当 oracle**的最小 fixture（按构造定答案）+ 变异自检（动一条 lane
   宽度/gap/段 spacing，下游对应 offset 必变，否则红）。
-- [ ] **D-t2.3** 冻结 `batch_route_bundle` 契约（**D/E 边界，strict-xfail oracle，先于 E**）：入参 = **分段 trunk**
+- [x] **D-t2.3（契约已冻；实现 = E-Tier2）** 冻结 `batch_route_bundle` 契约（**D/E 边界，strict-xfail oracle，先于 E**）：入参 = **分段 trunk**
   （centerline 顶点序列 + 每段 spacing；刚性段成员 offset 给死、过渡段两端 offset 给死）+ 有序成员表（net/offset/
   width/kind，diff 项带 P/N 配对 + 极性）+ 两端 breakout（part + order）+ 共享几何 kwargs（track_width/clearance/
   via_*）；`return_results` 结构按 `batch_route` 同构、**逐成员**报 routed/blocked。钉 = 像 D2 `GridRouteOverride`
   那样 AST 取真 entry 签名做 union drift guard（E-Tier2 实现后翻绿）。
-- [ ] **D-t2.4** `resolve_nets`/anchor 解析扩展：bundle 成员**按序**经 bridge② 解析；diff lane 的 P/N 都要解析。
+- [x] **D-t2.4** `resolve_nets`/anchor 解析扩展：bundle 成员**按序**经 bridge② 解析；diff lane 的 P/N 都要解析。
 - [ ] **D-t2.1（可分离旁支）** `anchors`：命名几何点/线，供"两远端单线打 checkpoint 再汇合"这类**非 bundle**
   用例（route-to-point）。与 bundle 正交，可后置；bundle 自带 trunk 端点不依赖它。
 
 **测试计划与判据（D-Tier2；tests-first S0，先全红、实现靠移除/失活 xfail 翻绿）**——三桶分明：标注 D 内可自测项
 + 判据，与"E 读取实现的接口模板"（后者须 docstring 写全协议 + 接口 delta，= 本仓"协议写在契约测试 docstring"纪律）。
 共用 mixed DDR fixture：8 单端 DQ + 2 对时钟 diff + 一处转角 neck-down 分段（刚性—过渡—刚性）。
-**棘轮已落地（2026-06-19，全红）**：`test/exporters/pcb/layout/test_bundle_contract.py`（23 strict-xfail，
-T-A1–T-A5 + T-B1/T-B2；冻结的接口名 + 横截面约定 + result schema 全写在模块 docstring）。桶①gated on `_DT2_LANDED`
-（layout_plan 的 bundle 符号 + 新 `bundle_geometry` 模块），桶②additionally gated on `_E_TIER2_LANDED`（AST 探
-router `route_bundle.batch_route_bundle`，缺则红、router repo 全缺则响亮 skip）。负向用例与 base-bundle 正向控制
-**成对**（落地前控制即抛 → 干净 XFAIL，杜绝 D2 把 `type: bundle` 当未知 stage 拒掉造成的 wrong-reason XPASS）。
-实现靠移除/失活 xfail 翻绿，各项 `- [ ]` 仍待实现勾选。
+**棘轮已落地（2026-06-19）+ 桶① 已实现翻绿（2026-06-20）**：`test/exporters/pcb/layout/test_bundle_contract.py`
+（T-A1–T-A5 + T-B1/T-B2；冻结的接口名 + 横截面约定 + result schema 全写在模块 docstring）。桶①gated on
+`_DT2_LANDED`（layout_plan 的 bundle 符号 + 新 `bundle_geometry` 模块）= **现 21 项全绿**；桶②additionally gated
+on `_E_TIER2_LANDED`（AST 探 router `route_bundle.batch_route_bundle`，缺则红、router repo 全缺则响亮 skip）=
+**仍 2 项 strict-xfail，待 E-Tier2**。负向用例与 base-bundle 正向控制**成对**（落地前控制即抛 → 干净 XFAIL，杜绝
+D2 把 `type: bundle` 当未知 stage 拒掉造成的 wrong-reason XPASS）。桶① `- [x]` = 已翻绿，桶② `- [ ]` 待 E-Tier2。
 - **桶① D 内可自测（无 router / 无 KiCad；纯函数 + schema + 真 build IR fixture）**
-  - [ ] **T-A1 schema 正向**：fixture 解析成 typed model。判据：lanes 顺序/类型、分段 spacing、breakout order
+  - [x] **T-A1 schema 正向**：fixture 解析成 typed model。判据：lanes 顺序/类型、分段 spacing、breakout order
     逐字段断言 == 期望（非"跑通即绿"）。
-  - [ ] **T-A2 schema 负向（loud-or-nothing，逐条独立 case 证明会拒）**：diff lane≠2 net / gap·width·spacing≤0 /
+  - [x] **T-A2 schema 负向（loud-or-nothing，逐条独立 case 证明会拒）**：diff lane≠2 net / gap·width·spacing≤0 /
     centerline<2 顶点 / `spacing_overrides.after` 悬空 / 显式 order 非成员排列 / 两端 order 不自洽 / 未知键
     (`extra=forbid`)。判据：每畸形输入抛**指定异常类型 + 消息含定位**，且对应合法输入不抛（正负成对）。
-  - [ ] **T-A3 `profile→offset` 纯函数（几何 SSOT，最关键）**：① 按构造 oracle——**手算** mixed 横截面 offset 表
+  - [x] **T-A3 `profile→offset` 纯函数（几何 SSOT，最关键）**：① 按构造 oracle——**手算** mixed 横截面 offset 表
     == 输出（容差）；② **变异自检（必配，防失明）**——动一条 lane width/gap/段 spacing，对应下游 offset 必变
     （断言 before≠after），不变 = 测试 bug；③ 居中不变量——profile 关于 centerline 对称（或按 reference 规则）；
     ④ 过渡段输出两端 offset 边界 A/B。判据：== 手算 且 变异传播 且 居中成立。
-  - [ ] **T-A4 `resolve_nets`（consumer-oracle，真 build IR 的 `signal_nets`，无 router）**：bundle 成员**按序**
+  - [x] **T-A4 `resolve_nets`（consumer-oracle，真 build IR 的 `signal_nets`，无 router）**：bundle 成员**按序**
     解析 == bridge②；diff lane 的 P/N 都解析；缺失地址响亮（`LayoutPlanError`）。判据：有序列表逐项 == ir 期望
     + 负例抛错。
-  - [ ] **T-A5 artifact schema（D 产 `<t>.layout_plan.json`）= E1 的【文件】接口模板**：产物含分段 trunk + 算好的
+  - [x] **T-A5 artifact schema（D 产 `<t>.layout_plan.json`）= E1 的【文件】接口模板**：产物含分段 trunk + 算好的
     offset / 有序成员表 / breakout order / resolved nets；JSON schema 校验 + 关键字段非空。**`.schema.json` +
     docstring = E1 读取的文件接口 SSOT，须写全（这是 E 开始时照着读的模板之一）。**
 - **桶② D/E 契约（strict-xfail，E 实现前恒红）= E 读取实现的【Python】接口模板（须 docstring 写全签名 + result schema）**
@@ -397,7 +405,7 @@ router `route_bundle.batch_route_bundle`，缺则红、router repo 全缺则响�
   可留一个板绝对坐标逃逸口。
 - `Room` 几何扩展：加 `polygon: [[x,y],...]`（loud：≥3 点、非自交）作为 `origin/size` 之外的第三种几何；KiCad
   placement rule area 本就是 `Polygon` zone（`rule_area.py:128` 现只喂 4 个 bbox 角点），改动小。**并修一个现存
-  S5a 隐患**：`Room.rotation/layers/anchor`（`layout_plan.py:157-160`）现被解析却被 D3 完全忽略
+  S5a 隐患**：`Room.rotation/layers/anchor`（`layout_plan.py:164-166`）现被解析却被 D3 完全忽略
   （`_make_placement_rule_area` 只吃 bbox + 全信号层，`rule_area.py:83`）——要么接线生效（rotation→旋转矩形多边形、
   layers/side→zone 层），要么删除，不留"声明却静默忽略"。
 - 新增 `placements` 段，按 **ato 地址** key（与全文一致，不用 designator）：`{component: <addr>, at: [x,y],
@@ -429,7 +437,7 @@ router `route_bundle.batch_route_bundle`，缺则红、router repo 全缺则响�
 | 元件旋转（per-instance） | 同上，无 per-instance 文本通道 | `layout_ir.py:149`（读 `fp.at.r`） | **本 D-Tier3 修** |
 | 元件正反面 side | 库 footprint 默认层 / 复用件从板读 | `transformer.py:1872`（`lib_fp.layer`） | **本 D-Tier3 修**（`placements.side`） |
 | 板框 Edge.Cuts 几何 | 只能 GUI 画 / build-server agent 工具 / reuse；无文本源字段 | `tool_layout.py:112` 读、`tool_definitions.py:321` 仅 server-agent API；`config.py:458` 的 "Edge.Cuts" 只是层定义非几何 | **本 D-Tier3 修**（`board.outline`） |
-| 叠层 stackup（**完整**：层名+厚度/材料/Er） | 只能 KiCad PCB setup 配；atopile 只读不写 | `cost_estimation.py:278-283` 仅读；阻抗依赖 `route.py:256-258` | **本 D-Tier3 修**（`board.stackup`，完整，差分阻抗硬依赖） |
+| 叠层 stackup（**完整**：层名+厚度/材料/Er） | 只能 KiCad PCB setup 配；atopile 只读不写 | `src/atopile/server/domains/cost_estimation.py:278-283` 仅读；阻抗依赖 `route.py:256-258` | **本 D-Tier3 修**（`board.stackup`，完整，差分阻抗硬依赖） |
 | 布线 design rule（clearance/线宽/via/impedance） | 已是文本可授权 | `route_stages.config` = `GridRouteOverride`（D2） | **已覆盖** |
 | 铜走线 tracks / vias | reuse 或手工 | `layout_sync.py:252-286` | **§E route_stages 从文本生成**（fork 核心目标，非遗留缺陷） |
 | 板级 net-class / DRC 规则表（KiCad DRC 对齐） | 只能 KiCad Design Rules 配；atopile 源无 authoring | `grep net_class/design_rule src/atopile` = 空 | **进 §F**（DRC 对齐；缺失须 loud，不缺省） |
@@ -440,6 +448,73 @@ router `route_bundle.batch_route_bundle`，缺则红、router repo 全缺则响�
 排期：D-Tier3 = 生成式 flow 必备、**关键路径**，含三件 must-do——摆放（room 相对坐标）+ 板框 outline + **完整叠层**
 （差分阻抗硬依赖，不可退化为仅层数）；铜走线由 §E 覆盖；板级 net-class/DRC 表、铜皮 pour、非 placement 禁布、丝印
 全部**进 §F**，且 **loud-or-nothing：缺失必响亮，禁静默默认**。
+
+**测试计划与判据（D-Tier3；tests-first S0，先全红，实现靠移除/失活 xfail 翻绿）——共 31 个 strict-xfail
+（桶① 29 + 桶② 2）；桶③ e2e 属后续 DoD、不计入。** 棘轮文件（待建）：`test/exporters/pcb/layout/
+test_placement_contract.py`（摆放 + room 几何）+ `test/exporters/pcb/layout/test_board_section_contract.py`
+（板框 + 叠层）。门控 `_DT3_LANDED` = 全部 D-Tier3 符号导入（`Placement` 模型 / `board` 段 `BoardOutline`·
+`Stackup`·`StackupLayer` / `Room.polygon` 字段 / room 相对解析纯函数 `resolve_placement` / 叠层→层表纯函数
+`stackup_layers`）；半落地（改名只改一半）保持红。负向用例一律与正向控制**成对**（落地前控制即抛 → 干净 XFAIL，
+杜绝 wrong-reason XPASS）。三件 must-do（摆放 / outline / 完整叠层）各自 schema 正负 + 纯函数 oracle + 变异自检。
+
+- **桶①（D 内可自测：schema + 纯函数 + rule_area 几何 + 真 build IR fixture；无 router / 无 KiCad）= 29**
+
+  *摆放（room 相对坐标）— 10*
+  - [ ] **TP1** `placements` 正向（逐字段）：`{component: <addr>, at:[x,y], rotation, side:F|B}` 解析成 typed
+    model，地址 / at / rotation / side 逐字段断言（非"跑通即绿"）。— 1
+  - [ ] **TP2** `placements` 负向（loud-or-nothing，逐条 + 正向控制成对）：未知键(`extra=forbid`) / `side`∉{F,B} /
+    缺 `component` / 缺 `at` / `at` 非二元。每例抛指定异常 + 消息含定位，合法控制不抛。— 5
+  - [ ] **TP3** room 相对→板绝对 纯函数 oracle：`resolve_placement` 把 room 相对 at 经 room origin/anchor 合成板
+    绝对坐标 == **手算**（按构造定答案）。— 1
+  - [ ] **TP4** 变异自检（防失明，必配）：动 room origin/anchor，成员板绝对坐标必变（before≠after）；不变 = 测试 bug。— 1
+  - [ ] **TP5** 板绝对逃逸口：标注绝对坐标的 placement 原样落该坐标、不经 room 合成。— 1
+  - [ ] **TP6** placements vs reuse 优先级（消费者-oracle，纯函数判定）：文本给值即覆盖 reuse、缺省回退 reuse
+    （钉死 `transformer.py:176/2013-2080` 自动网格摊开被文本权威取代的优先级）。— 1
+
+  *room 几何 + 静默忽略隐患修复 — 6*
+  - [ ] **TR1** `Room.polygon` 正向 + rule area：polygon（≥3 点）解析；`generate_rule_areas` 产的 zone == 该 polygon
+    （非 bbox 四角；扩 `rule_area.py:128` 的 `Polygon`、`:83` `_make_placement_rule_area`）。— 1
+  - [ ] **TR2** room 几何 负向（loud）：polygon<3 点 / polygon 自交 / `origin+size` 与 `polygon` 多重几何并存（互斥）。— 3
+  - [ ] **TR3** `Room.rotation` 接线生效（不再静默忽略）：rotation≠0 的 room 产**旋转后的** polygon rule area——钉死
+    `layout_plan.py:164-166`（rotation/layers/anchor 现被解析却被 `rule_area.py:83` 完全忽略的 S5a 隐患）。— 1
+  - [ ] **TR4** `Room.layers`/`side` 接线生效：显式 layers 产对应 zone 层（非 `_copper_layers` 全信号层默认，
+    `rule_area.py:47-48`）。要么接线生效、要么删字段，不留"声明却静默忽略"。— 1
+
+  *板框 outline — 4*
+  - [ ] **TB1** `board.outline` 正向（逐字段）：`{origin,size}` 与 `polygon: [[x,y],...]` 两形都解析。— 1
+  - [ ] **TB2** `board.outline` 负向（loud）：polygon<3 点 / 自交。— 2
+  - [ ] **TB3** outline 缺失→响亮（sign-off）：管线消费无 outline 的 plan 必 loud——钉 `obstacle_map.py:393-395`
+    无 board_bounds 即无界布线、铜溢板外、板不可制造的静默灾难。— 1
+
+  *完整叠层 stackup（含"两层/四层默认来路不明"bug 取证）— 9*
+  - [ ] **TS1** `board.stackup` 正向（逐字段）：有序 copper 层名 + 每介电层 thickness/material/Er，逐字段断言
+    （**完整**叠层，非仅层数）。— 1
+  - [ ] **TS2** `board.stackup` 负向（loud）：只给层数无介电（不完整=退化为仅层数，**显式拒**）/ thickness≤0 /
+    层名重复 / copper<2。— 4
+  - [ ] **TS3** 叠层→层表 单一权威 纯函数 oracle：`stackup_layers(stackup)` == 有序 copper 层集（== 手算）。这是
+    层数的**唯一真相**（桶②两条权威棘轮都派生自它）。— 1
+  - [ ] **TS4** stackup 缺失→响亮（sign-off）：管线消费无 stackup 的 plan 必 loud。— 1
+  - [ ] **TS5** 阻抗硬依赖：route_stage 处 impedance 模式但无 `board.stackup` → 必 loud——钉 `route.py:256-258`
+    （impedance 无 stackup 静默退回固定线宽 = 阻抗失控；= D-Tier2 差分阻抗的分层耦合/阻抗规则白做）。— 1
+  - [ ] **TS-LM** 层数默认 divergence 取证（AST/值，D 内，**bug 现状锁定**）：钉死 atopile 默认 copper =
+    `[F.Cu, B.Cu]`（2 层，`config.py:374,380`）≠ router 默认 `DEFAULT_4_LAYER_STACK = ['F.Cu','In1.Cu','In2.Cu',
+    'B.Cu']`（4 层，`routing_constants.py:8`；`route.py:231` 无 `layers` 入参即取之），且二者**无共享来源**。锁死两处
+    "来路不明"魔数位置，为桶②两条权威棘轮提供取证（魔数被静默改即红）。— 1
+
+- **桶②（D/build·D/E 边界，consumer-oracle，strict-xfail 至下游落地）= 2 —— 即用户要求"之前的两层/四层 bug 现在
+  测试必须红"的两条棘轮**
+  - [ ] **TS-AUTH-A** 板生成层表权威（gated on `_DT3_BUILD_LANDED`）：断言 atopile **实际生成板**的 copper 层表
+    == `stackup_layers(board.stackup)`（断**接线后的板**、非"schema 解析通过"——`board.stackup` 仅解析不足以翻绿），
+    **杀掉 `config.py:374,380` 硬编码 2 层默认**。**现红**（无 stackup 权威）；权威接线落地后翻绿。— 1
+  - [ ] **TS-AUTH-B** router 层表权威（gated on `_E1_LANDED`）：E1 把 `stackup_layers(board.stackup)` 当 `layers`
+    传给 router，**绝不吃** `route.py:231` 的 4 层默认。**现红**（E1 未建）；E1 落地后翻绿。— 1
+  > **bug 覆盖闭环**：TS-LM（现绿、取证两处魔数分叉）+ TS-AUTH-A/B（现红、钉死修复后单一权威）合起即"两层/四层默认
+  > 来路不明"bug 的完整覆盖——修复门控 = "层数只有 `board.stackup` **一个**权威源、atopile 板表与 router `layers`
+  > 都由 `stackup_layers()` 派生 ⟹ 物理上不可能再分叉"。权威落地前 TS-AUTH-A/B **必为红**（用户要求）。
+
+- **桶③（端到端，属后续 DoD，不在 D-Tier3 单元）**：纯文本（无 reuse）端到端构建一块板——`board.outline` + 完整
+  `board.stackup` + `placements` 全文本给定 → 生成 .kicad_pcb → 重读 `semantic_view` 验层表/板框/摆放落位 == plan
+  （含层表 == stackup 权威，板上无 In1/In2.Cu 幽灵层）。
 
 ### 增量执行 / 断点调试（route_stages 按号停-取-回退）
 **动机（用户）**：`layout.yaml` 是顺序文件，必须**增量可调试**——可只执行到第 N 号 stage、取该部分结果，由 agent/人
