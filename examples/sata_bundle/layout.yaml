@@ -1,0 +1,46 @@
+# SATA channel layout intent (D-Tier2 bundle).
+#
+# The two SATA differential pairs (TX, RX) travel together as ONE bundle from the
+# host (placed northeast) down to the device (south). The trunk runs rigidly south,
+# then necks down (a transition segment) as it fans into the device breakout.
+rooms:
+  - module: host
+  - module: device
+
+route_stages:
+  - type: bundle
+    name: sata_link
+    lanes:
+      # TX pair, then RX pair — the bundle-global member order (P before N).
+      - diff: [host.tx.p.line, host.tx.n.line]
+        gap: 0.2
+        width: 0.2
+        impedance: 100
+      - diff: [host.rx.p.line, host.rx.n.line]
+        gap: 0.2
+        width: 0.2
+        impedance: 100
+    trunk:
+      centerline:
+        # northeast → south. Equal spacings ⇒ rigid; the final unequal pair ⇒ a
+        # transition (neck-down) into the device breakout.
+        - at: [40, 8]
+          spacing: 0.5
+        - at: [40, 40]
+          spacing: 0.5
+        - at: [22, 58]
+          spacing: 0.3
+    breakouts:
+      # host derives its fanout order from the lane order; the device end mirrors it
+      # (an explicit permutation — the pairs enter from the opposite side).
+      - at: host
+      - at: device
+        order:
+          - host.rx.n.line
+          - host.rx.p.line
+          - host.tx.n.line
+          - host.tx.p.line
+    config:
+      track_width: 0.2
+      clearance: 0.15
+      impedance: 100

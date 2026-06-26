@@ -36,7 +36,7 @@ SSOT），BACKLOG 只留"结论 + 代码指针"，绝不复述实现细节或调
 | C | room 几何（forced via / room 复制） | ✅ |
 | **C3** | **group→sheetname 迁移（room 去 group 化）** | ✅ 2026-06-15（见 §C3 代码指针） |
 | **D** | **layout.yaml 加载 + placement rule area（D1–D4）** | ✅ 2026-06-16（见 §D 代码指针）；D5 后置 |
-| **D-Tier2** | **bundle 总线传输 schema + geometry（桶①）** | 🔶 桶① ✅ 2026-06-20（model+geometry 落地翻绿）；桶② `batch_route_bundle` 契约 strict-xfail，实现移 §E E-Tier2（用户拍板） |
+| **D-Tier2** | **bundle 总线传输 schema + geometry（桶①）** | ✅ 桶① 2026-06-20（model+geometry）+ D 侧 build 集成 2026-06-25（`generate_layout_plan` 调 `bundle_artifact`，e2e `examples/sata_bundle`）；桶② `batch_route_bundle` 契约 strict-xfail，实现移 §E E-Tier2（用户拍板） |
 | **D-Tier3** | **自包含：摆放（room 相对坐标）+ 板框 outline + 完整叠层** | ⬜ **关键路径**（完整叠层 = 差分阻抗硬依赖）；测试计划已定（31 strict-xfail，见 §D-Tier3 测试计划）；net-class/pour/keepout/silk 进 §F |
 | **增量执行** | **route_stages `--up-to` 断点 + stage name 唯一** | ⬜ 增量可调试，配 §F 诊断闭环 |
 | **Tier0** | **corridor-as-data（纯 schema 旁支，零 router 改动）** | ⬜ 低成本、可独立做 |
@@ -300,8 +300,13 @@ token，**不是** `ZonePlacement.source_type`/`source`（错建的内存/protob
 `resolve_nets` bundle 分支；新模块 `bundle_geometry.py`（`cross_section_offsets` 几何 SSOT + `bundle_artifact`）。
 契约测试 `test_bundle_contract.py` 桶① 21 项全绿、桶② 2 项仍 strict-xfail。**桶②（`batch_route_bundle` 实现 +
 breakout 扇出）= E-Tier2，用户 2026-06-20 拍板留到 §E**（实际路由实现复杂）；契约已由桶② 棘轮冻死、E 照此实现。
-**剩余 D 侧集成**：`build_steps.generate_layout_plan`（D4）尚未对 bundle stage 调 `bundle_artifact` 注入 offset 进
-`<t>.layout_plan.json`（现产物仍 `model_dump`+`resolved_nets`，不含 offset）——配 e2e 时补；不挡桶①单元绿。
+**D 侧集成已闭环（2026-06-25）**：`build_steps.generate_layout_plan`（D4）现对每个 bundle stage 调
+`bundle_artifact(stage, ir)`，把**算好的 cross-section offset + 分段 trunk + breakout 顺序 + resolved_nets**
+写进 `<t>.layout_plan.json`（plain single/diff stage 仍走 `model_dump`）——几何 SSOT（`bundle_geometry`）即落盘
+内容、E1 不再二次推导。e2e 由 `examples/sata_bundle`（host⇄device 的 SATA TX/RX 双 diff lane、NE→S trunk
+带 neck-down 过渡段；自带本地件+复用板，全离线构建）+ `test/end_to_end/test_bundle_build.py` 钉死：S0 棘轮
+`_BUNDLE_BUILD_WIRED` AST 探 `generate_layout_plan` 是否引用 `bundle_artifact`（撤线即 strict-xfail），且断言
+产物 offset **== `cross_section_offsets` SSOT**（证明注入而非重算）。
 **问题**：现 `route_stages` 的最小单元 = 一条 net 整条路由到完成，无法表达"两端 fanout、中间一条 bus
 平行同形走线"这类布线意图（手工布线核心模式：BGA 先扇出成两端都接受的公共顺序，中段整把 bus 平行拉过去、
 零调序；或两远端先到近 checkpoint 再汇合）。`pitch` 标量也错——DDR byte lane 是 **single+diff 混编**的
@@ -333,8 +338,8 @@ morph 路径（范围被两端钉死、很小）；其中**外层 bundle 顺序/
 - bundle 的 router override **不是** `GridRouteOverride`（那钉在 batch_route/diff 两入口）——bundle 钉
   `batch_route_bundle`，须新建 bundle config 模型（per-bundle + per-lane 两级），T-B1 独立 drift guard。
 - `LayoutPlan` 加 `anchors` 字段（D-t2.1，可后置）。
-- `build_steps.generate_layout_plan`（D4）须扩：写 `<t>.layout_plan.json` 时调 D-t2.2b 把**算好的 offset** 注入
-  产物（现产物 = `model_dump`+`resolved_nets`、不含 offset；T-A5 要求含）。
+- [x] `build_steps.generate_layout_plan`（D4）写 `<t>.layout_plan.json` 时对 bundle stage 调 `bundle_artifact`
+  注入**算好的 offset**（2026-06-25 落地，e2e `test_bundle_build.py`；plain stage 仍 `model_dump`）。
 - 与 D3 rule area / placement **正交**：bundle 是布线侧，不碰 placement（仍只 enabled+sheetname，事实 10）。
 - [x] **D-t2.2** `bundle` stage 类型（与 `mode: single|diff` 并列的第三类 `type: bundle`）：
   - `lanes`（**有序、bundle 全局不变量**：每条 `{net: addr}` 或 `{diff: [p,n], gap, width?, impedance?}`）；

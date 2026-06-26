@@ -1,0 +1,43 @@
+"""
+A minimal SATA channel, used to exercise the D-Tier2 bundle route end to end.
+
+A SATA link is two differential pairs — TX {P,N} and RX {P,N}. Here a `host` and a
+`device` port are linked by those two pairs; the bundle that carries them across
+the board (northeast → south) is the route described in `layout.yaml`.
+
+Every diff-pair line is brought out through a series 0402 (a stand-in for the SATA
+AC-coupling cap) so each line is a real footprint-backed `_P`/`_N` net and the two
+ports become real board rooms (`host`, `device`). The 0402 value is irrelevant to
+the routing demo — it reuses this repo's only local part so the build stays fully
+offline.
+"""
+#pragma experiment("FOR_LOOP")
+import DifferentialPair
+import Resistor
+
+
+module SataPort:
+    """One end of the link: a TX and an RX differential pair, each line anchored to
+    a local 0402 so it has a pad and a named net."""
+    tx = new DifferentialPair
+    rx = new DifferentialPair
+
+    term = new Resistor[4]
+    for r in term:
+        r.resistance = 1kohm +/- 20%
+        r.package = "R0402"
+
+    tx.p.line ~ term[0].unnamed[0]
+    tx.n.line ~ term[1].unnamed[0]
+    rx.p.line ~ term[2].unnamed[0]
+    rx.n.line ~ term[3].unnamed[0]
+
+
+module Top:
+    host = new SataPort
+    device = new SataPort
+
+    # the SATA link: TX and RX differential pairs span host ⇄ device. This is the
+    # bundle routed (NE → S) in layout.yaml.
+    host.tx ~ device.tx
+    host.rx ~ device.rx

@@ -1,0 +1,15 @@
+requires-atopile: ^0.14.0
+
+paths:
+  src: ./
+  layout: ./layout
+
+builds:
+  top:
+    entry: sata.ato:Top
+    layout_config: ./layout.yaml
+
+  # the reusable port sub-layout. Its committed board (layout/port/port.kicad_pcb)
+  # is what stamps the `host`/`device` room sheetnames into the top build.
+  port:
+    entry: sata.ato:SataPort

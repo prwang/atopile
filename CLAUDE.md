@@ -49,10 +49,10 @@ sheetname 同步）→ `generate_layout_plan`（§D：placement rule area + `<t>
 
 **layout sidecar 模块**（`src/faebryk/exporters/pcb/layout/`，各带契约测试，细节读 code/docstring）：
 - `layout_sync.py` — 从板回读 room（sheetname）布局（`pull_room_layout`，`_get_room_name:68`）。
-- `layout_plan.py` — `layout.yaml` 意图模型（D2 `rooms`/`route_stages`；D-Tier2 `BundleStage` 待落地）。
+- `layout_plan.py` — `layout.yaml` 意图模型（D2 `rooms`/`route_stages`；D-Tier2 `BundleStage` 判别联合已落地）。
 - `rule_area.py` — 每 room 一个 placement zone（D3，**只** `enabled`+`sheetname`，见约束 §source_type）。
 - `room_ops.py` — 强制 via / room copy / `pad_board_xy` 坐标变换（room 局部→板坐标，含 rotate；§C 已实现）。
-- `bundle_geometry.py` — D-Tier2 bundle 横截面 offset 几何 SSOT（**待实现**，契约见 `test_bundle_contract.py`）。
+- `bundle_geometry.py` — D-Tier2 bundle 横截面 offset 几何 SSOT（已落地；`generate_layout_plan` 经 `bundle_artifact` 注入 `<t>.layout_plan.json`，契约 `test_bundle_contract.py` + e2e `test_bundle_build.py`）。
 - `libs/kicad/layout_ir.py` — `layout_ir.json` = **bridge②**（ato 地址 → net/pad/room）；布线与诊断按地址定位，不解析 KiCad 文件。
 
 **布线器**（submodule `vendor/KiCadRoutingTools`，跑在 **system python3**，非 venv——rust 内核 ext 未为 venv 构建）：

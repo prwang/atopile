@@ -215,6 +215,9 @@ examples/**/parts/
 !examples/i2c/parts/
 !examples/i2c/parts/Texas_Instruments_TCA9548APWR/
 !examples/i2c/parts/Texas_Instruments_TCA9548APWR/**
+!examples/sata_bundle/parts/
+!examples/sata_bundle/parts/UNI_ROYAL_0402WGF1001TCE/
+!examples/sata_bundle/parts/UNI_ROYAL_0402WGF1001TCE/**
 
 # KiCad temporary files
 **/~*.kicad_pcb.lck

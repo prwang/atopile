@@ -905,7 +905,11 @@ def generate_layout_plan(ctx: BuildStepContext) -> None:
         logger.debug("No layout_config for this build; skipping layout-plan step")
         return
 
-    from faebryk.exporters.pcb.layout.layout_plan import load_layout_plan
+    from faebryk.exporters.pcb.layout.bundle_geometry import bundle_artifact
+    from faebryk.exporters.pcb.layout.layout_plan import (
+        BundleStage,
+        load_layout_plan,
+    )
     from faebryk.exporters.pcb.layout.rule_area import generate_rule_areas
     from faebryk.libs.kicad.layout_ir import layout_ir
 
@@ -922,6 +926,15 @@ def generate_layout_plan(ctx: BuildStepContext) -> None:
     kicad.dumps(pcb.pcb_file, config.build.paths.layout)
 
     artifact = plan.model_dump(mode="json")
+    # A bundle stage carries COMPUTED geometry — the cross-section member offsets +
+    # the segmented trunk E1 routes. Replace its raw model dump with the
+    # `bundle_artifact` fragment so the geometry SSOT (bundle_geometry) is what
+    # lands on disk, never a re-derivation by the consumer. Plain route stages
+    # (single/diff) pass through their model dump unchanged.
+    artifact["route_stages"] = [
+        bundle_artifact(stage, ir) if isinstance(stage, BundleStage) else dumped
+        for stage, dumped in zip(plan.route_stages, artifact["route_stages"])
+    ]
     artifact["resolved_nets"] = plan.resolve_nets(ir)
     out_path = config.build.paths.output_base.with_suffix(".layout_plan.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)

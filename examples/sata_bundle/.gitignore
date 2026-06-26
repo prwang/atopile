@@ -1,0 +1,6 @@
+build/
+# allow the port layout (the reuse source); the generated top board is derived.
+!layout
+layout/top
+layout/port/*
+!layout/port/port.kicad_pcb
