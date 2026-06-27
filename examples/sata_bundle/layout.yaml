@@ -7,6 +7,19 @@ rooms:
   - module: host
   - module: device
 
+# The board-level facts (D-Tier3): the SATA pairs carry controlled 100Ω
+# impedance, so a COMPLETE stackup is a hard dependency — declare one. The
+# copper layer set here is the single authority for the board's layer count.
+board:
+  outline:
+    origin: [0, 0]
+    size: [60, 70]
+  stackup:
+    layers:
+      - {name: F.Cu, type: copper, thickness: 0.035}
+      - {name: d1, type: dielectric, thickness: 0.2, material: FR4, epsilon_r: 4.5}
+      - {name: B.Cu, type: copper, thickness: 0.035}
+
 route_stages:
   - type: bundle
     name: sata_link

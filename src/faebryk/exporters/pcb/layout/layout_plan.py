@@ -91,6 +91,51 @@ class LayoutPlanError(Exception):
 
 
 # ---------------------------------------------------------------------------
+# shared 2D-polygon helpers (used by Room.polygon and board.outline). A boundary
+# is a list of (x, y) vertices; "self-intersecting" = any two NON-adjacent edges
+# cross. Kept dependency-free (no shapely): O(n²) over a handful of points.
+# ---------------------------------------------------------------------------
+def _segments_intersect(
+    a: tuple[float, float],
+    b: tuple[float, float],
+    c: tuple[float, float],
+    d: tuple[float, float],
+) -> bool:
+    """True if open segment ab properly crosses open segment cd."""
+
+    def orient(p, q, r) -> float:
+        return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+
+    o1, o2 = orient(a, b, c), orient(a, b, d)
+    o3, o4 = orient(c, d, a), orient(c, d, b)
+    # strict straddle on both sides ⇒ a proper crossing (shared endpoints of
+    # adjacent edges, handled by the caller's index skipping, are not a crossing).
+    return (o1 * o2 < 0) and (o3 * o4 < 0)
+
+
+def _polygon_self_intersects(points: list[tuple[float, float]]) -> bool:
+    n = len(points)
+    edges = [(points[i], points[(i + 1) % n]) for i in range(n)]
+    for i in range(n):
+        for j in range(i + 1, n):
+            # skip adjacent edges (they legitimately share a vertex) and the
+            # wrap-around adjacency between the last and first edge.
+            if j == i or j == (i + 1) % n or i == (j + 1) % n:
+                continue
+            if _segments_intersect(*edges[i], *edges[j]):
+                return True
+    return False
+
+
+def _validate_polygon(points: list[tuple[float, float]], where: str) -> None:
+    """Loud-or-nothing: a polygon must have ≥ 3 points and be simple (S5a)."""
+    if len(points) < 3:
+        raise ValueError(f"{where}: polygon needs ≥ 3 points, got {len(points)}")
+    if _polygon_self_intersects([tuple(p) for p in points]):
+        raise ValueError(f"{where}: polygon is self-intersecting (must be simple)")
+
+
+# ---------------------------------------------------------------------------
 # GridRouteOverride — a curated subset of the router ENTRY kwargs.
 #
 # Field names are the kwargs `batch_route` / `batch_route_diff_pairs` accept (the
@@ -161,6 +206,7 @@ class Room(BaseModel):
     module: str
     origin: tuple[float, float] | None = None
     size: tuple[float, float] | None = None
+    polygon: list[tuple[float, float]] | None = None
     rotation: float = 0.0
     layers: list[str] = Field(default_factory=list)
     anchor: str | None = None
@@ -181,7 +227,74 @@ class Room(BaseModel):
                 raise ValueError(
                     f"room {self.module!r}: size must be positive, got {self.size!r}"
                 )
+        # polygon is the THIRD geometry form, mutually exclusive with origin/size:
+        # a room is an explicit rectangle XOR an explicit polygon XOR a derived
+        # bbox — never two at once (S5a: multiple geometries are ambiguous).
+        if self.polygon is not None:
+            if self.origin is not None:
+                raise ValueError(
+                    f"room {self.module!r}: polygon and origin/size are mutually "
+                    "exclusive geometries"
+                )
+            _validate_polygon(self.polygon, f"room {self.module!r}")
         return self
+
+
+class Placement(BaseModel):
+    """A per-component pose, keyed by ato ADDRESS (never designator, §C). This is
+    the TEXT authority for a footprint's `(at x y rot)` + side in the derived
+    .kicad_pcb, replacing the build-time auto-grid spread (transformer.py:176 →
+    :2013-2080). `at` is ROOM-RELATIVE by default (composed through the room
+    origin by `resolve_placement`); set `absolute` to land board-absolute coords
+    verbatim (the escape hatch)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    component: str  # ato address
+    at: tuple[float, float]
+    rotation: float = 0.0
+    side: Literal["F", "B"] = "F"
+    absolute: bool = False  # at is board-absolute (skip room composition)
+
+
+def resolve_placement(
+    placement: Placement, room: "Room | None"
+) -> tuple[float, float]:
+    """The board-ABSOLUTE (x, y) for a placement (the pure room-relative oracle).
+
+    An `absolute` placement lands its `at` verbatim (the room is ignored). A
+    room-relative placement is composed through the room ORIGIN — and a
+    room-relative placement with no room origin to compose against is loud (S5a:
+    no silent (0,0) base)."""
+    if placement.absolute:
+        return placement.at
+    if room is None or room.origin is None:
+        raise LayoutPlanError(
+            f"placement {placement.component!r}: room-relative coordinates need a "
+            "room with an origin to compose against (or mark it absolute)"
+        )
+    ox, oy = room.origin
+    x, y = placement.at
+    return (ox + x, oy + y)
+
+
+def resolve_component_pose(
+    placement: "Placement | None",
+    reuse_pose: tuple[float, float] | None,
+    room: "Room | None" = None,
+) -> tuple[float, float]:
+    """The final board-absolute (x, y) for a component, pinning the
+    placements-vs-reuse PRIORITY: a TEXT `placement` OVERRIDES the reuse pose
+    (text is authoritative over both the build-time auto-grid spread and a pose
+    read back from a reuse board); with no text placement the reuse pose FALLS
+    THROUGH; with neither it is loud (no silent (0,0))."""
+    if placement is not None:
+        return resolve_placement(placement, room)
+    if reuse_pose is not None:
+        return reuse_pose
+    raise LayoutPlanError(
+        "component has neither a text placement nor a reuse pose to fall back on"
+    )
 
 
 class RouteStage(BaseModel):
@@ -362,6 +475,176 @@ class BundleStage(BaseModel):
         return self
 
 
+# ---------------------------------------------------------------------------
+# board section — the board-LEVEL facts a pure-text end-to-end board needs
+# (BACKLOG §D-Tier3). `outline` and `stackup` are peers of rooms/route_stages;
+# every fact downstream consumes either has a schema here or is loud when absent.
+# ---------------------------------------------------------------------------
+class BoardOutline(BaseModel):
+    """The board edge: an axis-aligned rectangle (`origin`/`size`) OR an explicit
+    `polygon` (≥ 3 points, simple). No outline at all is a silent disaster
+    downstream (obstacle_map.py:393-395 routes unbounded), so this schema exists
+    to make the boundary authoritative."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    origin: tuple[float, float] | None = None
+    size: tuple[float, float] | None = None
+    polygon: list[tuple[float, float]] | None = None
+
+    @model_validator(mode="after")
+    def _validate(self) -> "BoardOutline":
+        if (self.origin is None) != (self.size is None):
+            raise ValueError(
+                "board.outline: origin and size must be given together"
+            )
+        if self.polygon is not None:
+            if self.origin is not None:
+                raise ValueError(
+                    "board.outline: polygon and origin/size are mutually exclusive"
+                )
+            _validate_polygon(self.polygon, "board.outline")
+        if self.origin is None and self.polygon is None:
+            raise ValueError(
+                "board.outline: give either origin/size or a polygon"
+            )
+        if self.size is not None:
+            w, h = self.size
+            if w <= 0 or h <= 0:
+                raise ValueError(
+                    f"board.outline: size must be positive, got {self.size!r}"
+                )
+        return self
+
+
+def outline_bounds(
+    outline: BoardOutline | None,
+) -> tuple[float, float, float, float]:
+    """(minx, miny, maxx, maxy) for an outline. A MISSING outline is loud — never
+    a silently invented unbounded board (the obstacle_map.py:393-395 sign-off)."""
+    if outline is None:
+        raise LayoutPlanError(
+            "board.outline is required: no silent unbounded board (copper would "
+            "spill off-board, the fab boundary is unknowable)"
+        )
+    if outline.origin is not None and outline.size is not None:
+        ox, oy = outline.origin
+        w, h = outline.size
+        return (ox, oy, ox + w, oy + h)
+    pts = [tuple(p) for p in outline.polygon]  # type: ignore[union-attr]
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+class StackupLayer(BaseModel):
+    """One physical layer: a copper layer (name + optional thickness) or a
+    dielectric (thickness + material + Er, all required — a complete stackup, not
+    just a count)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    type: Literal["copper", "dielectric"]
+    thickness: float | None = None
+    material: str | None = None
+    epsilon_r: float | None = None  # Er
+
+    @model_validator(mode="after")
+    def _validate(self) -> "StackupLayer":
+        if self.thickness is not None and self.thickness <= 0:
+            raise ValueError(
+                f"stackup layer {self.name!r}: thickness must be > 0, got "
+                f"{self.thickness!r}"
+            )
+        if self.type == "dielectric":
+            # a dielectric without thickness/material/Er is an incomplete stackup
+            # (= degenerate "just a count"); controlled impedance needs all three.
+            missing = [
+                k
+                for k, v in (
+                    ("thickness", self.thickness),
+                    ("material", self.material),
+                    ("epsilon_r", self.epsilon_r),
+                )
+                if v is None
+            ]
+            if missing:
+                raise ValueError(
+                    f"dielectric layer {self.name!r}: incomplete stackup — missing "
+                    f"{missing} (a complete stackup carries thickness/material/Er, "
+                    "never just a layer count)"
+                )
+        return self
+
+
+class Stackup(BaseModel):
+    """The ordered physical stack (top → bottom). The copper subset is the SINGLE
+    authority for layer count (`stackup_layers`). Loud: ≥ 2 copper, unique names,
+    a dielectric between every adjacent copper pair (complete, not a bare count)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    layers: list[StackupLayer] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate(self) -> "Stackup":
+        names = [layer.name for layer in self.layers]
+        if len(names) != len(set(names)):
+            raise ValueError("stackup: layer names must be unique")
+        coppers = [layer for layer in self.layers if layer.type == "copper"]
+        if len(coppers) < 2:
+            raise ValueError(
+                f"stackup: need ≥ 2 copper layers, got {len(coppers)}"
+            )
+        # complete, not a count: two copper layers must be separated by ≥ 1
+        # dielectric — adjacent coppers mean the dielectric was omitted.
+        for a, b in zip(self.layers, self.layers[1:]):
+            if a.type == "copper" and b.type == "copper":
+                raise ValueError(
+                    f"stackup: copper layers {a.name!r} and {b.name!r} are "
+                    "adjacent — a dielectric (thickness/material/Er) must separate "
+                    "them (incomplete stackup = degenerate layer count)"
+                )
+        return self
+
+
+def stackup_layers(stackup: Stackup | None) -> list[str]:
+    """The ordered copper layer names — the SINGLE authority for layer count (it
+    feeds both the generated board's layer table and the router's `layers`). A
+    MISSING stackup is loud: no silent layer-count default (S5a)."""
+    if stackup is None or not stackup.layers:
+        raise LayoutPlanError(
+            "board.stackup is required for the layer count: no silent default "
+            "(controlled impedance depends on the real stackup)"
+        )
+    return [layer.name for layer in stackup.layers if layer.type == "copper"]
+
+
+class Board(BaseModel):
+    """The board-level section: outline + complete stackup (both optional in the
+    model — their REQUIRED-ness is enforced where consumed: outline by
+    `outline_bounds`, stackup by `stackup_layers` and the impedance check)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    outline: BoardOutline | None = None
+    stackup: Stackup | None = None
+
+
+def _stage_requests_impedance(stage: Any) -> bool:
+    """True if a stage asks for controlled impedance anywhere (stage config or, for
+    a bundle, any diff lane). Used to enforce the stackup hard-dependency."""
+    if stage.config.impedance is not None:
+        return True
+    if isinstance(stage, BundleStage):
+        return any(
+            isinstance(lane, DiffLane) and lane.impedance is not None
+            for lane in stage.lanes
+        )
+    return False
+
+
 def _stage_kind(v: Any) -> str:
     """Pick the route_stages union member: a `type: bundle` mapping (or a
     BundleStage instance) is the bundle stage; everything else is a RouteStage
@@ -390,7 +673,26 @@ class LayoutPlan(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     rooms: list[Room] = Field(default_factory=list)
+    placements: list[Placement] = Field(default_factory=list)
+    board: Board | None = None
     route_stages: list[_Stage] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_impedance_needs_stackup(self) -> "LayoutPlan":
+        # impedance is a HARD dependency on a real stackup: a stage requesting
+        # impedance with no board.stackup would silently fall back to a fixed
+        # width (route.py:256-258) = impedance out of control. Reject at parse.
+        has_stackup = self.board is not None and self.board.stackup is not None
+        if has_stackup:
+            return self
+        for stage in self.route_stages:
+            if _stage_requests_impedance(stage):
+                raise LayoutPlanError(
+                    f"stage {stage.name!r} requests controlled impedance but the "
+                    "plan has no board.stackup — impedance needs a complete stackup "
+                    "(else the router silently falls back to a fixed width)"
+                )
+        return self
 
     def resolve_nets(self, ir: dict[str, Any]) -> dict[str, list[str]]:
         """{stage name -> [kicad net name]} resolving each ato signal ADDRESS

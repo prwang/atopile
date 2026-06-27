@@ -249,6 +249,15 @@ def _ddr_yaml() -> str:
     bo_block = "".join(f"          - {n}\n" for n in bo_order)
 
     yaml = (
+        # the dqs/ck lanes carry controlled impedance ⇒ a complete stackup is a
+        # hard dependency (TS5): declare one so the plan parses.
+        "board:\n"
+        "  stackup:\n"
+        "    layers:\n"
+        "      - {name: F.Cu, type: copper, thickness: 0.035}\n"
+        "      - {name: d1, type: dielectric, thickness: 0.2, material: FR4,"
+        " epsilon_r: 4.5}\n"
+        "      - {name: B.Cu, type: copper, thickness: 0.035}\n"
         "route_stages:\n"
         "  - type: bundle\n"
         "    name: ddr_byte0\n"

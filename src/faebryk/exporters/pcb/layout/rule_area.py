@@ -9,22 +9,30 @@ source channel KiCad preserves verbatim (no `group`, no custom S-expression
 token; `ZonePlacement.sheetname` is a native field). C3 has already stamped that
 same sheetname onto the room's footprints, so the rule area and its members agree.
 
-Room polygon:
+Room boundary (`_room_boundary`) — three geometry forms:
+  * explicit `polygon` (D-Tier3; ≥ 3 pts, simple) ⇒ that polygon verbatim;
   * explicit `origin`/`size` (D2) ⇒ the axis-aligned rectangle
     [origin, origin + size];
   * both omitted ⇒ the rectangle is DERIVED as the bbox of the room's member pad
     board positions, taken from the IR via the SAME pose composition the rest of
     atopile uses (`room_ops.pad_board_xy` → `Geometry.abs_pos`), never a
     re-invented convention.
+`room.rotation` rotates the boundary CCW about its first vertex; `room.layers`
+restricts the zone to those layers (else every signal layer). Both were
+parsed-but-silently-dropped before D-Tier3 and are now wired (no "declared yet
+silently ignored": either it takes effect or the field is removed).
 
 The generated zone is a keepout rule area with everything ALLOWED: it carries no
 copper (so KiCad never GCs it as net-0 copper, BACKLOG fact 2) and restricts
 nothing (so it adds zero DRC violations, D3.5). Its sole effect is the placement
 grouping via sheetname.
 
-Contract pinned by test/exporters/pcb/layout/test_rule_area_contract.py.
+Contract pinned by test/exporters/pcb/layout/test_rule_area_contract.py
+(sheetname / bbox / derived-bbox) and test_placement_contract.py (TR1-TR4:
+polygon, rotation, per-room layers).
 """
 
+import math
 from typing import Any
 
 from faebryk.exporters.pcb.layout.layout_plan import LayoutPlan, Room
@@ -80,11 +88,36 @@ def _room_bbox(room: Room, ir: dict[str, Any]) -> tuple[float, float, float, flo
     return (min(xs), min(ys), max(xs), max(ys))
 
 
+def _rotate(
+    points: list[tuple[float, float]], degrees: float
+) -> list[tuple[float, float]]:
+    """Rotate a boundary by `degrees` CCW about its FIRST vertex (the pinned
+    convention; for an origin/size room the first vertex is the origin)."""
+    if degrees == 0.0:
+        return points
+    th = math.radians(degrees)
+    c, s = math.cos(th), math.sin(th)
+    px, py = points[0]
+    return [
+        (px + (x - px) * c - (y - py) * s, py + (x - px) * s + (y - py) * c)
+        for x, y in points
+    ]
+
+
+def _room_boundary(room: Room, ir: dict[str, Any]) -> list[tuple[float, float]]:
+    """The room's boundary points (CCW-rotated by room.rotation about the first
+    vertex): an explicit polygon, an explicit rectangle, or the derived bbox."""
+    if room.polygon is not None:
+        points = [tuple(p) for p in room.polygon]
+    else:
+        minx, miny, maxx, maxy = _room_bbox(room, ir)
+        points = [(minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy)]
+    return _rotate(points, room.rotation)
+
+
 def _make_placement_rule_area(
-    sheetname: str, bbox: tuple[float, float, float, float], layers: list[str]
+    sheetname: str, corners: list[tuple[float, float]], layers: list[str]
 ) -> Zone:
-    minx, miny, maxx, maxy = bbox
-    corners = [(minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy)]
     return Zone(
         net=0,
         net_name="",
@@ -159,9 +192,14 @@ def generate_rule_areas(
         pcb.zones,
         lambda z: not (z.name is not None and z.name.startswith(_MANAGED_PREFIX)),
     )
-    layers = _copper_layers(pcb)
+    default_layers = _copper_layers(pcb)
     inserted: list[Zone] = []
     for room in plan.rooms:
-        zone = _make_placement_rule_area(room.module, _room_bbox(room, ir), layers)
+        # an explicit room.layers takes effect (no longer silently ignored, S5a);
+        # otherwise the zone spans every signal layer.
+        layers = list(room.layers) if room.layers else default_layers
+        zone = _make_placement_rule_area(
+            room.module, _room_boundary(room, ir), layers
+        )
         inserted.append(kicad.insert(pcb, "zones", pcb.zones, zone))
     return inserted

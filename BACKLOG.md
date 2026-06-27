@@ -37,7 +37,7 @@ SSOT），BACKLOG 只留"结论 + 代码指针"，绝不复述实现细节或调
 | **C3** | **group→sheetname 迁移（room 去 group 化）** | ✅ 2026-06-15（见 §C3 代码指针） |
 | **D** | **layout.yaml 加载 + placement rule area（D1–D4）** | ✅ 2026-06-16（见 §D 代码指针）；D5 后置 |
 | **D-Tier2** | **bundle 总线传输 schema + geometry（桶①）** | ✅ 桶① 2026-06-20（model+geometry）+ D 侧 build 集成 2026-06-25（`generate_layout_plan` 调 `bundle_artifact`，e2e `examples/sata_bundle`）；桶② `batch_route_bundle` 契约 strict-xfail，实现移 §E E-Tier2（用户拍板） |
-| **D-Tier3** | **自包含：摆放（room 相对坐标）+ 板框 outline + 完整叠层** | ⬜ **关键路径**（完整叠层 = 差分阻抗硬依赖）；测试计划已定（31 strict-xfail，见 §D-Tier3 测试计划）；net-class/pour/keepout/silk 进 §F |
+| **D-Tier3** | **自包含：摆放（room 相对坐标）+ 板框 outline + 完整叠层** | 🟡 桶①已落地翻绿 2026-06-26（`Placement`+`resolve_placement`、`Room.polygon`/rotation/layers 接线、`board.outline`/`board.stackup`+`stackup_layers`/`outline_bounds`、impedance→stackup 硬依赖校验；29 绿，契约 `test_placement_contract.py`+`test_board_section_contract.py`）；桶② TS-AUTH-A（板层表权威，gated `_DT3_BUILD_LANDED`）+ TS-AUTH-B（router 层表权威，gated `_E1_LANDED`）**仍 strict-xfail**（单一层数权威 = config.py 派生自 stackup + E1 传 layers，待 downstream 落地）；net-class/pour/keepout/silk 进 §F |
 | **增量执行** | **route_stages `--up-to` 断点 + stage name 唯一** | ⬜ 增量可调试，配 §F 诊断闭环 |
 | **Tier0** | **corridor-as-data（纯 schema 旁支，零 router 改动）** | ⬜ 低成本、可独立做 |
 | E–F | 路由 fork + 诊断闭环——**章节字母 = 执行序** | ⬜（C3+D 已解锁 E；**E-Tier2 = bundle 路由实现**） |
@@ -400,6 +400,17 @@ D2 把 `type: bundle` 当未知 stage 拒掉造成的 wrong-reason XPASS）。�
   验：刚性段 offset 落位 == plan、**过渡段 diff 全程不散（P/N 间距 == gap±tol）**、breakout 按 order 零 trunk 交叉。
 
 ### D-Tier3. 自包含摆放 + 自包含性审计（layout.yaml 为生成式 flow 唯一权威）
+**状态（2026-06-26）**：**桶①（D 内 schema + 纯函数 + rule_area 几何）已落地翻绿（29 绿）**——`layout_plan.py`
+加 `Placement`+`resolve_placement`（room 相对解析，绝对逃逸口）、`Room.polygon` + rotation/layers 接线生效
+（不再静默忽略，`rule_area.py` `_room_boundary`/`_rotate` + per-room layers）、`board` 段
+`BoardOutline`/`Stackup`/`StackupLayer`+`stackup_layers`/`outline_bounds`、impedance→stackup 硬依赖 plan 级校验
+（TS5）；多边形自交检测 dependency-free。契约 `test/exporters/pcb/layout/test_placement_contract.py`（TP1-6+TR1-4）
++ `test_board_section_contract.py`（TB1-3+TS1-5+TS-LM）。**桶②两条权威棘轮仍 strict-xfail（必红，用户要求）**：
+TS-AUTH-A（gated `_DT3_BUILD_LANDED`：config.py 板层表派生自 `stackup_layers`，杀 2 层硬编码）+ TS-AUTH-B（gated
+`_E1_LANDED`：E1 传 `stackup_layers` 给 router，不吃 4 层默认）——单一层数权威的 downstream 接线（config + E1）未做。
+TS-LM 现绿（取证 config.py 2 层 / routing_constants.py 4 层两处魔数分叉，无共享源；权威落地后转红、由 TS-AUTH 接管）。
+已加 `examples/sata_bundle` 的 `board.outline`+`board.stackup`（阻抗硬依赖落地后该 plan 必须带 stackup）。
+
 **原则（用户拍板 2026-06-19）**：在生成式 / agent 文本优先工作流里，`.ato`（电路）+ `layout.yaml`（布局）必须
 **自包含、是唯一权威**；**任何一项事实都不得以「只能 GUI 编辑 .kicad_pcb」或「只能 reuse 既有 .kicad_pcb」为唯一
 输入来源**——「为避免 GUI 必须先用 GUI」的循环依赖即设计缺陷。.kicad_pcb 是**派生产物**，reuse 仅作可选优化、
@@ -408,22 +419,23 @@ D2 把 `type: bundle` 当未知 stage 拒掉造成的 wrong-reason XPASS）。�
 **摆放语义（本节修，关键路径）**：
 - **坐标系 = room 相对**（用户拍板）：元件坐标相对其 room 的 origin/anchor，移动 room 整块跟随、块可复用；
   可留一个板绝对坐标逃逸口。
-- `Room` 几何扩展：加 `polygon: [[x,y],...]`（loud：≥3 点、非自交）作为 `origin/size` 之外的第三种几何；KiCad
-  placement rule area 本就是 `Polygon` zone（`rule_area.py:128` 现只喂 4 个 bbox 角点），改动小。**并修一个现存
-  S5a 隐患**：`Room.rotation/layers/anchor`（`layout_plan.py:164-166`）现被解析却被 D3 完全忽略
-  （`_make_placement_rule_area` 只吃 bbox + 全信号层，`rule_area.py:83`）——要么接线生效（rotation→旋转矩形多边形、
-  layers/side→zone 层），要么删除，不留"声明却静默忽略"。
-- 新增 `placements` 段，按 **ato 地址** key（与全文一致，不用 designator）：`{component: <addr>, at: [x,y],
-  rotation: <deg>, side: F|B}`，room 相对。这是把 footprint `(at x y rot)` + layer 写进派生 .kicad_pcb 的**文本权威**，
-  取代受管 footprint 现在 build 时的自动网格摊开（`transformer.py:176` 默认 `(0,0,0)` → `:2013-2080` 按 parent
-  聚类、10mm 步进；非任何文本源可控）。须定 `placements` 与 reuse 的**优先级**（文本给值即覆盖 reuse，缺省回退 reuse）。
+- `Room` 几何扩展（**已落地**）：加 `polygon: [[x,y],...]`（loud：≥3 点、非自交）作为 `origin/size` 之外的第三种几何；
+  KiCad placement rule area 本就是 `Polygon` zone（`rule_area._make_placement_rule_area`），改动小。**并修一个曾存
+  S5a 隐患（已修）**：`Room.rotation/layers/anchor` 曾被解析却被 D3 完全忽略（旧 `_make_placement_rule_area` 只吃
+  bbox + 全信号层）——现 `rule_area._room_boundary`/`_rotate` 接线生效（rotation→绕首点 CCW 旋转多边形、layers→zone
+  层），不留"声明却静默忽略"。
+- 新增 `placements` 段（**schema + 纯函数权威已落地；transformer 消费接线 = 后续 build 侧，与 TS-AUTH 同批**），按
+  **ato 地址** key（与全文一致，不用 designator）：`{component: <addr>, at: [x,y], rotation: <deg>, side: F|B}`，room
+  相对（`resolve_placement`；`absolute` 逃逸口）。这是把 footprint `(at x y rot)` + layer 写进派生 .kicad_pcb 的**文本
+  权威**，取代受管 footprint build 时的自动网格摊开（`transformer` 默认 `(0,0,0)` → 按 parent 聚类、10mm 步进；非任何
+  文本源可控）。`placements` 与 reuse 的**优先级**由纯函数 `resolve_component_pose` 钉死（文本给值即覆盖 reuse，缺省回退 reuse）。
 
 **板级自包含（本节修，关键路径——不可后置）**：纯文本端到端跑一块板，下游（E router / F DRC / 制造）消费的板级
 通用事实必须有文本 schema。layout.yaml 加**板级 `board` 段**（与 `rooms`/`placements`/`route_stages` 平级）：
-- [ ] `board.outline`：`{origin, size}` 或 `polygon: [[x,y],...]`（loud：≥3 点、非自交）。**无 outline 现在是静默灾难**
+- [x] `board.outline`：`{origin, size}` 或 `polygon: [[x,y],...]`（loud：≥3 点、非自交）。**无 outline 现在是静默灾难**
   ——router 在无界空间布线、铜溢出板外（`obstacle_map.py:393-395` 无 board_bounds 直接 `return`），F 的边界间距无可查、
   板不可制造。必给 schema。
-- [ ] `board.stackup`：**完整叠层，不止层数**——有序 copper 层名 + 每介电层厚度/材料/Er。**为何完整、不可退化为"只给
+- [x] `board.stackup`：**完整叠层，不止层数**——有序 copper 层名 + 每介电层厚度/材料/Er。**为何完整、不可退化为"只给
   层数"**：差分对受控阻抗依赖真实叠层（`route.py:256-258`：`impedance` 模式无 stackup 即 warn 退回固定线宽 =
   **阻抗失控**）；**阻抗失败 = 板子失败 ⟹ D-Tier2 里差分对的分层耦合/阻抗规则全部白做**。故完整叠层是 **D-Tier2 的
   硬依赖**，与铜层数同级 must-do、**不得倒退为仅层数**。
@@ -454,8 +466,8 @@ D2 把 `type: bundle` 当未知 stage 拒掉造成的 wrong-reason XPASS）。�
 （差分阻抗硬依赖，不可退化为仅层数）；铜走线由 §E 覆盖；板级 net-class/DRC 表、铜皮 pour、非 placement 禁布、丝印
 全部**进 §F**，且 **loud-or-nothing：缺失必响亮，禁静默默认**。
 
-**测试计划与判据（D-Tier3；tests-first S0，先全红，实现靠移除/失活 xfail 翻绿）——共 31 个 strict-xfail
-（桶① 29 + 桶② 2）；桶③ e2e 属后续 DoD、不计入。** 棘轮文件（待建）：`test/exporters/pcb/layout/
+**测试计划与判据（D-Tier3；tests-first S0，实现靠移除/失活 xfail 翻绿）——共 31 个 case：30 strict-xfail
+（桶① 28 + 桶② 2）+ TS-LM 现绿（取证锁，未门控，从不 xfail）；桶③ e2e 属后续 DoD、不计入。** 棘轮文件（待建）：`test/exporters/pcb/layout/
 test_placement_contract.py`（摆放 + room 几何）+ `test/exporters/pcb/layout/test_board_section_contract.py`
 （板框 + 叠层）。门控 `_DT3_LANDED` = 全部 D-Tier3 符号导入（`Placement` 模型 / `board` 段 `BoardOutline`·
 `Stackup`·`StackupLayer` / `Room.polygon` 字段 / room 相对解析纯函数 `resolve_placement` / 叠层→层表纯函数
@@ -465,43 +477,43 @@ test_placement_contract.py`（摆放 + room 几何）+ `test/exporters/pcb/layou
 - **桶①（D 内可自测：schema + 纯函数 + rule_area 几何 + 真 build IR fixture；无 router / 无 KiCad）= 29**
 
   *摆放（room 相对坐标）— 10*
-  - [ ] **TP1** `placements` 正向（逐字段）：`{component: <addr>, at:[x,y], rotation, side:F|B}` 解析成 typed
+  - [x] **TP1** `placements` 正向（逐字段）：`{component: <addr>, at:[x,y], rotation, side:F|B}` 解析成 typed
     model，地址 / at / rotation / side 逐字段断言（非"跑通即绿"）。— 1
-  - [ ] **TP2** `placements` 负向（loud-or-nothing，逐条 + 正向控制成对）：未知键(`extra=forbid`) / `side`∉{F,B} /
+  - [x] **TP2** `placements` 负向（loud-or-nothing，逐条 + 正向控制成对）：未知键(`extra=forbid`) / `side`∉{F,B} /
     缺 `component` / 缺 `at` / `at` 非二元。每例抛指定异常 + 消息含定位，合法控制不抛。— 5
-  - [ ] **TP3** room 相对→板绝对 纯函数 oracle：`resolve_placement` 把 room 相对 at 经 room origin/anchor 合成板
+  - [x] **TP3** room 相对→板绝对 纯函数 oracle：`resolve_placement` 把 room 相对 at 经 room origin/anchor 合成板
     绝对坐标 == **手算**（按构造定答案）。— 1
-  - [ ] **TP4** 变异自检（防失明，必配）：动 room origin/anchor，成员板绝对坐标必变（before≠after）；不变 = 测试 bug。— 1
-  - [ ] **TP5** 板绝对逃逸口：标注绝对坐标的 placement 原样落该坐标、不经 room 合成。— 1
-  - [ ] **TP6** placements vs reuse 优先级（消费者-oracle，纯函数判定）：文本给值即覆盖 reuse、缺省回退 reuse
-    （钉死 `transformer.py:176/2013-2080` 自动网格摊开被文本权威取代的优先级）。— 1
+  - [x] **TP4** 变异自检（防失明，必配）：动 room origin/anchor，成员板绝对坐标必变（before≠after）；不变 = 测试 bug。— 1
+  - [x] **TP5** 板绝对逃逸口：标注绝对坐标的 placement 原样落该坐标、不经 room 合成。— 1
+  - [x] **TP6** placements vs reuse 优先级（纯函数 `resolve_component_pose` 判定）：文本给值即覆盖 reuse、缺省回退
+    reuse、皆无则 loud（钉死自动网格摊开/reuse 读回被文本权威取代的优先级；transformer 实际消费 = 后续 build 侧）。— 1
 
   *room 几何 + 静默忽略隐患修复 — 6*
-  - [ ] **TR1** `Room.polygon` 正向 + rule area：polygon（≥3 点）解析；`generate_rule_areas` 产的 zone == 该 polygon
-    （非 bbox 四角；扩 `rule_area.py:128` 的 `Polygon`、`:83` `_make_placement_rule_area`）。— 1
-  - [ ] **TR2** room 几何 负向（loud）：polygon<3 点 / polygon 自交 / `origin+size` 与 `polygon` 多重几何并存（互斥）。— 3
-  - [ ] **TR3** `Room.rotation` 接线生效（不再静默忽略）：rotation≠0 的 room 产**旋转后的** polygon rule area——钉死
-    `layout_plan.py:164-166`（rotation/layers/anchor 现被解析却被 `rule_area.py:83` 完全忽略的 S5a 隐患）。— 1
-  - [ ] **TR4** `Room.layers`/`side` 接线生效：显式 layers 产对应 zone 层（非 `_copper_layers` 全信号层默认，
-    `rule_area.py:47-48`）。要么接线生效、要么删字段，不留"声明却静默忽略"。— 1
+  - [x] **TR1** `Room.polygon` 正向 + rule area：polygon（≥3 点）解析；`generate_rule_areas` 产的 zone == 该 polygon
+    （非 bbox 四角；扩 `rule_area._room_boundary`/`_make_placement_rule_area`）。— 1
+  - [x] **TR2** room 几何 负向（loud）：polygon<3 点 / polygon 自交 / `origin+size` 与 `polygon` 多重几何并存（互斥）。— 3
+  - [x] **TR3** `Room.rotation` 接线生效（不再静默忽略）：rotation≠0 的 room 产**旋转后的** polygon rule area——钉死
+    曾被解析却被旧 `_make_placement_rule_area` 完全忽略的 S5a 隐患（现 `rule_area._rotate` 绕首点 CCW）。— 1
+  - [x] **TR4** `Room.layers` 接线生效：显式 layers 产对应 zone 层（非 `rule_area._copper_layers` 全信号层默认）。
+    要么接线生效、要么删字段，不留"声明却静默忽略"。（`side` 属 `placements`、非 `Room`，不在此项。）— 1
 
   *板框 outline — 4*
-  - [ ] **TB1** `board.outline` 正向（逐字段）：`{origin,size}` 与 `polygon: [[x,y],...]` 两形都解析。— 1
-  - [ ] **TB2** `board.outline` 负向（loud）：polygon<3 点 / 自交。— 2
-  - [ ] **TB3** outline 缺失→响亮（sign-off）：管线消费无 outline 的 plan 必 loud——钉 `obstacle_map.py:393-395`
+  - [x] **TB1** `board.outline` 正向（逐字段）：`{origin,size}` 与 `polygon: [[x,y],...]` 两形都解析。— 1
+  - [x] **TB2** `board.outline` 负向（loud）：polygon<3 点 / 自交。— 2
+  - [x] **TB3** outline 缺失→响亮（sign-off）：管线消费无 outline 的 plan 必 loud——钉 `obstacle_map.py:393-395`
     无 board_bounds 即无界布线、铜溢板外、板不可制造的静默灾难。— 1
 
   *完整叠层 stackup（含"两层/四层默认来路不明"bug 取证）— 9*
-  - [ ] **TS1** `board.stackup` 正向（逐字段）：有序 copper 层名 + 每介电层 thickness/material/Er，逐字段断言
+  - [x] **TS1** `board.stackup` 正向（逐字段）：有序 copper 层名 + 每介电层 thickness/material/Er，逐字段断言
     （**完整**叠层，非仅层数）。— 1
-  - [ ] **TS2** `board.stackup` 负向（loud）：只给层数无介电（不完整=退化为仅层数，**显式拒**）/ thickness≤0 /
+  - [x] **TS2** `board.stackup` 负向（loud）：只给层数无介电（不完整=退化为仅层数，**显式拒**）/ thickness≤0 /
     层名重复 / copper<2。— 4
-  - [ ] **TS3** 叠层→层表 单一权威 纯函数 oracle：`stackup_layers(stackup)` == 有序 copper 层集（== 手算）。这是
+  - [x] **TS3** 叠层→层表 单一权威 纯函数 oracle：`stackup_layers(stackup)` == 有序 copper 层集（== 手算）。这是
     层数的**唯一真相**（桶②两条权威棘轮都派生自它）。— 1
-  - [ ] **TS4** stackup 缺失→响亮（sign-off）：管线消费无 stackup 的 plan 必 loud。— 1
-  - [ ] **TS5** 阻抗硬依赖：route_stage 处 impedance 模式但无 `board.stackup` → 必 loud——钉 `route.py:256-258`
+  - [x] **TS4** stackup 缺失→响亮（sign-off）：管线消费无 stackup 的 plan 必 loud。— 1
+  - [x] **TS5** 阻抗硬依赖：route_stage 处 impedance 模式但无 `board.stackup` → 必 loud——钉 `route.py:256-258`
     （impedance 无 stackup 静默退回固定线宽 = 阻抗失控；= D-Tier2 差分阻抗的分层耦合/阻抗规则白做）。— 1
-  - [ ] **TS-LM** 层数默认 divergence 取证（AST/值，D 内，**bug 现状锁定**）：钉死 atopile 默认 copper =
+  - [x] **TS-LM** 层数默认 divergence 取证（AST/值，D 内，**bug 现状锁定**）：钉死 atopile 默认 copper =
     `[F.Cu, B.Cu]`（2 层，`config.py:374,380`）≠ router 默认 `DEFAULT_4_LAYER_STACK = ['F.Cu','In1.Cu','In2.Cu',
     'B.Cu']`（4 层，`routing_constants.py:8`；`route.py:231` 无 `layers` 入参即取之），且二者**无共享来源**。锁死两处
     "来路不明"魔数位置，为桶②两条权威棘轮提供取证（魔数被静默改即红）。— 1
