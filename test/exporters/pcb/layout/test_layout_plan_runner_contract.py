@@ -44,9 +44,9 @@ shells out to system python3.
 3. LAYERS FROM THE STACKUP AUTHORITY (TS-AUTH-B): every invocation's kwargs carry
    layers explicitly == stackup_layers(plan.board.stackup). The runner NEVER
    passes layers=None and so NEVER falls through to route.py:230-231
-   DEFAULT_4_LAYER_STACK. A missing/empty board.stackup is loud (stackup_layers
-   raises LayoutPlanError — no silent layer-count default). This is the
-   implementation half of the TS-AUTH-B ratchet in test_board_section_contract.py.
+   DEFAULT_4_LAYER_STACK. A missing board.stackup (or no board at all) is loud
+   (LayoutPlanError — no silent layer-count default). This is the implementation
+   half of the TS-AUTH-B ratchet in test_board_section_contract.py.
 
    SINGLE AUTHORITY (the must-fix): the stackup is the SOLE source of `layers`.
    GridRouteOverride.layers exists only to satisfy the D2.4 union drift-guard
@@ -127,35 +127,35 @@ the marker going inactive — a half-landed surface stays red. The PURE tests fl
 green in the venv (no router needed); the E2E tests additionally SKIP loudly
 (never silently pass) when the router submodule board or system python3 is absent
 or cannot import the router, exactly like test_router_smoke_batch_route.py.
-
-NOTE (gate 1 of 3 — the spec): every test body below is a `NotImplementedError`
-placeholder (strict-xfail green). The biting assertion bodies land in gate 2; the
-runner that flips them green lands in gate 3.
 """
+
+import shutil
+import subprocess
 
 import pytest
 
 import faebryk.library._F as F  # noqa: F401  # prevents a circular import
 
 # --- consumed model surface (already landed; import normally) ---------------
-from faebryk.exporters.pcb.layout.layout_plan import (  # noqa: F401
+from faebryk.exporters.pcb.layout.layout_plan import (
     Board,
-    BundleStage,
+    BundleStage,  # noqa: F401  # named in the protocol; isinstance-tagged in runner
     GridRouteOverride,
     LayoutPlan,
     LayoutPlanError,
     RouteStage,
     Stackup,
     StackupLayer,
-    stackup_layers,
+    load_layout_plan,
 )
+from faebryk.libs.util import repo_root
 
 # ---------------------------------------------------------------------------
 # S0 ratchet guard — import the FULL E1 surface; half-landing stays red.
 # ---------------------------------------------------------------------------
 try:
     from faebryk.exporters.pcb.layout.layout_plan_runner import (  # type: ignore
-        RouteReport,
+        RouteReport,  # noqa: F401
         StageInvocation,
         StageResult,
         build_invocations,
@@ -179,7 +179,176 @@ needs_e1 = pytest.mark.xfail(
     strict=True,
 )
 
-_SPEC = "ratchet body lands in gate 2 (see module docstring)"
+# ---------------------------------------------------------------------------
+# fixtures — build_invocations is PURE, so input_board/workdir need not exist for
+# the pure tests; only the e2e + report-writing tests use a real tmp_path.
+# ---------------------------------------------------------------------------
+_IN = "/e1/in.kicad_pcb"
+_WD = "/e1/wd"
+_TWO_LAYER = ["F.Cu", "B.Cu"]
+_FOUR_LAYER = ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu"]  # route.py default E1 must NOT eat
+
+
+def _stackup2() -> Stackup:
+    return Stackup(
+        layers=[
+            StackupLayer(name="F.Cu", type="copper", thickness=0.035),
+            StackupLayer(
+                name="d1",
+                type="dielectric",
+                thickness=1.5,
+                material="FR4",
+                epsilon_r=4.5,
+            ),
+            StackupLayer(name="B.Cu", type="copper", thickness=0.035),
+        ]
+    )
+
+
+def _board2() -> Board:
+    return Board(stackup=_stackup2())
+
+
+def _ir(signal_nets: dict[str, str]) -> dict:
+    return {"signal_nets": dict(signal_nets)}
+
+
+def _plan(stages, board="2") -> LayoutPlan:
+    """A plan over the given stages. board="2" ⇒ the 2-copper stackup; None ⇒ no
+    board (for the loud-no-stackup test); a Board instance ⇒ used verbatim."""
+    if board == "2":
+        board = _board2()
+    return LayoutPlan(board=board, route_stages=stages)
+
+
+def _invs(plan, ir, **kw):
+    kw.setdefault("input_board", _IN)
+    kw.setdefault("workdir", _WD)
+    return build_invocations(plan, ir, **kw)
+
+
+def _three_stages():
+    """3 single stages s1/s2/s3 — the --up-to slicing fixture."""
+    return [RouteStage(name=f"s{i}", nets=["top.a"], mode="single") for i in (1, 2, 3)]
+
+
+def _fake_invoker(summaries: dict):
+    """A pure invoker: summaries[stage_name] is the canned JSON_SUMMARY dict, or
+    None for the early-return (no-summary) case. Mirrors what the real subprocess
+    invoker would parse, so run_route_stages aggregation is exercised router-free."""
+
+    def invoke(inv):
+        s = summaries.get(inv.stage_name)
+        if s is None:
+            return StageResult(
+                stage_name=inv.stage_name,
+                stage_type=inv.stage_type,
+                successful=0,
+                failed=0,
+                total_vias=0,
+                summary=None,
+            )
+        return StageResult(
+            stage_name=inv.stage_name,
+            stage_type=inv.stage_type,
+            successful=int(s.get("successful", 0)),
+            failed=int(s.get("failed", 0)),
+            total_vias=int(s.get("total_vias", 0)),
+            summary=s,
+        )
+
+    return invoke
+
+
+# a minimal valid bundle (1 single + 1 diff) with a 2-copper board, for R2.
+_BUNDLE_YAML = (
+    "board:\n"
+    "  stackup:\n"
+    "    layers:\n"
+    "      - {name: F.Cu, type: copper, thickness: 0.035}\n"
+    "      - {name: d1, type: dielectric, thickness: 0.2, "
+    "material: FR4, epsilon_r: 4.5}\n"
+    "      - {name: B.Cu, type: copper, thickness: 0.035}\n"
+    "route_stages:\n"
+    "  - type: bundle\n"
+    "    name: b\n"
+    "    lanes:\n"
+    "      - net: top.a.x\n"
+    "      - diff: [top.d.p, top.d.n]\n"
+    "        gap: 0.15\n"
+    "        width: 0.12\n"
+    "    trunk:\n"
+    "      centerline:\n"
+    "        - at: [0, 0]\n          spacing: 0.5\n"
+    "        - at: [10, 0]\n          spacing: 0.5\n"
+    "    breakouts:\n"
+    "      - at: top.a\n"
+    "      - at: top.d\n"
+    "    config:\n"
+    "      track_width: 0.1\n"
+)
+_BUNDLE_IR = _ir({"top.a.x": "/X", "top.d.p": "/DP", "top.d.n": "/DN"})
+
+# a single stage THEN the same bundle — for the "bundle OUTSIDE the --up-to slice
+# must not raise" nuance (the loudness is per the RUN SLICE, not the whole plan).
+_SINGLE_THEN_BUNDLE_YAML = (
+    "board:\n"
+    "  stackup:\n"
+    "    layers:\n"
+    "      - {name: F.Cu, type: copper, thickness: 0.035}\n"
+    "      - {name: d1, type: dielectric, thickness: 0.2, "
+    "material: FR4, epsilon_r: 4.5}\n"
+    "      - {name: B.Cu, type: copper, thickness: 0.035}\n"
+    "route_stages:\n"
+    "  - name: pre\n"
+    "    mode: single\n"
+    "    nets:\n"
+    "      - top.s\n"
+    "  - type: bundle\n"
+    "    name: b\n"
+    "    lanes:\n"
+    "      - net: top.a.x\n"
+    "      - diff: [top.d.p, top.d.n]\n"
+    "        gap: 0.15\n"
+    "        width: 0.12\n"
+    "    trunk:\n"
+    "      centerline:\n"
+    "        - at: [0, 0]\n          spacing: 0.5\n"
+    "        - at: [10, 0]\n          spacing: 0.5\n"
+    "    breakouts:\n"
+    "      - at: top.a\n"
+    "      - at: top.d\n"
+    "    config:\n"
+    "      track_width: 0.1\n"
+)
+_SINGLE_THEN_BUNDLE_IR = _ir(
+    {"top.s": "/S", "top.a.x": "/X", "top.d.p": "/DP", "top.d.n": "/DN"}
+)
+
+
+# ---------------------------------------------------------------------------
+# e2e router guard — same pattern as test_router_smoke_batch_route.py.
+# ---------------------------------------------------------------------------
+_ROUTER_ROOT = repo_root() / "vendor" / "KiCadRoutingTools"
+_BOARD = _ROUTER_ROOT / "kicad_files" / "lvds_converter_dualclk.kicad_pcb"
+_SYS_PY = shutil.which("python3")
+
+needs_router = pytest.mark.skipif(
+    not _BOARD.exists() or _SYS_PY is None,
+    reason=f"router submodule board or system python3 absent ({_BOARD})",
+)
+
+
+def _router_importable() -> bool:
+    if _SYS_PY is None:
+        return False
+    proc = subprocess.run(
+        [_SYS_PY, "-c", "import route, route_diff"],
+        cwd=str(_ROUTER_ROOT),
+        capture_output=True,
+        text=True,
+    )
+    return proc.returncode == 0
 
 
 # ===========================================================================
@@ -188,7 +357,18 @@ _SPEC = "ratchet body lands in gate 2 (see module docstring)"
 # ===========================================================================
 @needs_e1
 def test_dispatch_selects_entry_by_stage_type():
-    raise NotImplementedError("R1: " + _SPEC)
+    plan = _plan(
+        [
+            RouteStage(name="s1", nets=["top.a"], mode="single"),
+            RouteStage(name="s2", nets=["top.b", "top.c"], mode="diff"),
+        ]
+    )
+    ir = _ir({"top.a": "/A", "top.b": "/B+", "top.c": "/B-"})
+    invs = _invs(plan, ir)
+    assert invs[0].entry == "batch_route" and invs[0].module == "route"
+    assert invs[0].stage_type == "single"
+    assert invs[1].entry == "batch_route_diff_pairs" and invs[1].module == "route_diff"
+    assert invs[1].stage_type == "diff"
 
 
 # ===========================================================================
@@ -197,7 +377,29 @@ def test_dispatch_selects_entry_by_stage_type():
 # ===========================================================================
 @needs_e1
 def test_bundle_dispatch_is_loud_not_implemented():
-    raise NotImplementedError("R2: " + _SPEC)
+    plan = load_layout_plan(_BUNDLE_YAML)
+    with pytest.raises(NotImplementedError) as ei:
+        build_invocations(plan, _BUNDLE_IR, input_board=_IN, workdir=_WD)
+    assert "batch_route_bundle" in str(ei.value)  # named the unbuilt entry
+    # positive control: a single+diff plan builds without raising.
+    ctrl = _plan([RouteStage(name="s", nets=["top.a"], mode="single")])
+    assert _invs(ctrl, _ir({"top.a": "/A"}))
+
+
+# ===========================================================================
+# R2b — the bundle loudness is per the RUN SLICE: a bundle BEYOND the --up-to
+# cutoff must NOT raise (you can route up to the single stage while bundle is
+# still E-Tier2), but the full plan that reaches it does.
+# ===========================================================================
+@needs_e1
+def test_bundle_outside_up_to_slice_does_not_raise():
+    plan = load_layout_plan(_SINGLE_THEN_BUNDLE_YAML)
+    ir = _SINGLE_THEN_BUNDLE_IR
+    with pytest.raises(NotImplementedError):  # full plan reaches the bundle
+        build_invocations(plan, ir, input_board=_IN, workdir=_WD)
+    # --up-to the single stage stops BEFORE the bundle ⇒ builds fine.
+    invs = build_invocations(plan, ir, input_board=_IN, workdir=_WD, up_to="pre")
+    assert [i.stage_name for i in invs] == ["pre"]
 
 
 # ===========================================================================
@@ -206,16 +408,38 @@ def test_bundle_dispatch_is_loud_not_implemented():
 # ===========================================================================
 @needs_e1
 def test_config_expanded_verbatim_unset_dropped():
-    raise NotImplementedError("R3: " + _SPEC)
+    stage = RouteStage(
+        name="s",
+        nets=["top.a"],
+        mode="single",
+        config=GridRouteOverride(track_width=0.3, clearance=0.15),
+    )
+    inv = _invs(_plan([stage]), _ir({"top.a": "/A"}))[0]
+    assert inv.kwargs["track_width"] == 0.3 and inv.kwargs["clearance"] == 0.15
+    # unset fields are NOT forwarded — the router default stands, no None leaks.
+    assert "via_size" not in inv.kwargs and "impedance" not in inv.kwargs
+    assert all(v is not None for v in inv.kwargs.values())
+    # E1 adds nothing beyond the explicitly-set config keys + the stackup layers.
+    assert set(inv.kwargs) == set(stage.config.model_fields_set) | {"layers"}
 
 
 # ===========================================================================
 # R4 — TS-AUTH-B impl side: layers == stackup_layers(board.stackup), never None
-# / the 4-layer default; a plan with no board.stackup is loud.
+# / the 4-layer default; a plan with no board/stackup is loud.
 # ===========================================================================
 @needs_e1
 def test_layers_sourced_from_stackup_never_default():
-    raise NotImplementedError("R4: " + _SPEC)
+    plan = _plan([RouteStage(name="s", nets=["top.a"], mode="single")])
+    inv = _invs(plan, _ir({"top.a": "/A"}))[0]
+    assert inv.kwargs["layers"] == _TWO_LAYER  # the stackup's ordered copper set
+    assert inv.kwargs["layers"] is not None and inv.kwargs["layers"] != _FOUR_LAYER
+    # negative: no stackup (and no board at all) ⇒ loud, never a silent default.
+    no_stk = _plan([RouteStage(name="s", nets=["top.a"], mode="single")], board=Board())
+    with pytest.raises(LayoutPlanError):
+        _invs(no_stk, _ir({"top.a": "/A"}))
+    no_board = _plan([RouteStage(name="s", nets=["top.a"], mode="single")], board=None)
+    with pytest.raises(LayoutPlanError):
+        _invs(no_board, _ir({"top.a": "/A"}))
 
 
 # ===========================================================================
@@ -224,7 +448,22 @@ def test_layers_sourced_from_stackup_never_default():
 # ===========================================================================
 @needs_e1
 def test_per_stage_config_layers_is_loud_single_authority():
-    raise NotImplementedError("R5: " + _SPEC)
+    bad = _plan(
+        [
+            RouteStage(
+                name="s",
+                nets=["top.a"],
+                mode="single",
+                config=GridRouteOverride(layers=["F.Cu", "B.Cu"]),
+            )
+        ]
+    )
+    with pytest.raises(LayoutPlanError):
+        _invs(bad, _ir({"top.a": "/A"}))
+    # control: the SAME stage without a per-stage layers override builds, sourcing
+    # layers from the stackup authority.
+    ok = _plan([RouteStage(name="s", nets=["top.a"], mode="single")])
+    assert _invs(ok, _ir({"top.a": "/A"}))[0].kwargs["layers"] == _TWO_LAYER
 
 
 # ===========================================================================
@@ -233,7 +472,24 @@ def test_per_stage_config_layers_is_loud_single_authority():
 # ===========================================================================
 @needs_e1
 def test_user_layer_constraints_forwarded_per_stage():
-    raise NotImplementedError("R6: " + _SPEC)
+    on = _plan(
+        [
+            RouteStage(
+                name="s",
+                nets=["top.a"],
+                mode="single",
+                config=GridRouteOverride(
+                    guide_corridor_enabled=True, keepout_enabled=True
+                ),
+            )
+        ]
+    )
+    k = _invs(on, _ir({"top.a": "/A"}))[0].kwargs
+    assert k["guide_corridor_enabled"] is True and k["keepout_enabled"] is True
+    # a stage that sets neither ⇒ neither key present (default off, router decides).
+    off = _plan([RouteStage(name="s", nets=["top.a"], mode="single")])
+    k2 = _invs(off, _ir({"top.a": "/A"}))[0].kwargs
+    assert "guide_corridor_enabled" not in k2 and "keepout_enabled" not in k2
 
 
 # ===========================================================================
@@ -243,7 +499,18 @@ def test_user_layer_constraints_forwarded_per_stage():
 # ===========================================================================
 @needs_e1
 def test_board_accumulates_across_stages_output_naming_no_locks():
-    raise NotImplementedError("R7: " + _SPEC)
+    stages = [RouteStage(name=f"s{i}", nets=["top.a"], mode="single") for i in range(3)]
+    plan = _plan(stages)
+    invs = _invs(plan, _ir({"top.a": "/A"}))
+    assert invs[0].input_file == _IN  # stage 0 starts from the original board
+    for k in range(2):
+        assert invs[k].output_file == invs[k + 1].input_file  # chained
+    for inv in invs:
+        assert inv.output_file.endswith(f"{inv.stage_name}.kicad_pcb")  # per stage
+    # no locks / presets: E1 forwards ONLY the config-set keys + layers, nothing else.
+    for i, inv in enumerate(invs):
+        cfg = plan.route_stages[i].config
+        assert set(inv.kwargs) <= set(cfg.model_fields_set) | {"layers"}
 
 
 # ===========================================================================
@@ -251,8 +518,41 @@ def test_board_accumulates_across_stages_output_naming_no_locks():
 # 0 to every total, the stage still appears as zero-routed.
 # ===========================================================================
 @needs_e1
-def test_missing_json_summary_tolerated():
-    raise NotImplementedError("R8: " + _SPEC)
+def test_missing_json_summary_tolerated(tmp_path):
+    plan = _plan(
+        [
+            RouteStage(name="s1", nets=["top.a"], mode="single"),
+            RouteStage(name="s2", nets=["top.b"], mode="single"),
+        ]
+    )
+    ir = _ir({"top.a": "/A", "top.b": "/B"})
+    summaries = {
+        "s1": None,  # early return: nothing to route ⇒ no JSON_SUMMARY
+        "s2": {
+            "successful": 1,
+            "failed": 0,
+            "total_time": 0.1,
+            "total_iterations": 3,
+            "total_vias": 1,
+            "routed_single": ["/B"],
+            "failed_single": [],
+        },
+    }
+    report = run_route_stages(
+        plan, ir, input_board=_IN, workdir=tmp_path, invoker=_fake_invoker(summaries)
+    )
+    assert len(report.stages) == 2  # the None-summary stage is NOT dropped
+    assert report.totals["successful"] == 1 and report.totals["total_vias"] == 1
+    s1 = next(s for s in report.stages if s.stage_name == "s1")
+    assert s1.summary is None and s1.successful == 0  # present, zero-routed
+    assert report.up_to is None  # a full (non-truncated) run carries no breakpoint
+    # the report_path override is honored (the surface beyond the default location).
+    custom = tmp_path / "custom_report.json"
+    run_route_stages(
+        plan, ir, input_board=_IN, workdir=tmp_path,
+        invoker=_fake_invoker(summaries), report_path=custom,
+    )
+    assert custom.exists()
 
 
 # ===========================================================================
@@ -261,8 +561,53 @@ def test_missing_json_summary_tolerated():
 # written and json.loads round-trips report.to_dict().
 # ===========================================================================
 @needs_e1
-def test_aggregation_common_and_per_type_keys():
-    raise NotImplementedError("R9: " + _SPEC)
+def test_aggregation_common_and_per_type_keys(tmp_path):
+    import json
+
+    plan = _plan(
+        [
+            RouteStage(name="se", nets=["top.a"], mode="single"),
+            RouteStage(name="dp", nets=["top.b", "top.c"], mode="diff"),
+        ]
+    )
+    ir = _ir({"top.a": "/A", "top.b": "/P", "top.c": "/N"})
+    summaries = {
+        "se": {
+            "successful": 2,
+            "failed": 1,
+            "total_time": 0.5,
+            "total_iterations": 10,
+            "total_vias": 3,
+            "routed_single": ["/A", "/A2"],
+            "failed_single": ["/A3"],
+        },
+        "dp": {
+            "successful": 1,
+            "failed": 0,
+            "total_time": 0.3,
+            "total_iterations": 5,
+            "total_vias": 2,
+            "routed_diff_pairs": [["/P", "/N"]],
+            "failed_diff_pairs": [],
+        },
+    }
+    report = run_route_stages(
+        plan, ir, input_board=_IN, workdir=tmp_path, invoker=_fake_invoker(summaries)
+    )
+    # common scalar keys summed from the summary dicts.
+    assert report.totals["successful"] == 3 and report.totals["failed"] == 1
+    assert report.totals["total_vias"] == 5
+    assert report.totals["total_time"] == pytest.approx(0.8)
+    assert report.totals["total_iterations"] == 15
+    # per-type list keys kept SEPARATE by entry type.
+    assert "routed_single" in report.by_type["single"]
+    assert "routed_diff_pairs" not in report.by_type["single"]
+    assert "routed_diff_pairs" in report.by_type["diff"]
+    assert "routed_single" not in report.by_type["diff"]
+    # route_report.json written and round-trips the report dict.
+    rp = tmp_path / "route_report.json"
+    assert rp.exists()
+    assert json.loads(rp.read_text()) == report.to_dict()
 
 
 # ===========================================================================
@@ -270,8 +615,17 @@ def test_aggregation_common_and_per_type_keys():
 # len(report.stages) == k, report.final_board == invs[-1].output_file.
 # ===========================================================================
 @needs_e1
-def test_up_to_by_stage_name_slices():
-    raise NotImplementedError("R10: " + _SPEC)
+def test_up_to_by_stage_name_slices(tmp_path):
+    plan = _plan(_three_stages())
+    ir = _ir({"top.a": "/A"})
+    invs = build_invocations(plan, ir, input_board=_IN, workdir=tmp_path, up_to="s2")
+    assert [i.stage_name for i in invs] == ["s1", "s2"]  # sliced at the named stage
+    report = run_route_stages(
+        plan, ir, input_board=_IN, workdir=tmp_path, up_to="s2",
+        invoker=_fake_invoker({}),
+    )
+    assert report.up_to == "s2" and len(report.stages) == 2
+    assert report.final_board == invs[-1].output_file  # partial board pinned (pure)
 
 
 # ===========================================================================
@@ -279,8 +633,21 @@ def test_up_to_by_stage_name_slices():
 # normalized to the resolved stage NAME (never a raw int).
 # ===========================================================================
 @needs_e1
-def test_up_to_by_1based_index_slices():
-    raise NotImplementedError("R11: " + _SPEC)
+def test_up_to_by_1based_index_slices(tmp_path):
+    plan = _plan(_three_stages())
+    ir = _ir({"top.a": "/A"})
+    by_name = build_invocations(plan, ir, input_board=_IN, workdir=_WD, up_to="s2")
+    by_idx = build_invocations(plan, ir, input_board=_IN, workdir=_WD, up_to=2)
+    names = [i.stage_name for i in by_name]
+    assert [i.stage_name for i in by_idx] == names == ["s1", "s2"]
+    # up_to == len ⇒ the full plan.
+    full = build_invocations(plan, ir, input_board=_IN, workdir=_WD, up_to=3)
+    assert len(full) == 3
+    # report.up_to is normalized to the stage NAME for the index form.
+    report = run_route_stages(
+        plan, ir, input_board=_IN, workdir=tmp_path, up_to=2, invoker=_fake_invoker({})
+    )
+    assert report.up_to == "s2"
 
 
 # ===========================================================================
@@ -288,8 +655,15 @@ def test_up_to_by_1based_index_slices():
 # (LayoutPlanError), never a silent clamp; paired controls succeed.
 # ===========================================================================
 @needs_e1
-def test_up_to_out_of_range_or_unknown_is_loud():
-    raise NotImplementedError("R12: " + _SPEC)
+@pytest.mark.parametrize("up_to", [0, 4, "nope"], ids=["zero", "over", "unknown_name"])
+def test_up_to_out_of_range_or_unknown_is_loud(up_to):
+    plan = _plan(_three_stages())
+    ir = _ir({"top.a": "/A"})
+    with pytest.raises(LayoutPlanError):
+        build_invocations(plan, ir, input_board=_IN, workdir=_WD, up_to=up_to)
+    # controls: 1-based index 1 and the matching name both resolve.
+    assert build_invocations(plan, ir, input_board=_IN, workdir=_WD, up_to=1)
+    assert build_invocations(plan, ir, input_board=_IN, workdir=_WD, up_to="s1")
 
 
 # ===========================================================================
@@ -297,7 +671,16 @@ def test_up_to_out_of_range_or_unknown_is_loud():
 # ===========================================================================
 @needs_e1
 def test_net_names_from_resolve_nets_verbatim():
-    raise NotImplementedError("R13: " + _SPEC)
+    stage = RouteStage(
+        name="dp",
+        nets=["top.a", "top.b"],
+        mode="diff",
+        config=GridRouteOverride(diff_pair_gap=0.2),
+    )
+    plan = _plan([stage])
+    ir = _ir({"top.a": "/A", "top.b": "/B"})
+    inv = _invs(plan, ir)[0]
+    assert inv.net_names == plan.resolve_nets(ir)["dp"] == ["/A", "/B"]
 
 
 # ===========================================================================
@@ -305,8 +688,14 @@ def test_net_names_from_resolve_nets_verbatim():
 # explode (it never shells out, never imports the router).
 # ===========================================================================
 @needs_e1
-def test_build_invocations_is_pure_no_subprocess():
-    raise NotImplementedError("R14: " + _SPEC)
+def test_build_invocations_is_pure_no_subprocess(monkeypatch):
+    def _boom(*_a, **_k):
+        raise AssertionError("build_invocations shelled out — it must be pure")
+
+    monkeypatch.setattr(subprocess, "run", _boom)
+    plan = _plan([RouteStage(name="s", nets=["top.a"], mode="single")])
+    invs = _invs(plan, _ir({"top.a": "/A"}))
+    assert invs and invs[0].entry == "batch_route"
 
 
 # ===========================================================================
@@ -314,8 +703,29 @@ def test_build_invocations_is_pure_no_subprocess():
 # parses a JSON_SUMMARY into a StageResult (tolerating the early-return None).
 # ===========================================================================
 @needs_e1
-def test_e2e_subprocess_invoker_single_net():
-    raise NotImplementedError("E15: " + _SPEC)
+@needs_router
+def test_e2e_subprocess_invoker_single_net(tmp_path):
+    if not _router_importable():
+        pytest.skip("system python3 cannot import the router (ext not built)")
+    out = tmp_path / "s.kicad_pcb"
+    inv = StageInvocation(
+        stage_name="s",
+        stage_type="single",
+        entry="batch_route",
+        module="route",
+        input_file=str(_BOARD),
+        output_file=str(out),
+        net_names=["/DATA+"],
+        kwargs={"layers": _TWO_LAYER, "track_width": 0.2, "clearance": 0.2},
+    )
+    res = default_subprocess_invoker(inv)
+    # the invoker PLUMBING: a StageResult carrying the stage identity, regardless of
+    # whether the single-ended route completed (early return ⇒ summary None).
+    assert res.stage_name == "s" and res.stage_type == "single"
+    assert res.summary is None or (
+        {"successful", "failed", "total_vias"} <= res.summary.keys()
+        and {"routed_single", "failed_single"} <= res.summary.keys()
+    )
 
 
 # ===========================================================================
@@ -323,5 +733,27 @@ def test_e2e_subprocess_invoker_single_net():
 # board produces route_report.json with summed totals + per-type breakdown.
 # ===========================================================================
 @needs_e1
-def test_e2e_full_run_writes_route_report():
-    raise NotImplementedError("E16: " + _SPEC)
+@needs_router
+def test_e2e_full_run_writes_route_report(tmp_path):
+    if not _router_importable():
+        pytest.skip("system python3 cannot import the router (ext not built)")
+    plan = _plan(
+        [
+            RouteStage(
+                name="dp",
+                nets=["x.p", "x.n"],
+                mode="diff",
+                config=GridRouteOverride(
+                    track_width=0.2, clearance=0.2, diff_pair_gap=0.25
+                ),
+            )
+        ]
+    )
+    ir = _ir({"x.p": "/DATA+", "x.n": "/DATA-"})
+    report = run_route_stages(plan, ir, input_board=str(_BOARD), workdir=tmp_path)
+    assert (tmp_path / "route_report.json").exists()
+    assert "diff" in report.by_type and "routed_diff_pairs" in report.by_type["diff"]
+    assert report.final_board == str(tmp_path / "dp.kicad_pcb")
+    # the LVDS board's one diff pair routes deterministically (smoke oracle 1/0),
+    # so a routing regression turns this red instead of passing on >= 0.
+    assert report.totals["successful"] >= 1
