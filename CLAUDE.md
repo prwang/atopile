@@ -56,7 +56,8 @@ sheetname 同步）→ `generate_layout_plan`（§D：placement rule area + `<t>
 - `placement.py` — `apply_placements` build 侧消费 `LayoutPlan.placements`：按 `atopile_address` 命中受管 footprint，用 `resolve_component_pose`（文本>reuse）经 transformer `move_fp` 移位/翻面，**覆盖**自动网格摊开；在 `generate_layout_plan` 于 `layout_ir` 前调用（契约 `test_placement_apply_contract.py`）。
 - `room_ops.py` — 强制 via / room copy / `pad_board_xy` 坐标变换（room 局部→板坐标，含 rotate；§C 已实现）。
 - `bundle_geometry.py` — D-Tier2 bundle 横截面 offset 几何 SSOT（已落地；`generate_layout_plan` 经 `bundle_artifact` 注入 `<t>.layout_plan.json`，契约 `test_bundle_contract.py` + e2e `test_bundle_build.py`）。
-- `config.py` `ensure_layout` — 生成 fresh board 的层表由 `board.stackup`（`_stackup_copper_names`→`stackup_layers`）单一权威派生，杀 2 层硬编码（D-Tier3 TS-AUTH-A；router 侧权威 = §E1 TS-AUTH-B 待做）。
+- `config.py` `ensure_layout` — 生成 fresh board 的层表由 `board.stackup`（`_stackup_copper_names`→`stackup_layers`）单一权威派生，杀 2 层硬编码（D-Tier3 TS-AUTH-A；router 侧权威 = §E1 TS-AUTH-B ✅ 见 `layout_plan_runner.py`）。
+- `layout_plan_runner.py` — §E1 route runner：`build_invocations`（纯，route_stages → 按类型分派的 `StageInvocation`：single→`route.batch_route`／diff→`route_diff.batch_route_diff_pairs`／bundle→loud=E-Tier2；config 逐字展开；`layers` ← `stackup_layers` 单一权威 TS-AUTH-B，per-stage `config.layers` loud；跨 stage 板累积不加锁；`--up-to` 断点）+ `run_route_stages`（驱动 invoker、容忍缺 `JSON_SUMMARY`、按类型聚合、写 `route_report.json`）+ `default_subprocess_invoker`（shell 到 system python3 跑 router）。库（消费方 = `ato route`/§F），契约 `test_layout_plan_runner_contract.py`。
 - `libs/kicad/layout_ir.py` — `layout_ir.json` = **bridge②**（ato 地址 → net/pad/room）；布线与诊断按地址定位，不解析 KiCad 文件。
 
 **布线器**（submodule `vendor/KiCadRoutingTools`，跑在 **system python3**，非 venv——rust 内核 ext 未为 venv 构建）：

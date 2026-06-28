@@ -58,7 +58,6 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-import atopile.build_steps as _build_steps
 import atopile.config as _config_mod
 from faebryk.libs.kicad.fileformats import kicad
 from faebryk.libs.util import repo_root as _repo_root
@@ -130,12 +129,20 @@ def _board_generator_uses_stackup_authority() -> bool:
 
 
 def _e1_passes_stackup_to_router() -> bool:
-    """E1 dispatch passes `stackup_layers(...)` as the router `layers`: it
-    references the stackup authority (as a real Name, not a bare import) AND
-    invokes a router entry. The router is dispatched as a SUBPROCESS string driver
-    (the rust ext is not built for the venv), so its entry name lives in a string
-    LITERAL — detect it as a source substring (ast.Constant), never an ast.Name."""
-    src = Path(_build_steps.__file__).read_text()
+    """E1 (`layout_plan_runner.py`, the route runner) passes `stackup_layers(...)`
+    as the router `layers`: it references the stackup authority (as a real Name,
+    not a bare import) AND invokes a router entry. Scoped to the runner — NOT
+    build_steps — because routing is `ato route` (§F), not a build step; the runner
+    is the E1 module that sources layers. The router is dispatched as a SUBPROCESS
+    string driver (the rust ext is not built for the venv), so its entry name lives
+    in a string LITERAL — detect it as a source substring, never an ast.Name."""
+    runner = (
+        _repo_root()
+        / "src" / "faebryk" / "exporters" / "pcb" / "layout" / "layout_plan_runner.py"
+    )
+    if not runner.exists():
+        return False
+    src = runner.read_text()
     names = {n.id for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Name)}
     calls_router = "batch_route" in src  # string driver substring, not a Name
     return calls_router and "stackup_layers" in names

@@ -131,6 +131,7 @@ or cannot import the router, exactly like test_router_smoke_batch_route.py.
 
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -754,6 +755,50 @@ def test_e2e_full_run_writes_route_report(tmp_path):
     assert (tmp_path / "route_report.json").exists()
     assert "diff" in report.by_type and "routed_diff_pairs" in report.by_type["diff"]
     assert report.final_board == str(tmp_path / "dp.kicad_pcb")
+    # the routed board is actually WRITTEN (catches return_results=True, which would
+    # return data instead of writing the file — route.py:775).
+    assert Path(report.final_board).exists()
     # the LVDS board's one diff pair routes deterministically (smoke oracle 1/0),
     # so a routing regression turns this red instead of passing on >= 0.
     assert report.totals["successful"] >= 1
+
+
+# ===========================================================================
+# E17 — e2e: two stages chain (stage 1's output board feeds stage 2), and a
+# zero-routed stage (nets already connected ⇒ no JSON_SUMMARY) is tolerated AND
+# still chains a board through (the partial/final board always resolves).
+# ===========================================================================
+@needs_e1
+@needs_router
+def test_e2e_two_stage_chaining_and_missing_summary(tmp_path):
+    if not _router_importable():
+        pytest.skip("system python3 cannot import the router (ext not built)")
+    plan = _plan(
+        [
+            RouteStage(
+                name="dp",
+                nets=["x.p", "x.n"],
+                mode="diff",
+                config=GridRouteOverride(
+                    track_width=0.2, clearance=0.2, diff_pair_gap=0.25
+                ),
+            ),
+            # stage 2 reads stage 1's routed board; the pair is now connected, so
+            # single-mode routing finds nothing to do ⇒ early return, no summary.
+            RouteStage(
+                name="again",
+                nets=["x.p"],
+                mode="single",
+                config=GridRouteOverride(track_width=0.2, clearance=0.2),
+            ),
+        ]
+    )
+    ir = _ir({"x.p": "/DATA+", "x.n": "/DATA-"})
+    report = run_route_stages(plan, ir, input_board=str(_BOARD), workdir=tmp_path)
+    assert len(report.stages) == 2
+    again = next(s for s in report.stages if s.stage_name == "again")
+    assert again.summary is None  # nothing to route ⇒ tolerated, zero-routed
+    # the zero-routed last stage still produces a board (copied through) ⇒ the chain
+    # and final_board resolve to a real file.
+    assert report.final_board == str(tmp_path / "again.kicad_pcb")
+    assert Path(report.final_board).exists()

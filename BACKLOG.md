@@ -37,10 +37,10 @@ SSOT），BACKLOG 只留"结论 + 代码指针"，绝不复述实现细节或调
 | **C3** | **group→sheetname 迁移（room 去 group 化）** | ✅ 2026-06-15（见 §C3 代码指针） |
 | **D** | **layout.yaml 加载 + placement rule area（D1–D4）** | ✅ 2026-06-16（见 §D 代码指针）；D5 后置 |
 | **D-Tier2** | **bundle 总线传输 schema + geometry（桶①）** | ✅ 桶① 2026-06-20（model+geometry）+ D 侧 build 集成 2026-06-25（`generate_layout_plan` 调 `bundle_artifact`，e2e `examples/sata_bundle`）；桶② `batch_route_bundle` 契约 strict-xfail，实现移 §E E-Tier2（用户拍板） |
-| **D-Tier3** | **自包含：摆放（room 相对坐标）+ 板框 outline + 完整叠层** | 🟢 桶① + 桶② TS-AUTH-A + placements→transformer 已落地（2026-06-26 / 2026-06-28）：摆放 schema+`apply_placements` build 消费 / `Room.polygon`+rotation+layers / `board.outline`+完整 `stackup` / impedance→stackup 硬依赖 / **单一层数权威板侧** `config` 派生自 `stackup_layers`（杀 2 层硬编码）；契约 `test_placement_contract.py`+`test_placement_apply_contract.py`+`test_board_section_contract.py`。剩余仅下游实现：**TS-AUTH-B=§E1**（router 层表）、**桶③=§E DoD**（纯文本 e2e）；net-class/pour/keepout/silk 进 §F |
-| **增量执行** | **route_stages `--up-to` 断点 + stage name 唯一** | 🟡 stage name 唯一 ✅ 2026-06-28；`--up-to` 断点归 §E1（产物 `route_report.json` 需 router，build 时仅截断无消费者=死代码） |
+| **D-Tier3** | **自包含：摆放（room 相对坐标）+ 板框 outline + 完整叠层** | 🟢 桶① + 桶② TS-AUTH-A + placements→transformer 已落地（2026-06-26 / 2026-06-28）：摆放 schema+`apply_placements` build 消费 / `Room.polygon`+rotation+layers / `board.outline`+完整 `stackup` / impedance→stackup 硬依赖 / **单一层数权威板侧** `config` 派生自 `stackup_layers`（杀 2 层硬编码）；契约 `test_placement_contract.py`+`test_placement_apply_contract.py`+`test_board_section_contract.py`。**TS-AUTH-B（router 层表）✅ 2026-06-28（E1 由 `stackup_layers` 传 `layers`）**；剩 **桶③=§E DoD**（纯文本 e2e）；net-class/pour/keepout/silk 进 §F |
+| **增量执行** | **route_stages `--up-to` 断点 + stage name 唯一** | ✅ 2026-06-28：stage name 唯一 + `--up-to`（name/1-based index，越界 loud，写部分板+`route_report.json`）落在 E1 runner |
 | **Tier0** | **corridor-as-data（纯 schema 旁支，零 router 改动）** | ✅ 2026-06-28（`corridor.py` / `RouteStage.corridor`） |
-| E–F | 路由 fork + 诊断闭环——**章节字母 = 执行序** | ⬜（C3+D 已解锁 E；**E-Tier2 = bundle 路由实现**） |
+| E–F | 路由 fork + 诊断闭环——**章节字母 = 执行序** | 🔶 **E1 ✅ 2026-06-28**（runner+`route_report.json`+`--up-to`+TS-AUTH-B）；剩 E2 / E-Tier2(bundle) / E3 / §E DoD / §F |
 | G | 不做 / 暂缓 | — |
 
 ### 依赖与关键路径（v10 数据模型推导；**章节字母 = 执行序**）
@@ -320,53 +320,48 @@ rotation+side 经 transformer 的翻转感知 `move_fp` 应用；命中不存在
 `layout_ir` 之前调用，故 room 派生 bbox 反映最终位置。指针：`placement.py`（`apply_placements`/`_room_for`，room =
 component 地址最长前缀的 room）、`build_steps.generate_layout_plan`；契约 `test_placement_apply_contract.py`（PA1-6）。
 
+### §E1 route runner（route_stages → 路由调用 + route_report.json）【✅ 2026-06-28】
+`layout_plan_runner.py`：纯 `build_invocations`（route_stages → `StageInvocation` 列表，零 subprocess/零 router import）
++ `run_route_stages`（按 stage 驱动 invoker、聚合、写 `route_report.json`）+ `default_subprocess_invoker`（shell 到
+system python3 跑 router、解析 `JSON_SUMMARY`，早返=None）。落地契约：按 stage 类型分派（single→`route.batch_route`／
+diff→`route_diff.batch_route_diff_pairs`，union tag 先于 `RouteStage.mode`）；config 逐字展开（仅 explicitly-set，余走
+router 默认、不漏 None、不重校 D2 已校的 mode 键）；**层表唯一权威** = `stackup_layers(board.stackup)`，绝不吃
+`route.py:230` 四层默认（**翻绿 TS-AUTH-B**）；缺 board/stackup 或 per-stage `config.layers` 一律 loud（单一权威）；
+跨 stage 板累积（前序铜=白送硬障碍，不加锁）；容忍缺 `JSON_SUMMARY`（早返=零布线、不 KeyError）；聚合 common
+标量键（含 `total_time`/`total_iterations`）从 summary dict 求和、per-type 列表分桶；`--up-to <name|1-based index>`
+断点（写部分板+report，越界/未知 loud、bundle 在 slice 外不报，`report.up_to` 归一为 stage 名）。
+指针：`layout_plan_runner.py`、契约 `test_layout_plan_runner_contract.py`（R1-R14 纯 + E15/E16 e2e）；TS-AUTH-B
+棘轮探针改指 runner（`test_board_section_contract.py::_e1_passes_stackup_to_router`，旧指 build_steps——路由非 build
+step，已纠）。
+源码外结论（诚实记限制）：
+- E1 是**库**：现由 e2e 测试消费，CLI `ato route` 走 §F（路由非 `ato build` 步骤，故不进 build pipeline）。
+- **bundle 分派 = loud not-implemented**（`batch_route_bundle` = E-Tier2、未建）：只钉 entry 名，不跑真 bundle。
+- e2e（E15/E16）gated on system python3 + router 板；**本沙盒 scipy 在场、真跑过**（LVDS 2 层板，diff 对真布通，
+  `successful>=1`）；无单端 fixture 板，故 E15 用单端入口路由 diff 对的一条线并容忍早返（只验 invoker 管线）。
+- **per-stage 层子集化 = 有意非目标**（单一权威）：per-stage `config.layers` 响亮拒；将来若需按 stage 限层另议。
+
 ---
 
 ## 未完成任务
 
 **本节自上而下 = 执行序**（章节字母 = 关键路径顺序）。已完成前置（C3+D / D-Tier2 桶① / D-Tier3 桶①·TS-AUTH-A /
-Tier0 corridor / stage-name 唯一 / placements→transformer）全见上「已完成」。**剩余关键路径 = §E（E1→E2→E-Tier2
-bundle）→ §F**。
+Tier0 corridor / stage-name 唯一 / placements→transformer / **§E1 runner+TS-AUTH-B+`--up-to`**）全见上「已完成」。
+**剩余关键路径 = §E（E2→E-Tier2 bundle）→ §F**。
 
 contract-first 下游棘轮的契约留在各自 D 测试文件、实现**就地落进 §E**，故**不再另列 D 残块**：
-桶② = §E-Tier2；TS-AUTH-B（router 层表）= §E1（见 E1「层表 ← board.stackup」）；桶③ 纯文本 e2e = **§E DoD**。
+桶② = §E-Tier2；**TS-AUTH-B（router 层表）✅ 落在 §E1**；桶③ 纯文本 e2e = **§E DoD**。
 
 真正不在关键路径上的旁支（P0.2-S7 终验、D5 component_class）收进 §E/§F **之后**的「旁支任务」节、**故意不编 E/F
-序号**（编入会假称其在关键路径上）；`--up-to` 断点不是旁支而是 §E1 的产物（写 `route_report.json` 需 router），见 E1。
+序号**（编入会假称其在关键路径上）。
 
 ### E.【需 §C + §D】KiCadRoutingTools fork
 E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶段能力。E3 全程并行先搭。
 **E1 dispatch 从一开始按「single / diff / bundle」三类 stage 设计**（D-Tier2 契约冻结后填 bundle 实现，勿事后改）。
-- [ ] **E1** `layout_plan_runner.py`：route_stages → **按 stage 类型**展开成 `batch_route`/
-  `batch_route_diff_pairs`/`batch_route_bundle` 的 **kwargs**（字段名 = router 入口入参，**非** GridRouteConfig；
-  翻译在 router 内部，见 D2 纠偏）→ 多次路由调用，阶段间 pcb_data 累积。产 `route_report.json`。
-  - **按 stage 类型分派入口（§C 边界事实 1/设计决策，不合并算法）**：single → `route.py:batch_route`、
-    diff → `route_diff.py:batch_route_diff_pairs`、**bundle → `batch_route_bundle`（契约 = `test_bundle_contract.py`
-    docstring SSOT，E-Tier2 实现）**；聚合按共有键 `failed`/`successful`/`total_vias` 归一、各类型键各自解析。类型来自
-    `route_stages` 判别联合（D2 + `BundleStage`），不自动猜测。
-  - **容忍缺失 `JSON_SUMMARY`**（边界事实 2）：已被 §C 完全连通的 net 不再路由，应在路由前从
-    batch 输入剔除；聚合不得假设每条输入 net 都有 summary。
-  - **不为 §C 预置几何加 lock**（边界事实 2）：它们是已连通铜、router 自动不动。跨 stage 的前序铜同理是
-    不可撕硬障碍（锁定模型见「关键事实」16），E1 无需为任何已布几何加锁。
-  - **GridRouteOverride → kwargs 原样展开（按 mode 校验）**：`RouteStage.config`（D2 的 override，键 ⊆
-    两入口入参 union，**非 GridRouteConfig**，见 D2 纠偏）原样展开成 `batch_route`（单端）/
-    `batch_route_diff_pairs`（差分）的同名 kwargs——E1 不维护映射表（**翻译在 router 内部**，如
-    `impedance`→`impedance_target`，E1 不碰）。**键合法性已由 D2 parse 期 mode-aware 校验保证**
-    （D2 自测 ④：错 mode 键 parse 即响亮），故 E1 按 stage `mode` 选入口后可信地展开 `**override`；
-    E1 不重复校验。新增 router 字段只需 D2 override 放行。
-  - **按 stage 启用 §C/§D 的 User 层约束**（边界事实 4）：stage 可置 `guide_corridor_enabled`
-    （读 §C 的 User.1 引导，**注：仅 `batch_route` 单端入口收，差分入口无此 kwarg**）/ `keepout_enabled`
-    （读 §D 的 User.2 room 边界，两入口都收），默认关、由 route_stages 显式开——这是把 §C/§D 几何变成
-    布线约束的唯一通道。
-  - **层表 ← `board.stackup`（翻绿 D-Tier3 TS-AUTH-B）**：E1 由 `stackup_layers(board.stackup)` 显式传
-    `layers`，**严禁**吃 `route.py:231` 的 4 层 `DEFAULT_4_LAYER_STACK` 默认（否则往不存在的 In1/In2.Cu 布线）。
-    这是 D-Tier3 桶② TS-AUTH-B 棘轮的实现侧（实现归 §E1、契约留 D-Tier3）。
-  - **`--up-to <stage-name|index>` 增量断点（动机：用户——`layout.yaml` 是顺序文件须增量可调试）**：只跑
-    `route_stages[0..k]`、停下、写出**部分板 + `route_report.json`**（F 诊断输入），支持按名（stage-name 唯一已 ✅
-    保证可寻址）或 1-based index。续跑语义：改**更早** stage 须从该步重跑（铜累积、关键事实 16）、改**更晚** stage 可
-    从断点续——每 stage 产物 = 可续跑 checkpoint，喂 SKILL/agent 构成 `layout_plan.py` docstring「FORM」的
-    build→诊断→改 plan→重建 外层 loop。**归 §E1 而非旁支**：其产物 `route_report.json` 是 router 输出，build 时仅
-    截断 `route_stages` 无消费者（= 死代码），故必须随 runner 一起落。
+- [x] **E1** `layout_plan_runner.py`【✅ 2026-06-28，见上「已完成 §E1」】：route_stages → 按 stage 类型分派的
+  路由调用（single→`batch_route`／diff→`batch_route_diff_pairs`；bundle→loud not-implemented=E-Tier2）+
+  `route_report.json`；config 逐字展开、层表 ← `stackup_layers`（**翻绿 TS-AUTH-B**）、`--up-to` 断点、跨 stage
+  板累积不加锁、容忍缺 `JSON_SUMMARY`、按类型聚合。纯 `build_invocations` / 真跑 `run_route_stages` /
+  `default_subprocess_invoker`（shell 到 system python3）。契约 `test_layout_plan_runner_contract.py`。
 - [ ] **E2** 阶段锁定 = **依赖 router 既有的跨 stage 硬障碍，非新建锁**（锁定模型见「关键事实」16）：
   跨 stage 的前序铜对后续 stage 天然不可撕，故 bundle/有序流水线的"前一条线占了空间、后面用不了"**已是硬保证**，
   E2 **不需要**给 `Segment`/`Via` 加 `_metadata`、不需要给 `rip_up_net` 加跨 stage 守卫（那是在解一个不存在的问题）。
