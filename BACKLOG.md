@@ -37,8 +37,8 @@ SSOT），BACKLOG 只留"结论 + 代码指针"，绝不复述实现细节或调
 | **C3** | **group→sheetname 迁移（room 去 group 化）** | ✅ 2026-06-15（见 §C3 代码指针） |
 | **D** | **layout.yaml 加载 + placement rule area（D1–D4）** | ✅ 2026-06-16（见 §D 代码指针）；D5 后置 |
 | **D-Tier2** | **bundle 总线传输 schema + geometry（桶①）** | ✅ 桶① 2026-06-20（model+geometry）+ D 侧 build 集成 2026-06-25（`generate_layout_plan` 调 `bundle_artifact`，e2e `examples/sata_bundle`）；桶② `batch_route_bundle` 契约 strict-xfail，实现移 §E E-Tier2（用户拍板） |
-| **D-Tier3** | **自包含：摆放（room 相对坐标）+ 板框 outline + 完整叠层** | 🟢 桶① + 桶② TS-AUTH-A 已落地（2026-06-26 / 2026-06-28）：摆放 / `Room.polygon`+rotation+layers / `board.outline`+完整 `stackup` / impedance→stackup 硬依赖 / **单一层数权威板侧** `config` 派生自 `stackup_layers`（杀 2 层硬编码）；契约 `test_placement_contract.py`+`test_board_section_contract.py`。剩余仅下游实现：**TS-AUTH-B=§E1**（router 层表）、**桶③=§E DoD**（纯文本 e2e）；net-class/pour/keepout/silk 进 §F |
-| **增量执行** | **route_stages `--up-to` 断点 + stage name 唯一** | 🟡 stage name 唯一 ✅ 2026-06-28；`--up-to` 断点待做，配 §F 诊断闭环 |
+| **D-Tier3** | **自包含：摆放（room 相对坐标）+ 板框 outline + 完整叠层** | 🟢 桶① + 桶② TS-AUTH-A + placements→transformer 已落地（2026-06-26 / 2026-06-28）：摆放 schema+`apply_placements` build 消费 / `Room.polygon`+rotation+layers / `board.outline`+完整 `stackup` / impedance→stackup 硬依赖 / **单一层数权威板侧** `config` 派生自 `stackup_layers`（杀 2 层硬编码）；契约 `test_placement_contract.py`+`test_placement_apply_contract.py`+`test_board_section_contract.py`。剩余仅下游实现：**TS-AUTH-B=§E1**（router 层表）、**桶③=§E DoD**（纯文本 e2e）；net-class/pour/keepout/silk 进 §F |
+| **增量执行** | **route_stages `--up-to` 断点 + stage name 唯一** | 🟡 stage name 唯一 ✅ 2026-06-28；`--up-to` 断点归 §E1（产物 `route_report.json` 需 router，build 时仅截断无消费者=死代码） |
 | **Tier0** | **corridor-as-data（纯 schema 旁支，零 router 改动）** | ✅ 2026-06-28（`corridor.py` / `RouteStage.corridor`） |
 | E–F | 路由 fork + 诊断闭环——**章节字母 = 执行序** | ⬜（C3+D 已解锁 E；**E-Tier2 = bundle 路由实现**） |
 | G | 不做 / 暂缓 | — |
@@ -312,49 +312,27 @@ stage name 唯一性 loud 校验 = `--up-to` 断点按名寻址的前提，且�
 `LayoutPlan._validate_unique_stage_names`（`layout_plan.py`）；契约
 `test_layout_plan_contract.py::test_duplicate_stage_name_is_loud`（+ 正向控制 `test_distinct_stage_names_pass`）。
 
+### placements → transformer build 时消费【✅ 2026-06-28】
+纯函数权威 `resolve_component_pose`（文本>reuse 优先级，§D-Tier3 已落）现已接进 build：`apply_placements` 把每个
+文本 placement 命中的受管 footprint（按 `atopile_address` property 匹配）移到解析后的位姿，**覆盖** transformer 的
+自动 10mm 网格摊开（`transformer.py:176`/`:2013-2080`）——room 相对经 room origin 复合、`absolute` 逐字落、
+rotation+side 经 transformer 的翻转感知 `move_fp` 应用；命中不存在的 footprint = loud。在 `generate_layout_plan` 里于
+`layout_ir` 之前调用，故 room 派生 bbox 反映最终位置。指针：`placement.py`（`apply_placements`/`_room_for`，room =
+component 地址最长前缀的 room）、`build_steps.generate_layout_plan`；契约 `test_placement_apply_contract.py`（PA1-6）。
+
 ---
 
 ## 未完成任务
 
-执行序：C3+D + D-Tier2 桶① + D-Tier3 桶①/TS-AUTH-A + Tier0 corridor + stage-name 唯一（全 ✅，见上「已完成」）
-→ **剩余关键路径 = §E（E1→E2→E-Tier2 bundle）→ §F**。下游棘轮（D-Tier2 桶② / D-Tier3 TS-AUTH-B·桶③）的实现
-**按 contract-first 归 §E**（契约棘轮留在各自 D 测试文件、实现移下游）。可并行/择机、不挡关键路径：增量执行
-（`--up-to` 断点，stage-name 唯一已落地）、D5（component_class，需 fileformats 前置）、§F 的板级 net-class/DRC 表 /
-铜皮 pour / 非 placement 禁布 / 丝印（缺失须 loud、不缺省）。
+**本节自上而下 = 执行序**（章节字母 = 关键路径顺序）。已完成前置（C3+D / D-Tier2 桶① / D-Tier3 桶①·TS-AUTH-A /
+Tier0 corridor / stage-name 唯一 / placements→transformer）全见上「已完成」。**剩余关键路径 = §E（E1→E2→E-Tier2
+bundle）→ §F**。
 
-### P0.2 S7 flag-day 终验剩余（写 v10 代码已落 + 单测/e2e determinism 已绿）
-- [ ] examples/fixtures 工程 `.kicad_pcb` 一次性 v9→v10 升级提交；build→build→diff 确认
-  增量稳态（事实 6）。
-- [ ] BOM / 制造产物 / DRC smoke。
+contract-first 下游棘轮的契约留在各自 D 测试文件、实现**就地落进 §E**，故**不再另列 D 残块**：
+桶② = §E-Tier2；TS-AUTH-B（router 层表）= §E1（见 E1「层表 ← board.stackup」）；桶③ 纯文本 e2e = **§E DoD**。
 
-### D5. component class placement（后置）
-component_class 源的 placement rule area。**前置 = 修 fileformats schema**：走 `(component_class "X")`
-token，**不是** `ZonePlacement.source_type`/`source`（错建的内存/protobuf 字段，写出即 SEGFAULT KiCad——
-见「关键事实」placement 条 + 回归 `test_generated_placement_has_no_source_type`）。须给 zig `ZonePlacement`
-加 `component_class` 字段（或把 type+source 融成单 token），sheetname/component_class/group 三源各自一个 token。
-另需写 `.kicad_pro`（事实 10 之外的通道）。
-
-### D-Tier3 剩余（实现已按 contract-first 移下游；棘轮留各自 D 测试文件）
-桶① + 桶② TS-AUTH-A 已落地（见上「已完成 §D-Tier3」）。剩余三条仅是下游实现，契约棘轮已冻：
-- [ ] **TS-AUTH-B（router 层表权威）= §E1**：E1 把 `stackup_layers(board.stackup)` 当 `layers` 传 router、绝不吃
-  `route.py:231` 的 4 层 `DEFAULT_4_LAYER_STACK` 默认（否则往不存在的 In1/In2.Cu 布线）。棘轮
-  `test_board_section_contract.py::test_e1_passes_stackup_layers_to_router`（gated `_E1_LANDED`，现 strict-xfail）；
-  实现见未完成 §E1。
-- [ ] **桶③ 纯文本 e2e（§E DoD）**：无 reuse，`board.outline` + 完整 `board.stackup` + `placements` 全文本给定 →
-  生成 .kicad_pcb → 重读 `semantic_view` 验层表 / 板框 / 摆放落位 == plan（板上无 In1/In2.Cu 幽灵层）。待 §E 路由落地。
-- [ ] **placements → transformer 消费接线**：纯函数权威 `resolve_component_pose` 已落地（文本>reuse 优先级）；把它接进
-  受管 footprint 的 build 时 pose（取代 `transformer` 默认 (0,0,0)→按 parent 聚类 10mm 网格摊开）属 build 侧消费，
-  可与 §E 并行择机做。
-### 增量执行 / 断点调试（route_stages 按号停-取-回退）
-**动机（用户）**：`layout.yaml` 是顺序文件，必须**增量可调试**——可只执行到第 N 号 stage、取该部分结果，由 agent/人
-检查→回退→改→重跑，确保整体布线优先级完整落实。这与「关键事实」16 的跨 stage 硬障碍天然契合：每 stage 产物 = 可
-**续跑的 checkpoint**。
-- [x] **强制 stage `name` 唯一**（`LayoutPlan._validate_unique_stage_names`，loud）——按名寻址断点的前提（见上
-  「已完成 §route_stage name 唯一」）。
-- [ ] build 加 `--up-to <stage-name|index>`：只跑 `route_stages[0..k]`、停下，写出**部分板 + `route_report.json`**
-  （F 诊断闭环的输入）；同时支持 1-based index 寻址。
-- [ ] checkpoint 续跑语义写进文档：改**更早** stage 须从该步重跑（铜累积）；改**更晚** stage 可从断点续。每 stage
-  的结构化诊断喂 SKILL/agent，构成 `layout_plan.py` docstring「FORM」节描述的 build→诊断→改 plan→重建 外层 loop。
+真正不在关键路径上的旁支（P0.2-S7 终验、D5 component_class）收进 §E/§F **之后**的「旁支任务」节、**故意不编 E/F
+序号**（编入会假称其在关键路径上）；`--up-to` 断点不是旁支而是 §E1 的产物（写 `route_report.json` 需 router），见 E1。
 
 ### E.【需 §C + §D】KiCadRoutingTools fork
 E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶段能力。E3 全程并行先搭。
@@ -383,6 +361,12 @@ E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶
   - **层表 ← `board.stackup`（翻绿 D-Tier3 TS-AUTH-B）**：E1 由 `stackup_layers(board.stackup)` 显式传
     `layers`，**严禁**吃 `route.py:231` 的 4 层 `DEFAULT_4_LAYER_STACK` 默认（否则往不存在的 In1/In2.Cu 布线）。
     这是 D-Tier3 桶② TS-AUTH-B 棘轮的实现侧（实现归 §E1、契约留 D-Tier3）。
+  - **`--up-to <stage-name|index>` 增量断点（动机：用户——`layout.yaml` 是顺序文件须增量可调试）**：只跑
+    `route_stages[0..k]`、停下、写出**部分板 + `route_report.json`**（F 诊断输入），支持按名（stage-name 唯一已 ✅
+    保证可寻址）或 1-based index。续跑语义：改**更早** stage 须从该步重跑（铜累积、关键事实 16）、改**更晚** stage 可
+    从断点续——每 stage 产物 = 可续跑 checkpoint，喂 SKILL/agent 构成 `layout_plan.py` docstring「FORM」的
+    build→诊断→改 plan→重建 外层 loop。**归 §E1 而非旁支**：其产物 `route_report.json` 是 router 输出，build 时仅
+    截断 `route_stages` 无消费者（= 死代码），故必须随 runner 一起落。
 - [ ] **E2** 阶段锁定 = **依赖 router 既有的跨 stage 硬障碍，非新建锁**（锁定模型见「关键事实」16）：
   跨 stage 的前序铜对后续 stage 天然不可撕，故 bundle/有序流水线的"前一条线占了空间、后面用不了"**已是硬保证**，
   E2 **不需要**给 `Segment`/`Via` 加 `_metadata`、不需要给 `rip_up_net` 加跨 stage 守卫（那是在解一个不存在的问题）。
@@ -407,6 +391,9 @@ E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶
     schema）。整台 E3（失败注入 + 多板矩阵）仍待此处。
   - **待补：单端 `route.py:batch_route` 的 JSON_SUMMARY schema 校验**（边界事实 1）——薄片只验
     差分对键集，单端走 `routed_single`/`failed_single`，须扩第二条 schema 校验防静默失配。
+- [ ] **§E DoD — 桶③ 纯文本 e2e（翻绿 D-Tier3 桶③棘轮）**：无 reuse，`board.outline` + 完整 `board.stackup` +
+  `placements` 全文本给定 → 生成 .kicad_pcb → 重读 `semantic_view` 验层表 / 板框 / 摆放落位 == plan（板上无
+  In1/In2.Cu 幽灵层）。证明 `.ato`+`layout.yaml` 自包含建板，是 §E 路由落地后的完工判据。
 
 ### F.【最后做，需 §E route_report + B 的 ir 反查】诊断闭环
 - [ ] **F-route** `ato route --plan layout.yaml --stage <name>`：进程内调 §E1
@@ -426,6 +413,27 @@ E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶
   zone 现 reuse-only。缺失须 loud。
 - [ ] **F-silk** 丝印 / 文字文本化（从审计移入；现 reuse-only `layout_sync.py:288-304`）：低优先，但仍 **不缺省、
   缺失须 loud**（不静默产无丝印板当成已完成）。
+
+### 旁支任务（可并行 / 不挡关键路径；故意不编 E/F 序号）
+与 §E/§F 无硬依赖、可择机做；保留各自原标识（不塞进 E/F 编号，以免假称在关键路径上）。
+
+- [ ] **P0.2-S7 flag-day 终验剩余**（写 v10 代码已落 + 单测/e2e determinism 已绿；**需可跑全量 example build 的环境**——
+  本仓库 sandbox 缺 router scipy 等 build 依赖，无法在此验，故未做、不可盲改已提交输入板）：
+  - examples/fixtures 的 v9 输入板（esp32_minimal / layout_reuse·sub / led_badge×3 / test-project×2 / faebryk example
+    共 8 块；sata_bundle 已是 v10）一次性 v9→v10 升级提交（load+dump 即升级，`kicad-cli` 在场）；build→build→diff 确认
+    增量稳态（事实 6，复用 `test_group_determinism.py`+`semantic_view`，现仅覆盖 layout_reuse，需小幅参数化到其余）。
+    **勿动** `fileformats/kicad/v8|v9` 语料板（它们是有意保留的旧版只读输入）。
+  - BOM / 制造产物 / DRC smoke：BOM+DRC 已在默认 build 跑、mfg-data 在 `all` target；缺的只是一个断言
+    `.bom.csv`/`.bom.json`/`.gerber.zip`/`.pick_and_place.csv` 产出且 BOM 非空的 smoke e2e（复用现有 `_build` fixture）。
+- [ ] **D5 component_class placement**（component_class 源的 placement rule area；与 sheetname 源并存）：
+  - **token 已实测安全（2026-06-28）**：`(placement (enabled yes) (component_class "X"))` 经 `kicad-cli pcb upgrade --force`
+    加载 rc=0、逐字回写——是合法 KiCad-10 文法，**不属** `source_type`/`source` 的 SEGFAULT 类（那两个是错建的内存/
+    protobuf 字段、文件无此 token、写出即崩，见 §D 结论 + 回归 `test_generated_placement_has_no_source_type`）。
+  - 余下实现（5 件，非快速 fact&pointer）：① 给 zig `ZonePlacement` 加 `component_class: ?str = null` 字段（镜像现有
+    `sheetname`，自动 build-on-import 重编，`E_zone_placement_source_type` 枚举已有该成员）；② layout.yaml/`Room` 加
+    component_class 源字段；③ `rule_area` 按源 emit `(component_class "X")`；④ **写 `.kicad_pro` 声明 class 成员归属**
+    （atopile 现不写 .kicad_pro——`set_kicad_netlist_path_in_project` 是死代码，模型 `C_kicad_project_file` 在；属净新通道）；
+    ⑤ 加 `(component_class)` 往返 + kicad-cli ingest 测试。
 
 ### G. 不做 / 暂缓
 - ❌ **hack uuid = 绝对禁止**（不可逾越原则）：uuid 是 128bit 不透明 id，atopile **既不往里写

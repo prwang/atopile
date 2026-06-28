@@ -911,6 +911,7 @@ def generate_layout_plan(ctx: BuildStepContext) -> None:
         BundleStage,
         load_layout_plan,
     )
+    from faebryk.exporters.pcb.layout.placement import apply_placements
     from faebryk.exporters.pcb.layout.rule_area import generate_rule_areas
     from faebryk.libs.kicad.layout_ir import layout_ir
 
@@ -919,6 +920,9 @@ def generate_layout_plan(ctx: BuildStepContext) -> None:
     kicad_pcb = pcb.pcb_file.kicad_pcb
 
     plan = load_layout_plan(layout_config)
+    # text placements override the auto-grid spread BEFORE ir is computed, so a
+    # room's derived bbox reflects the final footprint positions (not the grid).
+    apply_placements(kicad_pcb, plan)
     ir = layout_ir(kicad_pcb, app)
 
     generate_rule_areas(kicad_pcb, plan, ir)

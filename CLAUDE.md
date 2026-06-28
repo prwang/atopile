@@ -3,6 +3,7 @@
 ## 协作规则
 
 - **禁止不透明的 auto-memory**：不要写入 `~/.claude/.../memory/` 等用户不可见的持久化记忆。所有跨会话需要记住的偏好、决策、约束，一律写进本文件（`./CLAUDE.md`），随项目可见、可审、可版本控制。
+- **提交节奏 = dev 小步自提，门在 merge-to-master【2026-06-28 用户定调，取代旧"仅在用户要求时 commit"】**：在 dev / feature 分支上**可自主提交小步 checkpoint**，无需逐次征求许可——小步快提优于攒大堆变更。**唯一硬门 = 合并到 `master`**：merge / push 到 master 必须经用户明确批准，绝不自行 merge 或 push master。配套不变量：① 永远在 feature 分支上工作（在 master 上则先开分支）；② commit message 结尾带 `Co-Authored-By` + `Claude-Session` trailer；③ commit 前跑 `ps` 自检（见下「后台进程必须回收」）。
 - **后台进程必须回收**：每次 `git commit` 前、以及每次向用户交付（结束回合）前，**不得留下任何在跑或挂死的后台进程/监控 shell**（`ato build`、pytest、`until … sleep` 轮询、被自动 background 的任务等）。规则：① 用 `run_in_background` 起的活就要等它跑完或显式 kill；② 监控用 `until <cond>; do sleep N; done` 一次性等到位，别留轮询；③ 交付/commit 前跑一次 `ps` 自检，确认无 `/tmp` 工作区或 ato/pytest 残留再继续。教训：PATH 顺序错配（`~/.local/bin/ato` 旧版排在 venv 前）会让 BuildQueue spawn 旧 worker、orchestrator 崩在 pydantic/sqlite 但主进程挂死空转——这类僵尸最易遗漏。
 - **长期文档 = 单一现状定义，禁止补丁摞补丁**：BACKLOG.md / CLAUDE.md 等长期文档是「我与未来 agent 的唯一权威」，误读后果严重——**歧义本身就是 bug**。每条事实只能存在**一份最新、精确、自包含、无歧义**的定义。**禁止**：① 用删除线（`~~…~~`）保留旧错误文字与新结论并列；② 把同一事实写成「旧结论（日期A）→ 更正（日期B）→ 再更正（日期C）」的日期补丁层叠。**更正即就地重写**那条定义本身，使读者无需追溯历史即可读到唯一正确版本。允许且仅允许保留一处**简短的「曾因 X 踩坑」教训行**（帮助理解为何如此规定），但绝不能让过时结论与现行结论并存、互相矛盾。写入前自检：若一个新读者只读这一段、不看 git 历史，会不会被误导？会则重写。
 
@@ -52,6 +53,7 @@ sheetname 同步）→ `generate_layout_plan`（§D：placement rule area + `<t>
 - `layout_plan.py` — `layout.yaml` 意图模型（D2 `rooms`/`route_stages`；D-Tier2 `BundleStage` 判别联合；D-Tier3 桶①：`Placement`+`resolve_placement`+`resolve_component_pose`（文本/reuse 优先级）、`Room.polygon`、`board` 段 `BoardOutline`/`Stackup`/`StackupLayer`+`stackup_layers`/`outline_bounds`、impedance→stackup 硬依赖校验；stage `name` 唯一校验 `_validate_unique_stage_names`；Tier0 `RouteStage.corridor`）。
 - `rule_area.py` — 每 room 一个 placement zone（D3，**只** `enabled`+`sheetname`，见约束 §source_type；D-Tier3：`Room.polygon`/rotation（CCW 绕首点）/layers 已接线生效，不再静默忽略）。
 - `corridor.py` — Tier0 corridor-as-data：`draw_corridors` 把 single stage 的 `corridor` polyline 画到 User.1 + 置 `guide_corridor_enabled`，零 router 改动（契约 `test_corridor_contract.py`）。
+- `placement.py` — `apply_placements` build 侧消费 `LayoutPlan.placements`：按 `atopile_address` 命中受管 footprint，用 `resolve_component_pose`（文本>reuse）经 transformer `move_fp` 移位/翻面，**覆盖**自动网格摊开；在 `generate_layout_plan` 于 `layout_ir` 前调用（契约 `test_placement_apply_contract.py`）。
 - `room_ops.py` — 强制 via / room copy / `pad_board_xy` 坐标变换（room 局部→板坐标，含 rotate；§C 已实现）。
 - `bundle_geometry.py` — D-Tier2 bundle 横截面 offset 几何 SSOT（已落地；`generate_layout_plan` 经 `bundle_artifact` 注入 `<t>.layout_plan.json`，契约 `test_bundle_contract.py` + e2e `test_bundle_build.py`）。
 - `config.py` `ensure_layout` — 生成 fresh board 的层表由 `board.stackup`（`_stackup_copper_names`→`stackup_layers`）单一权威派生，杀 2 层硬编码（D-Tier3 TS-AUTH-A；router 侧权威 = §E1 TS-AUTH-B 待做）。
