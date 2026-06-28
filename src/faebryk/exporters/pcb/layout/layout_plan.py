@@ -306,6 +306,27 @@ class RouteStage(BaseModel):
     nets: list[str] = Field(default_factory=list)
     mode: Literal["diff", "single"]
     config: GridRouteOverride = Field(default_factory=GridRouteOverride)
+    # Tier0 corridor-as-data (BACKLOG Tier0): a guide polyline the build draws onto
+    # User.1 + flips `guide_corridor_enabled`, steering this stage's nets along it
+    # (zero router change — reuses the router's native guide reader). Single-mode
+    # only: the diff entry has no guide_corridor_* kwarg (§D2 mode exclusivity).
+    corridor: list[tuple[float, float]] | None = None
+
+    @model_validator(mode="after")
+    def _validate_corridor(self) -> "RouteStage":
+        if self.corridor is None:
+            return self
+        if self.mode != "single":
+            raise ValueError(
+                f"stage {self.name!r}: corridor is only valid for mode 'single' "
+                "(the differential router entry has no guide_corridor_* knob)"
+            )
+        if len(self.corridor) < 2:
+            raise ValueError(
+                f"stage {self.name!r}: corridor needs >= 2 points to be a "
+                f"polyline, got {len(self.corridor)}"
+            )
+        return self
 
     @model_validator(mode="after")
     def _validate_mode_kwargs(self) -> "RouteStage":
@@ -692,6 +713,25 @@ class LayoutPlan(BaseModel):
                     "plan has no board.stackup — impedance needs a complete stackup "
                     "(else the router silently falls back to a fixed width)"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_unique_stage_names(self) -> "LayoutPlan":
+        # stage names are the addressing key: resolve_nets keys its result by name
+        # (a duplicate would SILENTLY clobber the earlier stage's resolved nets),
+        # and the `--up-to <name>` incremental breakpoint addresses by name. Reject
+        # duplicates loudly at parse rather than let one stage shadow another.
+        seen: set[str] = set()
+        dups: list[str] = []
+        for stage in self.route_stages:
+            if stage.name in seen and stage.name not in dups:
+                dups.append(stage.name)
+            seen.add(stage.name)
+        if dups:
+            raise LayoutPlanError(
+                f"route_stages have duplicate name(s) {sorted(dups)} — stage names "
+                "must be unique (they key resolve_nets and the --up-to breakpoint)"
+            )
         return self
 
     def resolve_nets(self, ir: dict[str, Any]) -> dict[str, list[str]]:

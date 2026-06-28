@@ -273,6 +273,26 @@ class ProjectPaths(BaseConfigModel):
         self.layout.mkdir(parents=True, exist_ok=True)
 
 
+def _copper_layer_table(copper_names: list[str]) -> list:
+    """The ordered copper (SIGNAL) KiCad layers for `copper_names` — the single
+    layer-count authority for a fresh board. KiCad numbers F.Cu=0, inner copper
+    1.., B.Cu=31, so a 2-name list reproduces the historical F.Cu/B.Cu default
+    exactly while an N-name stackup yields a real N-layer board."""
+    # delayed import to keep config import light (matches ensure_layout).
+    from faebryk.libs.kicad.fileformats import kicad
+
+    n = len(copper_names)
+    return [
+        kicad.pcb.Layer(
+            number=(31 if i == n - 1 else i),
+            name=name,
+            type=kicad.pcb.E_layer_type.SIGNAL,
+            alias=None,
+        )
+        for i, name in enumerate(copper_names)
+    ]
+
+
 class BuildTargetPaths(BaseConfigModel):
     """
     Build-target specific paths
@@ -354,6 +374,24 @@ class BuildTargetPaths(BaseConfigModel):
         # default location, to create later
         return layout_base.resolve().absolute() / f"{layout_base.name}.kicad_pcb"
 
+    def _stackup_copper_names(self) -> list[str]:
+        """The ordered copper layer names for a fresh board: the layout.yaml
+        `board.stackup` authority when this build has one, else the 2-layer
+        F.Cu/B.Cu default. `board.stackup` is the SINGLE source of layer count."""
+        default = ["F.Cu", "B.Cu"]
+        if self.layout_config is None or not self.layout_config.is_file():
+            return default
+        # delayed import: layout_plan pulls in pydantic + the layout exporters.
+        from faebryk.exporters.pcb.layout.layout_plan import (
+            load_layout_plan,
+            stackup_layers,
+        )
+
+        plan = load_layout_plan(self.layout_config)
+        if plan.board is None or plan.board.stackup is None:
+            return default
+        return stackup_layers(plan.board.stackup)
+
     def ensure_layout(self):
         """Return the layout associated with a build."""
         if not self.layout.exists():
@@ -363,24 +401,19 @@ class BuildTargetPaths(BaseConfigModel):
             # delayed import to improve startup time
             from faebryk.libs.kicad.fileformats import kicad
 
+            # the copper (signal) layer table is single-sourced from the
+            # layout.yaml `board.stackup` authority (`stackup_layers`) when this
+            # build has one, else the 2-layer F.Cu/B.Cu default. This is the SAME
+            # authority E1 must feed the router (BACKLOG D-Tier3 单一层数权威), so
+            # board and router can never diverge on layer count.
+            copper_names = self._stackup_copper_names()
             kicad.dumps(
                 kicad.pcb.PcbFile(
                     kicad_pcb=kicad.pcb.KicadPcb(
                         generator=DISTRIBUTION_NAME,
                         generator_version=str(get_installed_atopile_version()),
                         layers=[
-                            kicad.pcb.Layer(
-                                number=0,
-                                name="F.Cu",
-                                type=kicad.pcb.E_layer_type.SIGNAL,
-                                alias=None,
-                            ),
-                            kicad.pcb.Layer(
-                                number=31,
-                                name="B.Cu",
-                                type=kicad.pcb.E_layer_type.SIGNAL,
-                                alias=None,
-                            ),
+                            *_copper_layer_table(copper_names),
                             kicad.pcb.Layer(
                                 number=32,
                                 name="B.Adhes",

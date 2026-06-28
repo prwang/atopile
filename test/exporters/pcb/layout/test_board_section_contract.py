@@ -29,22 +29,24 @@ the router would route to In1/In2.Cu layers that the board does not have.
 
 == THE RATCHET (S0 discipline) ============================================
 
-桶① (TB/TS, gated `_DT3_LANDED`): schema + pure-function oracle, all strict-xfail
-until D-Tier3 lands; negatives paired with a positive control so they xfail
-cleanly, never XPASS for the wrong reason.
+桶① (TB/TS, gated `_DT3_LANDED`): schema + pure-function oracle. D-Tier3 has
+landed, so these are GREEN; negatives stay paired with a positive control so a
+regression xfails cleanly, never XPASS for the wrong reason.
 
-TS-LM is the forensic LOCK: it is GREEN NOW and pins the two divergent magic
-numbers with NO shared source. It is intentionally un-gated — it goes RED the
-instant either number moves, INCLUDING the authoritative fix, at which point you
-update it to the single-authority reality and TS-AUTH-A/B flip green.
+TS-LM was the forensic divergence lock (2-layer board vs 4-layer router, no shared
+source). The BOARD side has since landed its single authority, so it is now
+`test_board_layer_table_is_single_sourced_from_stackup`: GREEN, un-gated, pinning
+that the board copper table is data-driven from `stackup_layers` (the old
+hardcoded 2-layer literal is gone) while the router still owns its 4-layer default
+until E1. It goes RED the day E1 unifies the router side too.
 
-桶② (TS-AUTH-A/B): the "the 2-layer/4-layer bug must be RED now" ratchets.
+桶② (TS-AUTH-A/B): the "2-layer/4-layer bug" authority ratchets.
   * TS-AUTH-A (gated `_DT3_BUILD_LANDED`): the atopile-GENERATED board's copper
-    layer table == `stackup_layers(board.stackup)` — kills the hardcoded 2-layer
-    default. RED until the board generator derives layers from the stackup.
+    layer table == `stackup_layers(board.stackup)`. GREEN now — the board
+    generator (config.py) derives its layers from the stackup authority, killing
+    the hardcoded 2-layer default.
   * TS-AUTH-B (gated `_E1_LANDED`): E1 passes `stackup_layers(board.stackup)` to
-    the router and never eats the 4-layer default. RED until E1 is built.
-Both MUST be red until the single-authority fix lands (user requirement).
+    the router and never eats the 4-layer default. RED until E1 is built (§E).
 """
 
 import ast
@@ -387,13 +389,15 @@ def test_impedance_without_stackup_is_loud():
 
 
 # ===========================================================================
-# TS-LM — layer-count divergence FORENSIC LOCK (un-gated, GREEN NOW).
+# TS-LM′ — board layer-table SINGLE-AUTHORITY lock (un-gated, GREEN NOW).
 #
-# Pins the two unauthoritative magic numbers with NO shared source:
-#   * atopile default board copper = [F.Cu, B.Cu]   (config.py:374,380, 2 layers)
-#   * router default = DEFAULT_4_LAYER_STACK         (routing_constants.py:8, 4)
-# Goes RED the instant either number moves — INCLUDING the authoritative fix (at
-# which point: replace this with TS-AUTH-A/B-green and a single-authority lock).
+# Replaces the old 2-layer/4-layer divergence forensic lock now that the BOARD
+# side landed its single authority. Pins:
+#   * board side: config.py derives its copper table from `stackup_layers` and the
+#     hardcoded 2-layer SIGNAL literal is GONE (no magic count);
+#   * router side: still its own 4-layer DEFAULT_4_LAYER_STACK — the remaining gap,
+#     owned by E1 / TS-AUTH-B. Goes RED the day E1 unifies the router side too (at
+#     which point fold into a full single-authority assertion).
 # ===========================================================================
 def _config_signal_layers() -> list[str]:
     """The copper (SIGNAL) layer NAMES atopile writes into a fresh board."""
@@ -428,25 +432,20 @@ def _router_default_stack() -> list[str]:
     raise AssertionError("DEFAULT_4_LAYER_STACK not found")
 
 
-def test_layer_count_defaults_diverge_with_no_shared_source():
-    atopile_default = _config_signal_layers()
-    router_default = _router_default_stack()
+def test_board_layer_table_is_single_sourced_from_stackup():
     config_src = Path(_config_mod.__file__).read_text()
 
-    # the two divergent magic numbers, pinned by value
-    assert set(atopile_default) == {"F.Cu", "B.Cu"}  # config.py:374,380 — 2 layers
-    assert "In1.Cu" not in atopile_default and "In2.Cu" not in atopile_default
-    assert router_default == ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu"]  # 4 layers
-
-    # they genuinely diverge in count
-    assert len(atopile_default) == 2 and len(router_default) == 4
-
-    # and NO shared source: the board generator references neither the router
-    # default nor a stackup authority — proving the two numbers are unrelated.
-    # (BOTH references appear only once the single-authority fix lands; then this
-    # forensic lock goes red and is replaced by the TS-AUTH ratchets going green.)
+    # board side: the copper table is now data-driven from the stackup authority…
+    assert "stackup_layers" in config_src
+    # …and the hardcoded copper SIGNAL literal pair is GONE (no magic 2-layer
+    # count baked into the source; the names come from `stackup_layers` at runtime)
+    assert _config_signal_layers() == []
+    # the board generator does NOT reach for the router's own default, either —
+    # the single authority is the stackup, full stop.
     assert "DEFAULT_4_LAYER_STACK" not in config_src
-    assert "stackup_layers" not in config_src
+
+    # router side: still its own 4-layer default until E1 (TS-AUTH-B) unifies it.
+    assert _router_default_stack() == ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu"]
 
 
 # ===========================================================================
@@ -492,9 +491,11 @@ def built_board(tmp_path_factory):
     dst = work / "sata_bundle"
     shutil.copytree(_AUTH_EXAMPLE, dst)
     _build(dst)
-    boards = list((dst / "build" / "builds" / "top").glob("*.kicad_pcb"))
-    assert boards, "no generated .kicad_pcb"
-    pcb = kicad.loads(kicad.pcb.PcbFile, boards[0].read_text()).kicad_pcb
+    # the generated board is edited in place at layout/<build>/<build>.kicad_pcb
+    # (== config.build.paths.layout; same path the e2e layout_plan_build test reads)
+    board = dst / "layout" / "top" / "top.kicad_pcb"
+    assert board.is_file(), f"no generated .kicad_pcb at {board}"
+    pcb = kicad.loads(kicad.pcb.PcbFile, board.read_text()).kicad_pcb
     plan = load_layout_plan((_AUTH_EXAMPLE / "layout.yaml"))
     return _copper_layers(pcb), stackup_layers(plan.board.stackup)
 

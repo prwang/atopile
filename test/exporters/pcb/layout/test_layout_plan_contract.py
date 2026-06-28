@@ -513,3 +513,32 @@ def test_resolve_nets_matches_real_signal_nets(layout_reuse_signal_nets):
     plan = _plan(yaml_text)
     resolved = plan.resolve_nets({"signal_nets": bridge})
     assert resolved["s"] == [bridge[a] for a in addrs]
+
+
+# ===========================================================================
+# D2.7 — stage names must be UNIQUE. They key resolve_nets (a dup would silently
+# clobber the earlier stage's resolved nets) and the `--up-to <name>` breakpoint,
+# so a duplicate is a hard error, not a last-one-wins coercion.
+# ===========================================================================
+@needs_d2
+def test_duplicate_stage_name_is_loud():
+    dup = (
+        "rooms: []\nroute_stages:\n"
+        "  - name: power\n    mode: single\n    nets: [top.a.x]\n    config: {}\n"
+        "  - name: power\n    mode: diff\n    nets: [top.a.y]\n    config: {}\n"
+    )
+    with pytest.raises(_LOUD) as ei:
+        _plan(dup)
+    assert "power" in str(ei.value) and "unique" in str(ei.value)
+
+
+@needs_d2
+def test_distinct_stage_names_pass():
+    """positive control: the same two stages with distinct names parse fine, so
+    the dup check rejects duplication, not multi-stage plans."""
+    ok = (
+        "rooms: []\nroute_stages:\n"
+        "  - name: power\n    mode: single\n    nets: [top.a.x]\n    config: {}\n"
+        "  - name: usb\n    mode: diff\n    nets: [top.a.y]\n    config: {}\n"
+    )
+    assert [s.name for s in _plan(ok).route_stages] == ["power", "usb"]

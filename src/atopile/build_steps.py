@@ -906,6 +906,7 @@ def generate_layout_plan(ctx: BuildStepContext) -> None:
         return
 
     from faebryk.exporters.pcb.layout.bundle_geometry import bundle_artifact
+    from faebryk.exporters.pcb.layout.corridor import draw_corridors
     from faebryk.exporters.pcb.layout.layout_plan import (
         BundleStage,
         load_layout_plan,
@@ -921,8 +922,11 @@ def generate_layout_plan(ctx: BuildStepContext) -> None:
     ir = layout_ir(kicad_pcb, app)
 
     generate_rule_areas(kicad_pcb, plan, ir)
-    # the rule areas mutate the board after `update_layout` already wrote it —
-    # persist the change so the on-disk layout carries them.
+    # Tier0: draw each single stage's corridor polyline onto User.1 and flip its
+    # guide_corridor_enabled (mutates `plan` so the artifact below records it).
+    draw_corridors(kicad_pcb, plan)
+    # the rule areas + corridors mutate the board after `update_layout` already
+    # wrote it — persist the change so the on-disk layout carries them.
     kicad.dumps(pcb.pcb_file, config.build.paths.layout)
 
     artifact = plan.model_dump(mode="json")
