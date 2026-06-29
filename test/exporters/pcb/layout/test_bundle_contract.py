@@ -928,3 +928,109 @@ def test_bundle_transition_morphs_cross_section():
     for (xp, yp), (xn, yn) in zip(p, n):
         assert abs(xp - xn) < 1e-6
         assert abs(abs(yp - yn) - 0.2) < 1e-6
+
+
+# ===========================================================================
+# T-B7 — routed/blocked classification (PURE, no router / no board): the per-member
+# decision `_route_members` makes. Unlike the e2e E18/E19 (gated on system python3
+# + a fixture board, hence skipped in a router-less env), these run in the venv and
+# bite EVERY branch of `routed = (trunk >= 2 pts) and not blocked` — including the
+# resolved-but-no-pads branch the e2e never reaches and the degenerate-trunk guard.
+# A blocked member MUST be routed=False, counted failed, and emit NO copper (S5a).
+# `_route_members` is pure (json+math only) so it imports + runs without scipy/rust.
+# ===========================================================================
+def _load_route_bundle():
+    """Import route_bundle.py as a standalone module — its geometry/classification
+    path is pure json+math, so it loads in the venv without the rust ext."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "route_bundle_pure", _ROUTER_ROOT / "route_bundle.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class _Pad:
+    def __init__(self, x=1.0, y=2.0):
+        self.global_x, self.global_y = x, y
+
+
+def _stub_seg(**kw):
+    return kw  # a JSON-ish stand-in for kicad_parser.Segment
+
+
+@needs_e_tier2
+def test_bundle_member_classification_all_branches():
+    """board mode: A (resolved + pads) routes; B (resolved, NO pads) and C
+    (unresolved) are blocked → routed=False, failed, and emit NO copper."""
+    rb = _load_route_bundle()
+    members = [
+        {"net": "A", "offset": -0.2, "width": 0.1, "kind": "single"},
+        {"net": "B", "offset": 0.0, "width": 0.1, "kind": "single"},
+        {"net": "C", "offset": 0.2, "width": 0.1, "kind": "single"},
+    ]
+    polys = {
+        "A": [[0, 0], [10, 0]],
+        "B": [[0, 0.1], [10, 0.1]],
+        "C": [[0, 0.2], [10, 0.2]],
+    }
+    net_id_of = {"A": 5, "B": 6}  # C absent ⇒ unresolved
+    pads_of = {"A": [_Pad()], "B": []}  # B resolved but pad-less
+    results, mout, routed, failed = rb._route_members(
+        members,
+        polys,
+        seg_cls=_stub_seg,
+        layer="F.Cu",
+        track_width=0.1,
+        net_id_of=net_id_of,
+        pads_of=pads_of,
+    )
+    by = {m["net"]: m for m in mout}
+    assert routed == ["A"] and failed == ["B", "C"]
+    # ONLY the routed member emitted copper — no floating tracks for the blocked two.
+    assert len(results) == 1
+    assert all(s["net_id"] == 5 for s in results[0]["new_segments"])  # real net, not 0
+    assert by["A"]["routed"] and by["A"]["blocked"] is None
+    assert not by["B"]["routed"] and "pad" in by["B"]["blocked"]  # no-pads branch
+    assert not by["C"]["routed"] and "resolv" in by["C"]["blocked"]  # unresolved
+
+
+@needs_e_tier2
+def test_bundle_degenerate_trunk_is_blocked():
+    """A trunk that degenerates to < 2 points yields no track ⇒ blocked, never
+    silently 'routed' — the len(poly) >= 2 guard actually bites (even geometry-only)."""
+    rb = _load_route_bundle()
+    members = [{"net": "A", "offset": 0.0, "width": 0.1, "kind": "single"}]
+    results, mout, routed, failed = rb._route_members(
+        members,
+        {"A": [[0, 0]]},  # a single vertex — no trunk
+        seg_cls=None,
+        layer="F.Cu",
+        track_width=0.1,
+        net_id_of={},
+        pads_of={},
+    )
+    assert routed == [] and failed == ["A"]
+    assert "vertices" in mout[0]["blocked"]
+    assert results == []
+
+
+@needs_e_tier2
+def test_bundle_geometry_only_routes_without_board():
+    """geometry-only mode (seg_cls None) skips resolution: a member with a >= 2-pt
+    trunk routes (blocked None) and emits NO board segments (geometry, not copper)."""
+    rb = _load_route_bundle()
+    members = [{"net": "A", "offset": 0.0, "width": 0.1, "kind": "single"}]
+    results, mout, routed, failed = rb._route_members(
+        members,
+        {"A": [[0, 0], [10, 0]]},
+        seg_cls=None,
+        layer="F.Cu",
+        track_width=0.1,
+        net_id_of={},
+        pads_of={},
+    )
+    assert routed == ["A"] and failed == [] and results == []
+    assert mout[0]["blocked"] is None
