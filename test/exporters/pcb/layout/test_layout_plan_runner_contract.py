@@ -135,6 +135,7 @@ green in the venv (no router needed); the E2E tests additionally SKIP loudly
 or cannot import the router, exactly like test_router_smoke_batch_route.py.
 """
 
+import ast
 import shutil
 import subprocess
 from pathlib import Path
@@ -357,6 +358,26 @@ needs_bundle_dispatch = pytest.mark.xfail(
 )
 
 
+def _route_bundle_landed() -> bool:
+    """AST-probe vendor route_bundle.py for batch_route_bundle (not imported: the
+    router pulls scipy + a rust ext). The router-runtime gate for the bundle e2e —
+    distinct from the pure-runner _bundle_dispatch_landed probe above."""
+    path = repo_root() / "vendor" / "KiCadRoutingTools" / "route_bundle.py"
+    if not path.exists():
+        return False
+    return any(
+        isinstance(n, ast.FunctionDef) and n.name == "batch_route_bundle"
+        for n in ast.walk(ast.parse(path.read_text()))
+    )
+
+
+needs_e_tier2 = pytest.mark.xfail(
+    not _route_bundle_landed(),
+    reason="E-Tier2 route_bundle.batch_route_bundle not landed (router runtime)",
+    strict=True,
+)
+
+
 # ---------------------------------------------------------------------------
 # e2e router guard — same pattern as test_router_smoke_batch_route.py.
 # ---------------------------------------------------------------------------
@@ -427,10 +448,13 @@ def test_bundle_dispatch_to_batch_route_bundle():
     assert dp["kind"] == "diff" and dp["diff_partner"] == "/DN"
     # the breakout D/E seam: bundle_artifact emits `at`-keyed, ato-address order;
     # the runner must translate to the FROZEN batch_route_bundle shape — key `part`
-    # with `order` RESOLVED to kicad names (the smoke-frozen T-B2 shape). Pin both
-    # the key and the resolved order content (derived == member order here).
+    # with `order` RESOLVED to kicad names (the smoke-frozen T-B2 shape). Pin the
+    # key, the `part` VALUE (the breakout room address — the first delivery passes
+    # the room address through as the fanout locator; see BACKLOG limitation), and
+    # the resolved order content (derived == member order here).
+    assert [bo["part"] for bo in inv.kwargs["breakouts"]] == ["top.a", "top.d"]
     for bo in inv.kwargs["breakouts"]:
-        assert "part" in bo and "at" not in bo
+        assert "at" not in bo
         assert bo["order"] == ["/X", "/DP", "/DN"]
     # layers from the stackup authority (TS-AUTH-B), never the 4-layer default.
     assert inv.kwargs["layers"] == ["F.Cu", "B.Cu"]
@@ -452,6 +476,74 @@ def test_bundle_in_vs_outside_up_to_slice():
     # --up-to the single stage stops BEFORE the bundle ⇒ just the single.
     pre = build_invocations(plan, ir, input_board=_IN, workdir=_WD, up_to="pre")
     assert [i.stage_name for i in pre] == ["pre"]
+
+
+# ===========================================================================
+# R2c — bundle config (BundleRouteConfig) expands verbatim, explicitly-set keys
+# only: _BUNDLE_YAML sets only config.track_width ⇒ it reaches kwargs, an UNSET
+# field (clearance, via_size, ...) is NOT forwarded (the router default stands),
+# and no None leaks. The bundle analogue of R3.
+# ===========================================================================
+@needs_bundle_dispatch
+def test_bundle_config_expanded_verbatim():
+    plan = load_layout_plan(_BUNDLE_YAML)  # config: {track_width: 0.1}
+    inv = build_invocations(plan, _BUNDLE_IR, input_board=_IN, workdir=_WD)[0]
+    assert inv.kwargs["track_width"] == 0.1  # explicitly set ⇒ forwarded
+    assert "clearance" not in inv.kwargs  # unset ⇒ router default stands
+    assert "via_size" not in inv.kwargs and "via_drill" not in inv.kwargs
+    assert None not in inv.kwargs.values()  # no None leak
+
+
+# ===========================================================================
+# R2d — single layer authority for a bundle too (TS-AUTH-B): a per-stage
+# config.layers is a LOUD conflict — a bundle may not override the board stackup.
+# The bundle analogue of R5.
+# ===========================================================================
+_BUNDLE_LAYERS_CONFLICT_YAML = _BUNDLE_YAML.replace(
+    "    config:\n      track_width: 0.1\n",
+    "    config:\n      track_width: 0.1\n      layers: [F.Cu, B.Cu]\n",
+)
+
+
+@needs_bundle_dispatch
+def test_bundle_per_stage_layers_is_loud():
+    plan = load_layout_plan(_BUNDLE_LAYERS_CONFLICT_YAML)
+    with pytest.raises(LayoutPlanError):
+        build_invocations(plan, _BUNDLE_IR, input_board=_IN, workdir=_WD)
+    # positive control: the same bundle WITHOUT config.layers builds fine.
+    ok = load_layout_plan(_BUNDLE_YAML)
+    assert build_invocations(ok, _BUNDLE_IR, input_board=_IN, workdir=_WD)
+
+
+# ===========================================================================
+# R2e — aggregation for a bundle (router-free, via the fake invoker): the common
+# scalars SUM and the per-type list keys (routed_members/failed_members) land in
+# by_type['bundle'] WITHOUT leaking into single/diff. The bundle analogue of R9.
+# ===========================================================================
+@needs_bundle_dispatch
+def test_bundle_aggregation_buckets_per_type(tmp_path):
+    plan = load_layout_plan(_BUNDLE_YAML)
+    canned = {
+        "successful": 2,
+        "failed": 1,
+        "total_vias": 3,
+        "total_time": 1.5,
+        "total_iterations": 100,
+        "routed_members": ["/X", "/DP"],
+        "failed_members": ["/DN"],
+    }
+    report = run_route_stages(
+        plan,
+        _BUNDLE_IR,
+        input_board=_IN,
+        workdir=tmp_path,
+        invoker=_fake_invoker({"b": canned}),
+    )
+    assert report.totals["successful"] == 2 and report.totals["failed"] == 1
+    assert report.totals["total_vias"] == 3
+    assert report.by_type["bundle"]["routed_members"] == ["/X", "/DP"]
+    assert report.by_type["bundle"]["failed_members"] == ["/DN"]
+    assert "single" not in report.by_type and "diff" not in report.by_type
 
 
 # ===========================================================================
@@ -895,6 +987,10 @@ _BUNDLE_E2E_IR = _ir({"top.o": "/OUT_A", "top.d.p": "/DATA+", "top.d.n": "/DATA-
 # parses. The end-to-end integration: plan -> bundle_artifact -> batch_route_bundle
 # -> board + report.
 # ===========================================================================
+# needs_e_tier2 (route_bundle.py present) AND needs_bundle_dispatch (the pure
+# runner probe is blind to route_bundle.py — without this an early runner-dispatch
+# landing would flip E18 from a clean XFAIL to a hard subprocess error).
+@needs_e_tier2
 @needs_bundle_dispatch
 @needs_router
 def test_e2e_bundle_run_writes_report_and_board(tmp_path):
@@ -911,7 +1007,14 @@ def test_e2e_bundle_run_writes_report_and_board(tmp_path):
     # the single + the diff pair all land along the trunk (parallel bus + fanout).
     routed = set(report.by_type["bundle"]["routed_members"])
     assert {"/OUT_A", "/DATA+", "/DATA-"} <= routed
-    # the routed board is actually written and parses back.
+    # NOT just the router's self-report: the scalar oracle (each member contributes)
+    # and the board actually GREW new copper (a no-op/copy-through impl has the same
+    # segment count and fails here).
+    assert report.totals["successful"] >= 3
+    before = _BOARD.read_text().count("(segment")
+    after = Path(report.final_board).read_text().count("(segment")
+    assert after > before, f"no new copper written (before={before}, after={after})"
+    # the routed board is written and is a parseable kicad_pcb.
     assert report.final_board == str(tmp_path / "link.kicad_pcb")
     assert Path(report.final_board).exists()
     assert "(kicad_pcb" in Path(report.final_board).read_text()[:200]

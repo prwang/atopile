@@ -473,6 +473,19 @@ def _tiny_lanes():
     ]
 
 
+def _offcenter_lanes():
+    """[single A, single B, diff(P,N gap0.2 width0.15)] — the diff lane is at the
+    EDGE, so its slot CENTER is nonzero and SHIFTS when the trunk re-packs at a
+    different spacing. (A center diff lane is symmetric → its midpoint is 0 at every
+    spacing, which would make the transition gap-check blind to a proportional
+    scale; the off-center lane forces the pair's position to actually move.)"""
+    return [
+        SingleLane(net="e.a"),
+        SingleLane(net="e.b"),
+        DiffLane(diff=("e.p", "e.n"), gap=0.2, width=0.15),
+    ]
+
+
 def _by_net(offsets):
     return {o.net: o for o in offsets}
 
@@ -799,13 +812,23 @@ def test_bundle_trunk_is_parallel_offset_bus():
     signed offset (perpendicular distance == |offset|), CONSTANT along a rigid
     trunk, spanning the centerline. = the parallel bus."""
     members = _members_from_lanes(_tiny_lanes())  # single A, diff(P,N), single B
+    # track_width kwarg (0.3) != the members' own widths (0.1): the router must size
+    # tracks from the per-member width table, not the bundle default, so the offset
+    # oracle (default_width=0.1) still holds — proves member widths are honored.
     res = _run_bundle_geometry(
-        _RIGID_TRUNK, members, _BREAKOUTS_GEO, track_width=0.1, clearance=0.1
+        _RIGID_TRUNK, members, _BREAKOUTS_GEO, track_width=0.3, clearance=0.1
     )
     out = {m["net"]: m for m in res["members"]}
+    # the member TABLE is in lane order (the bundle-global invariant); routed_members
+    # is a completion-order summary list, so compare it as a SET (matches E18).
     assert [m["net"] for m in res["members"]] == [m["net"] for m in members]
     assert all(m["routed"] for m in res["members"])
     assert res["successful"] == len(members) and res["failed"] == 0
+    # the per-type list keys the §E1 runner buckets under by_type['bundle'] (the
+    # JSON_SUMMARY seam): routed_members carries every routed net, failed_members
+    # is empty on the all-success path. Pins WHO produces them (the router).
+    assert set(res["routed_members"]) == {m["net"] for m in members}
+    assert res["failed_members"] == []
     for m in members:
         poly = out[m["net"]]["polyline"]
         assert len(poly) >= 2
@@ -848,7 +871,7 @@ def test_bundle_diff_lane_stays_coupled():
     apart at EVERY point of the trunk — never two independent parallel singles."""
     members = _members_from_lanes(_tiny_lanes())  # middle diff(n.p, n.n) gap 0.2
     res = _run_bundle_geometry(
-        _RIGID_TRUNK, members, _BREAKOUTS_GEO, track_width=0.1, clearance=0.1
+        _RIGID_TRUNK, members, _BREAKOUTS_GEO, track_width=0.3, clearance=0.1
     )
     out = {m["net"]: m for m in res["members"]}
     p, n = out["n.p"]["polyline"], out["n.n"]["polyline"]
@@ -861,35 +884,46 @@ def test_bundle_diff_lane_stays_coupled():
 @needs_e_tier2
 @needs_sys_py
 def test_bundle_transition_morphs_cross_section():
-    """A transition (neck-down 0.5 -> 0.25) RE-PACKS the cross-section per vertex:
-    only the INTER-lane spacing changes, the INTRA-pair gap is bundle-global. So
-    the morph must equal the geometry SSOT at each vertex's spacing — NOT a naive
-    proportional offset scale (which would collapse the diff gap and dissolve L1).
-    Pinned here: ① the SSOT-magnitude at both ends, ② lane order/side preserved,
-    ③ the diff pair stays a CONSTANT 0.2 apart at EVERY station incl. the far end."""
-    members = _members_from_lanes(_tiny_lanes())
+    """A transition RE-PACKS the cross-section PER SEGMENT, per vertex spacing: a
+    RIGID segment does NOT morph; a TRANSITION segment morphs to the re-packed SSOT
+    at the new spacing, with the INTRA-pair diff gap held constant (only INTER-lane
+    spacing changes — NOT a proportional offset scale, which would collapse the gap
+    and dissolve L1). _TRANSITION_TRUNK = [v0@0.5, v1@0.5, v2@0.25]: v0->v1 rigid,
+    v1->v2 transition. Uses the OFF-CENTER diff lane so the pair's position actually
+    moves under re-packing (a center lane would be blind to a proportional scale).
+    Pinned: every member at v0 AND v1 == near SSOT (rigid: no morph), at v2 == far
+    SSOT (re-packed); outer singles neck down; the diff pair's center SHIFTS yet its
+    gap stays a constant 0.2 throughout."""
+    lanes = _offcenter_lanes()
+    members = _members_from_lanes(lanes)
     res = _run_bundle_geometry(
-        _TRANSITION_TRUNK, members, _BREAKOUTS_GEO, track_width=0.1, clearance=0.1
+        _TRANSITION_TRUNK, members, _BREAKOUTS_GEO, track_width=0.3, clearance=0.1
     )
     out = {m["net"]: m for m in res["members"]}
     # the SSOT profiles at the near (spacing 0.5) and far (spacing 0.25) vertices.
-    near_oracle = {o.net: o.offset for o in cross_section_offsets(
-        _tiny_lanes(), 0.5, default_width=0.1)}
-    far_oracle = {o.net: o.offset for o in cross_section_offsets(
-        _tiny_lanes(), 0.25, default_width=0.1)}
-    for net in ("n.a", "n.b"):  # the two outer singles
-        poly = out[net]["polyline"]
-        near, far = poly[0][1], poly[-1][1]
-        # ① morph equals the re-packed SSOT at each end (not a proportional scale).
-        assert near == pytest.approx(near_oracle[net])
-        assert far == pytest.approx(far_oracle[net])
-        # ② genuinely necked down, side/sign (lane order) preserved.
-        assert abs(far) < abs(near) - 1e-9
-        assert (near > 0) == (far > 0)
-    # ③ L1 holds THROUGH the transition: intra-pair gap is constant 0.2 everywhere,
-    # including the far (necked-down) end — re-packing must not scale the pair gap.
-    p, n = out["n.p"]["polyline"], out["n.n"]["polyline"]
-    assert len(p) == len(n) and len(p) >= 3  # v0, v1, v2 (spans the transition)
+    near = {o.net: o.offset for o in cross_section_offsets(
+        lanes, 0.5, default_width=0.1)}
+    far = {o.net: o.offset for o in cross_section_offsets(
+        lanes, 0.25, default_width=0.1)}
+    for m in members:
+        poly = out[m["net"]]["polyline"]
+        assert len(poly) >= 3  # v0, v1, v2
+        # v0 AND v1 bound the RIGID segment (both spacing 0.5) ⇒ NO morph: a wrong
+        # impl that lerps offset across the WHOLE trunk fails the v1 pin here.
+        assert poly[0][1] == pytest.approx(near[m["net"]])
+        assert poly[1][1] == pytest.approx(near[m["net"]])
+        # v2 is the necked-down end (spacing 0.25) = the re-packed SSOT.
+        assert poly[-1][1] == pytest.approx(far[m["net"]])
+    for net in ("e.a", "e.b"):  # the outer singles genuinely neck down
+        assert abs(far[net]) < abs(near[net]) - 1e-9
+    # L1 through the transition: the OFF-CENTER diff pair's center SHIFTS (re-packed)
+    # yet the intra-pair gap stays a constant 0.2 — re-packing moves inter-lane
+    # spacing, never the pair gap (a proportional scale would shrink it).
+    p, n = out["e.p"]["polyline"], out["e.n"]["polyline"]
+    assert len(p) == len(n) and len(p) >= 3
+    near_mid = (p[0][1] + n[0][1]) / 2
+    far_mid = (p[-1][1] + n[-1][1]) / 2
+    assert abs(far_mid - near_mid) > 1e-6  # the pair's center re-packs (moves)
     for (xp, yp), (xn, yn) in zip(p, n):
         assert abs(xp - xn) < 1e-6
         assert abs(abs(yp - yn) - 0.2) < 1e-6
