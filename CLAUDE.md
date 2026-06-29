@@ -57,11 +57,12 @@ sheetname 同步）→ `generate_layout_plan`（§D：placement rule area + `<t>
 - `room_ops.py` — 强制 via / room copy / `pad_board_xy` 坐标变换（room 局部→板坐标，含 rotate；§C 已实现）。
 - `bundle_geometry.py` — D-Tier2 bundle 横截面 offset 几何 SSOT（已落地；`generate_layout_plan` 经 `bundle_artifact` 注入 `<t>.layout_plan.json`，契约 `test_bundle_contract.py` + e2e `test_bundle_build.py`）。
 - `config.py` `ensure_layout` — 生成 fresh board 的层表由 `board.stackup`（`_stackup_copper_names`→`stackup_layers`）单一权威派生，杀 2 层硬编码（D-Tier3 TS-AUTH-A；router 侧权威 = §E1 TS-AUTH-B ✅ 见 `layout_plan_runner.py`）。
-- `layout_plan_runner.py` — §E1 route runner：`build_invocations`（纯，route_stages → 按类型分派的 `StageInvocation`：single→`route.batch_route`／diff→`route_diff.batch_route_diff_pairs`／bundle→loud=E-Tier2；config 逐字展开；`layers` ← `stackup_layers` 单一权威 TS-AUTH-B，per-stage `config.layers` loud；跨 stage 板累积不加锁；`--up-to` 断点）+ `run_route_stages`（驱动 invoker、容忍缺 `JSON_SUMMARY`、按类型聚合、写 `route_report.json`）+ `default_subprocess_invoker`（shell 到 system python3 跑 router）。库（消费方 = `ato route`/§F），契约 `test_layout_plan_runner_contract.py`。
+- `layout_plan_runner.py` — §E1 route runner：`build_invocations`（纯，route_stages → 按类型分派的 `StageInvocation`：single→`route.batch_route`／diff→`route_diff.batch_route_diff_pairs`／bundle→`route_bundle.batch_route_bundle`（经 `_bundle_invocation` 展开 `bundle_artifact` 成几何 payload、成员名 bridge② 解析、breakout `at`→`part`+kicad 序，§E-Tier2 ✅）；config 逐字展开；`layers` ← `stackup_layers` 单一权威 TS-AUTH-B，per-stage `config.layers` loud；跨 stage 板累积不加锁；`--up-to` 断点）+ `run_route_stages`（驱动 invoker、容忍缺 `JSON_SUMMARY`、按类型聚合、写 `route_report.json`）+ `default_subprocess_invoker`（shell 到 system python3 跑 router；bundle 用 geometry-driven 调用约定）。库（消费方 = `ato route`/§F），契约 `test_layout_plan_runner_contract.py`。
+- `vendor/KiCadRoutingTools/route_bundle.py` — §E-Tier2 `batch_route_bundle`：bundle = 平行总线，trunk 确定性几何（per-vertex 重排镜像 `bundle_geometry.cross_section_offsets`，刚性段不变/过渡 morph、diff 对内 gap 恒定不散 L1，输入 offset + 重排 DELTA）+ 直连 breakout 扇出（有板时 pad→trunk 端）。geometry-only 模式纯 python（无 rust/parser），有板模式惰性导入。契约 `test_bundle_contract.py` T-B1..T-B6。**限制**：扇出直连非 A*、breakout `order`/`spacing_overrides` 未消费、逐成员失败路径未穷尽测。
 - `libs/kicad/layout_ir.py` — `layout_ir.json` = **bridge②**（ato 地址 → net/pad/room）；布线与诊断按地址定位，不解析 KiCad 文件。
 
 **布线器**（submodule `vendor/KiCadRoutingTools`，跑在 **system python3**，非 venv——rust 内核 ext 未为 venv 构建）：
-`route.py:batch_route` / `route_diff.py:batch_route_diff_pairs`（+ E-Tier2 新增 `route_bundle.py:batch_route_bundle`）；
+`route.py:batch_route` / `route_diff.py:batch_route_diff_pairs` / `route_bundle.py:batch_route_bundle`（§E-Tier2 ✅）；
 `return_results=True` 结构化结果 + stdout `JSON_SUMMARY` + `BlockingInfo`；`build_router.py` 下载预编译二进制。
 **跨 stage 前序铜 = 不可撕的硬障碍**（白送的优先级锁），优先级由 stage 顺序表达（BACKLOG 关键事实 16）。
 

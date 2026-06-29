@@ -449,9 +449,9 @@ def test_bundle_dispatch_to_batch_route_bundle():
     # the breakout D/E seam: bundle_artifact emits `at`-keyed, ato-address order;
     # the runner must translate to the FROZEN batch_route_bundle shape — key `part`
     # with `order` RESOLVED to kicad names (the smoke-frozen T-B2 shape). Pin the
-    # key, the `part` VALUE (the breakout room address — the first delivery passes
-    # the room address through as the fanout locator; see BACKLOG limitation), and
-    # the resolved order content (derived == member order here).
+    # key, the `part` VALUE (the breakout room address, carried for forward-compat —
+    # route_bundle does NOT yet consume breakout part/order; see BACKLOG limitation),
+    # and the resolved order content (derived == member order here).
     assert [bo["part"] for bo in inv.kwargs["breakouts"]] == ["top.a", "top.d"]
     for bo in inv.kwargs["breakouts"]:
         assert "at" not in bo
@@ -1018,3 +1018,64 @@ def test_e2e_bundle_run_writes_report_and_board(tmp_path):
     assert report.final_board == str(tmp_path / "link.kicad_pcb")
     assert Path(report.final_board).exists()
     assert "(kicad_pcb" in Path(report.final_board).read_text()[:200]
+
+
+# a bundle whose 2nd member resolves to a net that is NOT on the board, for E19.
+_BUNDLE_FAIL_YAML = (
+    "board:\n"
+    "  stackup:\n"
+    "    layers:\n"
+    "      - {name: F.Cu, type: copper, thickness: 0.035}\n"
+    "      - {name: d1, type: dielectric, thickness: 0.2, "
+    "material: FR4, epsilon_r: 4.5}\n"
+    "      - {name: B.Cu, type: copper, thickness: 0.035}\n"
+    "route_stages:\n"
+    "  - type: bundle\n"
+    "    name: link\n"
+    "    lanes:\n"
+    "      - net: top.real\n"
+    "      - net: top.bogus\n"
+    "    trunk:\n"
+    "      centerline:\n"
+    "        - at: [150, 100]\n          spacing: 0.5\n"
+    "        - at: [160, 100]\n          spacing: 0.5\n"
+    "    breakouts:\n"
+    "      - at: top.real\n"
+    "      - at: top.bogus\n"
+    "    config:\n"
+    "      track_width: 0.2\n"
+)
+_BUNDLE_FAIL_IR = _ir({"top.real": "/OUT_A", "top.bogus": "/NO_SUCH_NET"})
+
+
+# ===========================================================================
+# E19 — e2e: a member that resolves to a net ABSENT from the board is reported
+# routed=False / failed_members (NOT silently routed=True), and writes NO floating
+# net-0 copper. Catches the BLOCKER class where `routed = len(poly) >= 2` is
+# unconditionally true and an unresolved member lays deletable net-0 tracks.
+# ===========================================================================
+@needs_e_tier2
+@needs_bundle_dispatch
+@needs_router
+def test_e2e_bundle_unresolved_member_fails_loud(tmp_path):
+    if not _router_importable():
+        pytest.skip("system python3 cannot import the router (ext not built)")
+    plan = load_layout_plan(_BUNDLE_FAIL_YAML)
+    report = run_route_stages(
+        plan, _BUNDLE_FAIL_IR, input_board=str(_BOARD), workdir=tmp_path
+    )
+    bundle = report.by_type["bundle"]
+    assert bundle["routed_members"] == ["/OUT_A"]  # the real net lands
+    assert bundle["failed_members"] == ["/NO_SUCH_NET"]  # the bogus one is NOT routed
+    assert report.totals["successful"] == 1 and report.totals["failed"] == 1
+    # no floating copper for the unresolved member (S5a): the input board is unrouted
+    # (0 segments), so EVERY written segment must belong to the one routed net — a
+    # net-0/empty-net trunk from the bogus member would show up here.
+    out = Path(report.final_board).read_text()
+    import re as _re
+
+    seg_nets = _re.findall(r'\(segment.*?\(net "([^"]*)"', out, _re.DOTALL)
+    assert seg_nets, "no segments were written at all"
+    assert all(n == "/OUT_A" for n in seg_nets), (
+        f"a non-routed member wrote copper: segment nets = {sorted(set(seg_nets))}"
+    )

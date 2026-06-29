@@ -10,8 +10,10 @@ SYSTEM python3, like the §C router-oracle):
 
   - `build_invocations` (PURE): route_stages -> a list of `StageInvocation`. It
     selects the entry by stage type (single -> route.batch_route, diff ->
-    route_diff.batch_route_diff_pairs; a bundle is LOUD not-implemented, BACKLOG
-    §E-Tier2), expands `RouteStage.config` verbatim into the entry's kwargs
+    route_diff.batch_route_diff_pairs; bundle -> route_bundle.batch_route_bundle,
+    expanding bundle_artifact into a geometry-driven payload with member nets
+    resolved through bridge② — §E-Tier2), expands `RouteStage.config` verbatim
+    into the entry's kwargs
     (explicitly-set keys only — the router default stands otherwise), sources
     `layers` SOLELY from `stackup_layers(board.stackup)` (TS-AUTH-B: never the
     route.py 4-layer default; a per-stage `config.layers` is a loud conflict),
@@ -52,6 +54,11 @@ _ROUTER_ROOT = repo_root() / "vendor" / "KiCadRoutingTools"
 # the JSON_SUMMARY scalar keys both router entries emit (route.py:744-771 /
 # route_diff.py:679-692). Summed across stages; per-type list keys are kept apart.
 _COMMON_KEYS = ("successful", "failed", "total_time", "total_iterations", "total_vias")
+
+# verbose per-stage detail (the bundle `members` table carries full polylines) — kept
+# in each stage's own summary, but NOT bucketed into by_type (it would duplicate the
+# geometry and accumulate across multi-stage runs, bloating route_report.json).
+_DETAIL_KEYS = ("members",)
 
 
 @dataclass(frozen=True)
@@ -154,8 +161,8 @@ def build_invocations(
     """PURE: route_stages -> [StageInvocation]. No subprocess, no router import.
 
     layers come SOLELY from the board.stackup authority (TS-AUTH-B); a missing
-    board/stackup or a per-stage `config.layers` is loud. A bundle stage in the
-    run slice is loud not-implemented (§E-Tier2)."""
+    board/stackup or a per-stage `config.layers` is loud. A bundle stage dispatches
+    to route_bundle.batch_route_bundle via `_bundle_invocation` (§E-Tier2)."""
     # the single layer authority — computed once, never the route.py 4-layer default.
     if plan.board is None or plan.board.stackup is None:
         raise LayoutPlanError(
@@ -170,12 +177,16 @@ def build_invocations(
     invocations: list[StageInvocation] = []
     prev_output: str | None = None
     for stage in sliced:
+        input_file = str(input_board) if prev_output is None else prev_output
+        output_file = str(Path(workdir) / f"{stage.name}.kicad_pcb")
+
         if isinstance(stage, BundleStage):
-            raise NotImplementedError(
-                f"stage {stage.name!r}: bundle routing dispatches to "
-                "route_bundle.batch_route_bundle, which is not implemented yet "
-                "(BACKLOG §E-Tier2)"
+            invocations.append(
+                _bundle_invocation(stage, ir, layers, input_file, output_file)
             )
+            prev_output = output_file
+            continue
+
         if stage.mode == "single":
             entry, module, stage_type = "batch_route", "route", "single"
         else:
@@ -195,8 +206,6 @@ def build_invocations(
             )
         kwargs["layers"] = list(layers)
 
-        input_file = str(input_board) if prev_output is None else prev_output
-        output_file = str(Path(workdir) / f"{stage.name}.kicad_pcb")
         invocations.append(
             StageInvocation(
                 stage_name=stage.name,
@@ -213,6 +222,64 @@ def build_invocations(
     return invocations
 
 
+def _bundle_invocation(
+    stage: "BundleStage",
+    ir: dict[str, Any],
+    layers,
+    input_file: str,
+    output_file: str,
+) -> StageInvocation:
+    """A bundle stage -> a route_bundle.batch_route_bundle invocation. Expands
+    bundle_artifact (segmented trunk + ordered member offset table + breakouts) and
+    RESOLVES the ato member addresses (and each diff member's partner) to kicad net
+    names through bridge②; the breakouts are translated from the artifact's
+    {at(room), ato-order} to the frozen batch_route_bundle {part, kicad-order} shape.
+    The geometry-driven payload (trunk/members/breakouts) rides in kwargs alongside
+    the BundleRouteConfig knobs and the stackup layers (TS-AUTH-B)."""
+    # local import: bundle_geometry pulls the model; keep build_invocations' top
+    # imports lean and avoid a cycle.
+    from faebryk.exporters.pcb.layout.bundle_geometry import bundle_artifact
+
+    art = bundle_artifact(stage, ir)
+    addr2net = dict(zip([m["net"] for m in art["members"]], art["resolved_nets"]))
+    members = [
+        {
+            **m,
+            "net": addr2net[m["net"]],
+            "diff_partner": (
+                addr2net[m["diff_partner"]] if m.get("diff_partner") else None
+            ),
+        }
+        for m in art["members"]
+    ]
+    breakouts = [
+        {"part": bo["at"], "order": [addr2net[a] for a in bo["order"]]}
+        for bo in art["breakouts"]
+    ]
+
+    kwargs = stage.config.model_dump(exclude_unset=True)
+    if "layers" in kwargs:
+        raise LayoutPlanError(
+            f"bundle {stage.name!r}: per-stage config.layers is not allowed — "
+            "the board.stackup is the single layer authority (TS-AUTH-B)"
+        )
+    kwargs["layers"] = list(layers)
+    kwargs["trunk"] = art["trunk"]
+    kwargs["members"] = members
+    kwargs["breakouts"] = breakouts
+
+    return StageInvocation(
+        stage_name=stage.name,
+        stage_type="bundle",
+        entry="batch_route_bundle",
+        module="route_bundle",
+        input_file=input_file,
+        output_file=output_file,
+        net_names=list(art["resolved_nets"]),
+        kwargs=kwargs,
+    )
+
+
 def default_subprocess_invoker(inv: StageInvocation) -> StageResult:
     """IMPURE: run one invocation under SYSTEM python3 (the rust ext is not built
     for the venv) and parse its JSON_SUMMARY back into a StageResult. Mirrors the
@@ -220,6 +287,26 @@ def default_subprocess_invoker(inv: StageInvocation) -> StageResult:
     sys_py = shutil.which("python3")
     if sys_py is None:
         raise LayoutPlanError("route runner: no system python3 to run the router")
+
+    # the entry call differs by stage type: single/diff are net-name-driven
+    # (input, output, NETS, ...); a bundle is geometry-driven — trunk/members/
+    # breakouts ride in KW and input/output are keyword args (route_bundle.py).
+    if inv.stage_type == "bundle":
+        call = (
+            "    " + inv.module + "." + inv.entry + "("
+            + "input_file=" + repr(inv.input_file)
+            + ", output_file=" + repr(inv.output_file)
+            + ", return_results=False, verbose=False, **KW)\n"
+        )
+    else:
+        # return_results=False so the router WRITES output_file (return_results=True
+        # returns data INSTEAD of writing — route.py:775); JSON_SUMMARY prints either
+        # way (route.py:772, before that branch), so we still scrape it from stdout.
+        call = (
+            "    " + inv.module + "." + inv.entry + "("
+            + repr(inv.input_file) + ", " + repr(inv.output_file)
+            + ", NETS, return_results=False, verbose=False, **KW)\n"
+        )
 
     driver = (
         "import sys, io, json, re\n"
@@ -231,13 +318,8 @@ def default_subprocess_invoker(inv: StageInvocation) -> StageResult:
         "_o = sys.stdout\n"
         "sys.stdout = _buf\n"
         "try:\n"
-        # return_results=False so the router WRITES output_file (return_results=True
-        # returns data INSTEAD of writing — route.py:775); JSON_SUMMARY prints either
-        # way (route.py:772, before that branch), so we still scrape it from stdout.
-        "    " + inv.module + "." + inv.entry + "("
-        + repr(inv.input_file) + ", " + repr(inv.output_file)
-        + ", NETS, return_results=False, verbose=False, **KW)\n"
-        "finally:\n"
+        + call
+        + "finally:\n"
         "    sys.stdout = _o\n"
         "_m = re.search(r'JSON_SUMMARY: (\\{.*\\})', _buf.getvalue())\n"
         "_summary = json.loads(_m.group(1)) if _m else None\n"
@@ -323,7 +405,9 @@ def run_route_stages(
             totals[k] += res.summary.get(k, 0)
         bucket = by_type.setdefault(res.stage_type, {})
         for key, value in res.summary.items():
-            if key not in _COMMON_KEYS and isinstance(value, list):
+            if key in _COMMON_KEYS or key in _DETAIL_KEYS:
+                continue
+            if isinstance(value, list):
                 bucket.setdefault(key, []).extend(value)
 
     final_board = invocations[-1].output_file if invocations else str(input_board)

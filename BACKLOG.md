@@ -40,7 +40,7 @@ SSOT），BACKLOG 只留"结论 + 代码指针"，绝不复述实现细节或调
 | **D-Tier3** | **自包含：摆放（room 相对坐标）+ 板框 outline + 完整叠层** | 🟢 桶① + 桶② TS-AUTH-A + placements→transformer 已落地（2026-06-26 / 2026-06-28）：摆放 schema+`apply_placements` build 消费 / `Room.polygon`+rotation+layers / `board.outline`+完整 `stackup` / impedance→stackup 硬依赖 / **单一层数权威板侧** `config` 派生自 `stackup_layers`（杀 2 层硬编码）；契约 `test_placement_contract.py`+`test_placement_apply_contract.py`+`test_board_section_contract.py`。**TS-AUTH-B（router 层表）✅ 2026-06-28（E1 由 `stackup_layers` 传 `layers`）**；剩 **桶③=§E DoD**（纯文本 e2e）；net-class/pour/keepout/silk 进 §F |
 | **增量执行** | **route_stages `--up-to` 断点 + stage name 唯一** | ✅ 2026-06-28：stage name 唯一 + `--up-to`（name/1-based index，越界 loud，写部分板+`route_report.json`）落在 E1 runner |
 | **Tier0** | **corridor-as-data（纯 schema 旁支，零 router 改动）** | ✅ 2026-06-28（`corridor.py` / `RouteStage.corridor`） |
-| E–F | 路由 fork + 诊断闭环——**章节字母 = 执行序** | 🔶 **E1 ✅ 2026-06-28**（runner+`route_report.json`+`--up-to`+TS-AUTH-B）；剩 E2 / E-Tier2(bundle) / E3 / §E DoD / §F |
+| E–F | 路由 fork + 诊断闭环——**章节字母 = 执行序** | 🔶 **E1 ✅ 2026-06-28**（runner+`route_report.json`+`--up-to`+TS-AUTH-B）+ **E-Tier2 bundle ✅ 2026-06-29**（`batch_route_bundle` 平行总线+直连扇出+e2e；E2 rip-up 旋钮按用户拍板取消）；剩 E3 回归台 / §E DoD 桶③ 自包含建板 / §F |
 | G | 不做 / 暂缓 | — |
 
 ### 依赖与关键路径（v10 数据模型推导；**章节字母 = 执行序**）
@@ -330,26 +330,53 @@ router 默认、不漏 None、不重校 D2 已校的 mode 键）；**层表唯�
 跨 stage 板累积（前序铜=白送硬障碍，不加锁）；容忍缺 `JSON_SUMMARY`（早返=零布线、不 KeyError）；聚合 common
 标量键（含 `total_time`/`total_iterations`）从 summary dict 求和、per-type 列表分桶；`--up-to <name|1-based index>`
 断点（写部分板+report，越界/未知 loud、bundle 在 slice 外不报，`report.up_to` 归一为 stage 名）。
-指针：`layout_plan_runner.py`、契约 `test_layout_plan_runner_contract.py`（R1-R14 纯 + E15/E16 e2e）；TS-AUTH-B
-棘轮探针改指 runner（`test_board_section_contract.py::_e1_passes_stackup_to_router`，旧指 build_steps——路由非 build
-step，已纠）。
+指针：`layout_plan_runner.py`、契约 `test_layout_plan_runner_contract.py`（R1-R14 纯 + E15/E16/E17 e2e；
+bundle 分派 R2/R2b/R2c/R2d/R2e + bundle e2e E18 见下「§E-Tier2」）；TS-AUTH-B 棘轮探针改指 runner
+（`test_board_section_contract.py::_e1_passes_stackup_to_router`，旧指 build_steps——路由非 build step，已纠）。
 源码外结论（诚实记限制）：
 - E1 是**库**：现由 e2e 测试消费，CLI `ato route` 走 §F（路由非 `ato build` 步骤，故不进 build pipeline）。
-- **bundle 分派 = loud not-implemented**（`batch_route_bundle` = E-Tier2、未建）：只钉 entry 名，不跑真 bundle。
-- e2e（E15/E16）gated on system python3 + router 板；**本沙盒 scipy 在场、真跑过**（LVDS 2 层板，diff 对真布通，
-  `successful>=1`）；无单端 fixture 板，故 E15 用单端入口路由 diff 对的一条线并容忍早返（只验 invoker 管线）。
+- **bundle 分派**（`batch_route_bundle`）= **§E-Tier2 已落地**（见下），E1 经 `_bundle_invocation` 展开
+  `bundle_artifact` 成几何 payload、成员名经 bridge② 解析、breakout `at`→`part`+kicad 序。
+- e2e（E15/E16/E17/E18）gated on system python3 + router 板；**本沙盒 scipy 在场、真跑过**（LVDS 2 层板，diff 对
+  真布通 `successful>=1`，bundle 真铺 3 成员铜）；无单端 fixture 板，故 E15 用单端入口路由 diff 对的一条线并容忍早返。
 - **per-stage 层子集化 = 有意非目标**（单一权威）：per-stage `config.layers` 响亮拒；将来若需按 stage 限层另议。
+
+### §E-Tier2 bundle 路由（`batch_route_bundle` + runner 分派 + e2e）【✅ 2026-06-29】
+`vendor/KiCadRoutingTools/route_bundle.py:batch_route_bundle`：把冻结的 bundle 契约（分段 trunk + 有序成员 offset
+表 + 2 breakout）变成**平行总线**——每成员一条沿 centerline 的 offset 轨。trunk = **确定性几何、零 A***：横截面
+按每 vertex 的 `spacing` **重排**（`_repack_offsets` 镜像 `bundle_geometry.cross_section_offsets`），成员宽度与每
+diff 对的 intra gap 恒定（bundle-global 不变量）；刚性段不变、过渡段 morph 但 **L1 耦合不散**（只动 inter-lane
+spacing、绝不动对内 gap）。成员输入 offset 当可信入口 profile，per-vertex offset = 输入 + 重排 DELTA（刚性=输入逐字、
+过渡=加 morph 增量，P/N 同增量故 gap 恒定）。breakout 扇出（pad→trunk 端）仅在有板时跑。逐成员 routed/blocked 结果 +
+stdout `JSON_SUMMARY`（含 `members[*].polyline`/`routed_members`/`failed_members`/标量键）。geometry-only 模式（无
+input_file）= 纯 python、无 rust/无 parser，故 D-Tier2 契约直接驱动它；有板模式惰性导入 parser/writer。
+runner 侧：`build_invocations` 经 `_bundle_invocation` 分派 bundle（entry/module=`route_bundle`/`batch_route_bundle`、
+config 逐字展开、层表←stackup、跨 stage 板累积）；`default_subprocess_invoker` 按 stage 类型选调用约定（bundle =
+geometry-driven，trunk/members/breakouts 在 KW，input/output 为关键字参数）。
+指针：`route_bundle.py`、`layout_plan_runner.py:_bundle_invocation`；契约 `test_bundle_contract.py`（T-B1 AST 漂移钉 /
+T-B2 result-shape / T-B3 平行总线 / T-B3b offset→轨变异自检 / T-B4 刚性 diff 耦合 / T-B6 过渡 morph 钉 SSOT+刚性段不
+morph+对内 gap 恒定）+ `test_layout_plan_runner_contract.py`（R2/R2b 分派 / R2c config / R2d 层冲突 / R2e 聚合 /
+E18 e2e：LVDS 板真跑、route_report by_type['bundle']、板真增铜）。
+源码外结论（诚实记限制）：
+- **breakout 扇出 = 直连**（pad→较近 trunk 端的直线段），**非** obstacle-aware A*；breakout `order` 排列与
+  `spacing_overrides` **尚未被几何消费**（仅 schema/校验存在）；交叉局部化/扇出优化 = 后续。
+- **逐成员失败路径未被测试穷尽**：trunk 几何永成功 ⇒ routed=True；有板而缺 pad 时 `blocked` 记串但不翻 routed=False、
+  不计 failed。真正的 failed 计数路径（无效几何）未被 fixture 触发。
+- **过渡 morph 保真**：用「输入 offset + 重排 DELTA」模型，刚性段精确、过渡按 cross_section_offsets 语义重排（对内
+  gap 恒定）；曲折 centerline 顶点法线用相邻段角平分线（直线 trunk 精确，强弯角 miter 近似）。
 
 ---
 
 ## 未完成任务
 
-**本节自上而下 = 执行序**（章节字母 = 关键路径顺序）。已完成前置（C3+D / D-Tier2 桶① / D-Tier3 桶①·TS-AUTH-A /
-Tier0 corridor / stage-name 唯一 / placements→transformer / **§E1 runner+TS-AUTH-B+`--up-to`**）全见上「已完成」。
-**剩余关键路径 = §E（E2→E-Tier2 bundle）→ §F**。
+**本节自上而下 = 执行序**（章节字母 = 关键路径顺序）。已完成前置（C3+D / D-Tier2 桶①② / D-Tier3 桶①·TS-AUTH-A /
+Tier0 corridor / stage-name 唯一 / placements→transformer / **§E1 runner+TS-AUTH-B+`--up-to`** /
+**§E-Tier2 bundle 路由+e2e**）全见上「已完成」。
+**剩余关键路径 = §E DoD（桶③ 纯文本自包含建板 e2e）→ §F**。
 
 contract-first 下游棘轮的契约留在各自 D 测试文件、实现**就地落进 §E**，故**不再另列 D 残块**：
-桶② = §E-Tier2；**TS-AUTH-B（router 层表）✅ 落在 §E1**；桶③ 纯文本 e2e = **§E DoD**。
+桶② = **§E-Tier2 ✅**；**TS-AUTH-B（router 层表）✅ 落在 §E1**；桶③ 纯文本 e2e = **§E DoD**（路由半边已由
+E18 bundle e2e 证；剩自包含建板半边）。
 
 真正不在关键路径上的旁支（P0.2-S7 终验、D5 component_class）收进 §E/§F **之后**的「旁支任务」节、**故意不编 E/F
 序号**（编入会假称其在关键路径上）。
@@ -358,27 +385,20 @@ contract-first 下游棘轮的契约留在各自 D 测试文件、实现**就地
 E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶段能力。E3 全程并行先搭。
 **E1 dispatch 从一开始按「single / diff / bundle」三类 stage 设计**（D-Tier2 契约冻结后填 bundle 实现，勿事后改）。
 - [x] **E1** `layout_plan_runner.py`【✅ 2026-06-28，见上「已完成 §E1」】：route_stages → 按 stage 类型分派的
-  路由调用（single→`batch_route`／diff→`batch_route_diff_pairs`；bundle→loud not-implemented=E-Tier2）+
+  路由调用（single→`batch_route`／diff→`batch_route_diff_pairs`／bundle→`route_bundle.batch_route_bundle` 见 E-Tier2）+
   `route_report.json`；config 逐字展开、层表 ← `stackup_layers`（**翻绿 TS-AUTH-B**）、`--up-to` 断点、跨 stage
-  板累积不加锁、容忍缺 `JSON_SUMMARY`、按类型聚合。纯 `build_invocations` / 真跑 `run_route_stages` /
-  `default_subprocess_invoker`（shell 到 system python3）。契约 `test_layout_plan_runner_contract.py`。
-- [ ] **E2** 阶段锁定 = **依赖 router 既有的跨 stage 硬障碍，非新建锁**（锁定模型见「关键事实」16）：
-  跨 stage 的前序铜对后续 stage 天然不可撕，故 bundle/有序流水线的"前一条线占了空间、后面用不了"**已是硬保证**，
-  E2 **不需要**给 `Segment`/`Via` 加 `_metadata`、不需要给 `rip_up_net` 加跨 stage 守卫（那是在解一个不存在的问题）。
-  E2 的真实交付收窄为**暴露 stage 内 rip-up 旋钮**：把 `max_rip_up_count`/`ripped_route_avoidance_cost`/`_radius`
-  （`routing_config.py:60/83-84`）做成 per-stage config，让某 stage 内部也可"几乎不重排"。
-  - **`BundleStage.rip_up`（`RipUpBudget`）/ 旧设想的 `lock_after` 一律是"per-stage 的 stage 内 rip-up 预算旋钮"**
-    （值 = 上面三 kwarg），**不**表示跨 stage 锁（跨 stage 锁是白送的）。
-  - **不为 §C 预置几何加 lock**（边界事实 2）：已连通铜 router 自动不动。
-- [ ] **E-Tier2 `batch_route_bundle`**（实现冻结的 bundle 契约 = `test_bundle_contract.py` docstring，混编 + 分段平行传输）：
-  - **刚性段**：单端按给定 offset 平行铺、diff 成对按 offset 铺并走差分机理（耦合/`fix_polarity`）——offset 由 D
-    给死，**不搜索**；diff lane 不可退化成两条独立单端（丢耦合/极性）。
-  - **过渡段**：两端 cross-section（offset）给死，中间 morph 路径**有界 auto-route**，**两层约束同时在**：外层 bundle
-    顺序/不交叉 + 内层每 diff lane 耦合不散。= 把 `diff_pair_centerline_setback`（pad 附近受约束聚/散）推广到中段、
-    叠 bundle 顺序约束。
-  逐成员结构化结果（routed/blocked）。
-- [ ] **E-Tier2 breakout 扇出**：两端各把成员 pad→trunk 槽位按 order（缺省派生 / 显式覆盖）路由、局部化交叉、
-  零 trunk 交叉；复用/扩展 `bga_fanout.py`/`qfn_fanout.py`（现为独立脚本，非 router 参数——需收进 entry）。
+  板累积不加锁、容忍缺 `JSON_SUMMARY`、按类型聚合。契约 `test_layout_plan_runner_contract.py`。
+- [x] **E-Tier2 `batch_route_bundle` + breakout 扇出 + e2e**【✅ 2026-06-29，见上「已完成 §E-Tier2」】：平行总线
+  确定性几何（per-vertex 重排 = `cross_section_offsets` 镜像，刚性段不变/过渡 morph、diff 对内 gap 恒定不散 L1）+
+  直连 breakout 扇出（有板时 pad→trunk 端）+ 逐成员 routed/blocked + `JSON_SUMMARY`；runner `_bundle_invocation`
+  分派 + `default_subprocess_invoker` bundle 调用约定。契约 `test_bundle_contract.py` T-B1..T-B6 +
+  `test_layout_plan_runner_contract.py` R2/R2b/R2c/R2d/R2e + E18 e2e（LVDS 板真跑）。
+  - 限制（诚实记，见上「§E-Tier2」）：breakout = 直连非 A*、`order` 排列/`spacing_overrides` 未消费、逐成员失败
+    路径未被测试穷尽、强弯 centerline 法线 miter 近似。交叉局部化/扇出优化 = 后续按需。
+  - **E2 阶段内 rip-up 旋钮 = 不做（用户 2026-06-29 拍板：非必要、与「关键事实」16 重复）**：跨 stage 前序铜本就是
+    router 白送的不可撕硬障碍（优先级由 stage 顺序表达），bundle/流水线的"前线占位、后线绕行"已是硬保证。
+    `BundleStage.rip_up`（`RipUpBudget`）schema 已在（D-Tier2 落），如将来真需 stage 内"几乎不重排"再把
+    `max_rip_up_count`/`ripped_route_avoidance_cost`/`_radius` 接进 config——无新建跨 stage 锁的需求。
 - [ ] **E3** 独立回归台（全程并行先搭 = §E 的 S0 底座）：无需装 KiCad，预编译 Rust 二进制 +
   内置测试板 + numpy/scipy/shapely；失败注入 + 报告 schema 校验。
   - 最小切片已提前到 §C【✅】：`test/exporters/pcb/layout/test_router_smoke_batch_route.py`
@@ -389,6 +409,9 @@ E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶
 - [ ] **§E DoD — 桶③ 纯文本 e2e（翻绿 D-Tier3 桶③棘轮）**：无 reuse，`board.outline` + 完整 `board.stackup` +
   `placements` 全文本给定 → 生成 .kicad_pcb → 重读 `semantic_view` 验层表 / 板框 / 摆放落位 == plan（板上无
   In1/In2.Cu 幽灵层）。证明 `.ato`+`layout.yaml` 自包含建板，是 §E 路由落地后的完工判据。
+  - **路由半边已证**（§E-Tier2 E18 bundle e2e：真板真布线 + `route_report.json` + 板真增铜）；**剩自包含建板半边**
+    = `ato build` 从纯文本（无 reuse 源板）产出带 outline+完整 stackup 的可布线 .kicad_pcb（build 侧，较重、
+    gated not_in_ci），与路由 runner 解耦。
 
 ### F.【最后做，需 §E route_report + B 的 ir 反查】诊断闭环
 - [ ] **F-route** `ato route --plan layout.yaml --stage <name>`：进程内调 §E1

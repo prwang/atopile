@@ -219,6 +219,14 @@ needs_e_tier2 = pytest.mark.xfail(
     strict=True,
 )
 
+# the router runs under SYSTEM python3 (its rust ext is not built for the venv);
+# the bucket② tests shell out to it. Shared by T-B2 and the T-B3+ geometry tests.
+_SYS_PY = shutil.which("python3")
+
+needs_sys_py = pytest.mark.skipif(
+    _SYS_PY is None, reason="no system python3 to run the router"
+)
+
 
 # ===========================================================================
 # fixtures: the shared mixed-DDR bundle (8 DQ single + 2 clock/strobe diff,
@@ -667,6 +675,7 @@ def test_bundle_config_fields_are_real_router_kwargs():
 # E-Tier2. BACKLOG D-Tier2 桶② T-B2.
 # ===========================================================================
 @needs_e_tier2
+@needs_sys_py
 def test_batch_route_bundle_result_shape():
     if not _ROUTER_PRESENT:
         pytest.skip(f"KiCadRoutingTools not present at {_ROUTER_ROOT}")
@@ -675,9 +684,6 @@ def test_batch_route_bundle_result_shape():
     # the contract input shape E must accept (segmented trunk + ordered member
     # table + 2 breakouts). Pinned here so E builds to it; the call + per-member
     # result assertion run once E-Tier2 lands (this body executes only then).
-    import subprocess
-    import sys
-
     driver = (
         "import json, sys\n"
         f"sys.path.insert(0, {str(_ROUTER_ROOT)!r})\n"
@@ -700,8 +706,7 @@ def test_batch_route_bundle_result_shape():
         "                  for m in res.get('members', [])]}))\n"
     )
     proc = subprocess.run(
-        [sys.executable.replace("/.venv/bin/python", "/usr/bin/python3")
-         if "/.venv/" in sys.executable else "python3", "-c", driver],
+        [_SYS_PY, "-c", driver],
         capture_output=True, text=True, cwd=str(_ROUTER_ROOT), timeout=300,
     )
     assert proc.returncode == 0, proc.stderr[-2000:]
@@ -727,12 +732,6 @@ def test_batch_route_bundle_result_shape():
 # the assertions read is the `members[*].polyline` the router emits in its
 # JSON_SUMMARY (the member's trunk track, in board mm).
 # ===========================================================================
-_SYS_PY = shutil.which("python3")
-
-needs_sys_py = pytest.mark.skipif(
-    _SYS_PY is None, reason="no system python3 to run the router"
-)
-
 # trunks along +X (y == 0) so a member's signed offset maps directly to track y.
 _RIGID_TRUNK = {
     "centerline": [{"at": [0, 0], "spacing": 0.5}, {"at": [10, 0], "spacing": 0.5}],
@@ -914,8 +913,10 @@ def test_bundle_transition_morphs_cross_section():
         assert poly[1][1] == pytest.approx(near[m["net"]])
         # v2 is the necked-down end (spacing 0.25) = the re-packed SSOT.
         assert poly[-1][1] == pytest.approx(far[m["net"]])
-    for net in ("e.a", "e.b"):  # the outer singles genuinely neck down
-        assert abs(far[net]) < abs(near[net]) - 1e-9
+    # e.a is the leftmost (outer) single — it genuinely necks down. (e.b sits at the
+    # re-pack pivot and is spacing-invariant by construction, so it is NOT a
+    # neck-down witness; its morph is still pinned by the per-member far-SSOT above.)
+    assert abs(far["e.a"]) < abs(near["e.a"]) - 1e-9
     # L1 through the transition: the OFF-CENTER diff pair's center SHIFTS (re-packed)
     # yet the intra-pair gap stays a constant 0.2 — re-packing moves inter-lane
     # spacing, never the pair gap (a proportional scale would shrink it).
