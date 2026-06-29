@@ -111,8 +111,11 @@ schema"). Pinned in router file `route_bundle.py`:
 result schema is `batch_route`-isomorphic, reported PER MEMBER (routed/blocked).
 T-B1 AST-pins BundleRouteConfig.model_fields ⊆ that entry's kwargs (same method
 as D2's GridRouteOverride drift guard); T-B2 calls it and pins the result shape.
-Bucket③ (real router on a real board, semantic_view of landed offsets) is §E DoD,
-NOT in D.
+T-B3..T-B6 (added with §E-Tier2) pin the BEHAVIOR: the per-member parallel offset
+bus, the offset→track mutation self-check, the constant diff intra-pair gap (L1
+never dissolves), and the transition neck-down morph — read off the
+`members[*].polyline` the router emits. Bucket③ (real router on a real BOARD with
+breakout fanout) lands in the §E1 runner e2e (test_layout_plan_runner_contract).
 
 == THE RATCHET ============================================================
 
@@ -128,7 +131,8 @@ control (clean XFAIL) and cannot XPASS for the wrong reason (D2 rejecting every
 
 import ast
 import json
-from pathlib import Path
+import shutil
+import subprocess
 
 import pytest
 from pydantic import ValidationError
@@ -140,6 +144,11 @@ from faebryk.libs.util import repo_root
 # S0 ratchet guard (D side): probe the not-yet-existing bundle symbols.
 # ---------------------------------------------------------------------------
 try:
+    from faebryk.exporters.pcb.layout.bundle_geometry import (  # type: ignore
+        LaneOffset,  # noqa: F401
+        bundle_artifact,
+        cross_section_offsets,
+    )
     from faebryk.exporters.pcb.layout.layout_plan import (  # type: ignore
         Breakout,
         BundleRouteConfig,
@@ -152,11 +161,6 @@ try:
         Trunk,
         TrunkVertex,
         load_layout_plan,
-    )
-    from faebryk.exporters.pcb.layout.bundle_geometry import (  # type: ignore
-        LaneOffset,  # noqa: F401
-        bundle_artifact,
-        cross_section_offsets,
     )
 
     _DT2_LANDED = True
@@ -211,7 +215,7 @@ _E_TIER2_LANDED = _batch_route_bundle_kwargs() is not None
 
 needs_e_tier2 = pytest.mark.xfail(
     not (_DT2_LANDED and _E_TIER2_LANDED),
-    reason="E-Tier2 batch_route_bundle (router route_bundle.py) not landed (S0 ratchet)",
+    reason="E-Tier2 batch_route_bundle (route_bundle.py) not landed (S0 ratchet)",
     strict=True,
 )
 
@@ -305,7 +309,10 @@ _BASE_BUNDLE = (
     "      - at: top.a\n"
     "      - at: top.d\n"
     "    config:\n"
-    "      track_width: 0.1\n"
+    # track_width != bundle_geometry._DEFAULT_TRACK_WIDTH (0.1) so T-A5 proves the
+    # config→geometry seam: an impl that ignores config.track_width gives different
+    # single-lane offsets and FAILS (no blind default-collision pass).
+    "      track_width: 0.2\n"
 )
 _BASE_MEMBERS = ["top.a.x", "top.d.p", "top.d.n"]
 
@@ -595,12 +602,21 @@ def test_bundle_artifact_carries_segmented_geometry():
     members = art["members"]
     assert [m["net"] for m in members] == _BASE_MEMBERS  # lane order, P before N
     assert all({"net", "offset", "width", "kind"} <= set(m) for m in members)
-    # the offsets must equal the SSOT function (artifact is not a second source)
-    oracle = cross_section_offsets(stage.lanes, 0.5, default_width=0.1)
+    # the offsets must equal the SSOT function (artifact is not a second source);
+    # default_width == config.track_width (0.2, != the 0.1 hardcoded default) so
+    # this verifies the config→geometry seam, not a default collision.
+    oracle = cross_section_offsets(stage.lanes, 0.5, default_width=0.2)
     assert [pytest.approx(m["offset"]) for m in members] == [o.offset for o in oracle]
 
-    # breakout order + resolved nets (the address→net bridge②, in member order)
+    # breakouts: the D-side artifact keys them by room address `at` with `order` in
+    # ato addresses (member order when derived) — the runner later resolves these to
+    # the frozen `part`+kicad-name shape batch_route_bundle wants (R2). Pin both the
+    # key and the order CONTENT here so a wrong artifact cannot pass on length alone.
     assert len(art["breakouts"]) == 2
+    a_bo, d_bo = art["breakouts"]
+    assert a_bo["at"] == "top.a" and a_bo["order"] == _BASE_MEMBERS  # derived order
+    assert d_bo["at"] == "top.d" and d_bo["order"] == _BASE_MEMBERS
+    # breakout order + resolved nets (the address→net bridge②, in member order)
     assert art["resolved_nets"] == [bridge[m] for m in _BASE_MEMBERS]
 
     # the fragment is JSON-serializable (it is written to <t>.layout_plan.json)
@@ -626,7 +642,7 @@ def test_bundle_config_fields_are_real_router_kwargs():
     extra = fields - kwargs
     assert not extra, (
         "BundleRouteConfig has keys batch_route_bundle does not accept as a kwarg "
-        f"(drift — E1 expands these into the entry and would TypeError): {sorted(extra)}"
+        f"(drift — E1 expands these into the entry, would TypeError): {sorted(extra)}"
     )
 
 
@@ -664,7 +680,8 @@ def test_batch_route_bundle_result_shape():
         "breakouts = [{'part':'U1','order':['X','DP','DN']},\n"
         "             {'part':'U2','order':['X','DP','DN']}]\n"
         "res = batch_route_bundle(trunk, members, breakouts,\n"
-        "                         track_width=0.1, clearance=0.1, return_results=True)\n"
+        "                         track_width=0.1, clearance=0.1,\n"
+        "                         return_results=True)\n"
         "print('JSON_RESULT' + json.dumps({'keys': sorted(res),\n"
         "      'members': [{'net': m.get('net'), 'routed': m.get('routed')}\n"
         "                  for m in res.get('members', [])]}))\n"
@@ -681,3 +698,198 @@ def test_batch_route_bundle_result_shape():
     nets = {m["net"] for m in res["members"]}
     assert {"X", "DP", "DN"} <= nets
     assert all("routed" in m for m in res["members"])
+
+
+# ===========================================================================
+# T-B3..T-B6 — E-Tier2 BEHAVIORAL contract (桶②, beyond the T-B2 shape-pin):
+# `batch_route_bundle` turns the frozen (segmented trunk + ordered member offsets
+# + breakouts) into a PARALLEL BUS — one offset track per member along the
+# centerline — that ① is routed per member, ② sits at each member's signed offset
+# (and MOVES when the offset changes — no blind test), ③ keeps a diff lane's P/N a
+# CONSTANT intra-pair gap apart end to end (L1 coupling never dissolves into two
+# independent singles), and ④ morphs the cross-section at a transition (neck-down)
+# while preserving lane ORDER. These exercise the REAL router under system
+# python3; the trunk geometry needs NO board, so they run without a fixture PCB.
+# strict-xfail until E-Tier2 lands route_bundle.batch_route_bundle. The geometry
+# the assertions read is the `members[*].polyline` the router emits in its
+# JSON_SUMMARY (the member's trunk track, in board mm).
+# ===========================================================================
+_SYS_PY = shutil.which("python3")
+
+needs_sys_py = pytest.mark.skipif(
+    _SYS_PY is None, reason="no system python3 to run the router"
+)
+
+# trunks along +X (y == 0) so a member's signed offset maps directly to track y.
+_RIGID_TRUNK = {
+    "centerline": [{"at": [0, 0], "spacing": 0.5}, {"at": [10, 0], "spacing": 0.5}],
+    "segments": [{"kind": "rigid", "spacing": 0.5}],
+}
+# rigid (0.5) then a neck-down transition to 0.5 -> 0.25 in the last segment.
+_TRANSITION_TRUNK = {
+    "centerline": [
+        {"at": [0, 0], "spacing": 0.5},
+        {"at": [10, 0], "spacing": 0.5},
+        {"at": [20, 0], "spacing": 0.25},
+    ],
+    "segments": [
+        {"kind": "rigid", "spacing": 0.5},
+        {"kind": "transition", "spacing_a": 0.5, "spacing_b": 0.25},
+    ],
+}
+_BREAKOUTS_GEO = [{"part": "A", "order": None}, {"part": "B", "order": None}]
+
+
+def _members_from_lanes(lanes, spacing=0.5, default_width=0.1) -> list[dict]:
+    """The router's `members` input table, DERIVED from the geometry SSOT
+    (`cross_section_offsets`) so the behavioral tests stay pinned to the same
+    offsets T-A3 froze (the bus is not a second source of truth)."""
+    return [
+        {
+            "net": o.net,
+            "offset": o.offset,
+            "width": o.width,
+            "kind": o.kind,
+            "diff_partner": o.diff_partner,
+            "polarity": o.polarity,
+        }
+        for o in cross_section_offsets(lanes, spacing, default_width=default_width)
+    ]
+
+
+def _run_bundle_geometry(trunk, members, breakouts, **kw) -> dict:
+    """Shell out to system python3 and call `batch_route_bundle` in GEOMETRY-ONLY
+    mode (no board) — the rust ext is not built for the venv, same pattern as the
+    §C router-oracle. Returns the JSON_SUMMARY dict; each `members[*]` carries a
+    `polyline` (the member's trunk track, [[x, y], ...] in board mm)."""
+    payload = json.dumps([trunk, members, breakouts, kw])
+    driver = (
+        "import sys, json, io, re\n"
+        f"sys.path.insert(0, {str(_ROUTER_ROOT)!r})\n"
+        "from contextlib import redirect_stdout\n"
+        "from route_bundle import batch_route_bundle\n"
+        f"trunk, members, breakouts, kw = json.loads({payload!r})\n"
+        "buf = io.StringIO()\n"
+        "with redirect_stdout(buf):\n"
+        "    batch_route_bundle(trunk, members, breakouts,\n"
+        "                       return_results=True, verbose=False, **kw)\n"
+        "m = re.search(r'JSON_SUMMARY: (\\{.*\\})', buf.getvalue())\n"
+        "print('JSON_RESULT' + (m.group(1) if m else 'null'))\n"
+    )
+    proc = subprocess.run(
+        [_SYS_PY, "-c", driver],
+        cwd=str(_ROUTER_ROOT),
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert proc.returncode == 0, proc.stderr[-3000:]
+    line = next(
+        ln for ln in proc.stdout.splitlines() if ln.startswith("JSON_RESULT")
+    )
+    res = json.loads(line[len("JSON_RESULT"):])
+    assert res is not None, "batch_route_bundle printed no JSON_SUMMARY"
+    return res
+
+
+@needs_e_tier2
+@needs_sys_py
+def test_bundle_trunk_is_parallel_offset_bus():
+    """① every member routed, in order; ② each member's track is the line y == its
+    signed offset (perpendicular distance == |offset|), CONSTANT along a rigid
+    trunk, spanning the centerline. = the parallel bus."""
+    members = _members_from_lanes(_tiny_lanes())  # single A, diff(P,N), single B
+    res = _run_bundle_geometry(
+        _RIGID_TRUNK, members, _BREAKOUTS_GEO, track_width=0.1, clearance=0.1
+    )
+    out = {m["net"]: m for m in res["members"]}
+    assert [m["net"] for m in res["members"]] == [m["net"] for m in members]
+    assert all(m["routed"] for m in res["members"])
+    assert res["successful"] == len(members) and res["failed"] == 0
+    for m in members:
+        poly = out[m["net"]]["polyline"]
+        assert len(poly) >= 2
+        ys = [p[1] for p in poly]
+        assert all(abs(y - m["offset"]) < 1e-6 for y in ys), (
+            f"{m['net']} not at its offset {m['offset']}: ys={ys}"
+        )
+        xs = [p[0] for p in poly]
+        assert min(xs) <= 1e-6 and max(xs) >= 10 - 1e-6  # spans the trunk
+
+
+@needs_e_tier2
+@needs_sys_py
+def test_bundle_track_offset_mutation_propagates():
+    """A member's offset change MUST move its track (an offset that does not move
+    the geometry == a blind test == a bug)."""
+    members = _members_from_lanes(_tiny_lanes())
+    base = {
+        m["net"]: m
+        for m in _run_bundle_geometry(
+            _RIGID_TRUNK, members, _BREAKOUTS_GEO, track_width=0.1, clearance=0.1
+        )["members"]
+    }
+    bumped = [dict(m) for m in members]
+    bumped[0]["offset"] = members[0]["offset"] - 1.0  # shift member A by 1 mm
+    moved = {
+        m["net"]: m
+        for m in _run_bundle_geometry(
+            _RIGID_TRUNK, bumped, _BREAKOUTS_GEO, track_width=0.1, clearance=0.1
+        )["members"]
+    }
+    net0 = members[0]["net"]
+    assert moved[net0]["polyline"][0][1] != base[net0]["polyline"][0][1]
+
+
+@needs_e_tier2
+@needs_sys_py
+def test_bundle_diff_lane_stays_coupled():
+    """L1 is never flattened: a diff lane's P and N stay a CONSTANT intra-pair gap
+    apart at EVERY point of the trunk — never two independent parallel singles."""
+    members = _members_from_lanes(_tiny_lanes())  # middle diff(n.p, n.n) gap 0.2
+    res = _run_bundle_geometry(
+        _RIGID_TRUNK, members, _BREAKOUTS_GEO, track_width=0.1, clearance=0.1
+    )
+    out = {m["net"]: m for m in res["members"]}
+    p, n = out["n.p"]["polyline"], out["n.n"]["polyline"]
+    assert len(p) == len(n) and len(p) >= 2
+    for (xp, yp), (xn, yn) in zip(p, n):
+        assert abs(xp - xn) < 1e-6  # same x stations
+        assert abs(abs(yp - yn) - 0.2) < 1e-6  # constant intra-pair gap
+
+
+@needs_e_tier2
+@needs_sys_py
+def test_bundle_transition_morphs_cross_section():
+    """A transition (neck-down 0.5 -> 0.25) RE-PACKS the cross-section per vertex:
+    only the INTER-lane spacing changes, the INTRA-pair gap is bundle-global. So
+    the morph must equal the geometry SSOT at each vertex's spacing — NOT a naive
+    proportional offset scale (which would collapse the diff gap and dissolve L1).
+    Pinned here: ① the SSOT-magnitude at both ends, ② lane order/side preserved,
+    ③ the diff pair stays a CONSTANT 0.2 apart at EVERY station incl. the far end."""
+    members = _members_from_lanes(_tiny_lanes())
+    res = _run_bundle_geometry(
+        _TRANSITION_TRUNK, members, _BREAKOUTS_GEO, track_width=0.1, clearance=0.1
+    )
+    out = {m["net"]: m for m in res["members"]}
+    # the SSOT profiles at the near (spacing 0.5) and far (spacing 0.25) vertices.
+    near_oracle = {o.net: o.offset for o in cross_section_offsets(
+        _tiny_lanes(), 0.5, default_width=0.1)}
+    far_oracle = {o.net: o.offset for o in cross_section_offsets(
+        _tiny_lanes(), 0.25, default_width=0.1)}
+    for net in ("n.a", "n.b"):  # the two outer singles
+        poly = out[net]["polyline"]
+        near, far = poly[0][1], poly[-1][1]
+        # ① morph equals the re-packed SSOT at each end (not a proportional scale).
+        assert near == pytest.approx(near_oracle[net])
+        assert far == pytest.approx(far_oracle[net])
+        # ② genuinely necked down, side/sign (lane order) preserved.
+        assert abs(far) < abs(near) - 1e-9
+        assert (near > 0) == (far > 0)
+    # ③ L1 holds THROUGH the transition: intra-pair gap is constant 0.2 everywhere,
+    # including the far (necked-down) end — re-packing must not scale the pair gap.
+    p, n = out["n.p"]["polyline"], out["n.n"]["polyline"]
+    assert len(p) == len(n) and len(p) >= 3  # v0, v1, v2 (spans the transition)
+    for (xp, yp), (xn, yn) in zip(p, n):
+        assert abs(xp - xn) < 1e-6
+        assert abs(abs(yp - yn) - 0.2) < 1e-6

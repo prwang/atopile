@@ -30,9 +30,14 @@ shells out to system python3.
    isinstance(stage, BundleStage) -> bundle; else RouteStage, and stage.mode in
    {"single","diff"}. single -> route.batch_route; diff ->
    route_diff.batch_route_diff_pairs; bundle -> route_bundle.batch_route_bundle.
-   batch_route_bundle does NOT exist yet (E-Tier2), so a bundle stage IN THE RUN
-   SLICE is LOUD not-implemented at build_invocations time (NotImplementedError
-   naming the entry + E-Tier2), NEVER silently skipped (S5a).
+   A bundle stage expands `bundle_artifact` (segmented trunk + ordered member
+   offsets + breakouts) into the invocation, with member nets (and each diff
+   member's partner) RESOLVED through bridge② to kicad names — NOT the ato
+   addresses — and the payload (trunk/members/breakouts) carried in kwargs. The
+   runner consumes `route_bundle.batch_route_bundle`, whose calling convention
+   differs from single/diff (geometry-driven, not net-name-driven); the
+   default invoker dispatches that shape (§E-Tier2). (Before §E-Tier2 a bundle in
+   the run slice was loud not-implemented; that gate is now lifted.)
 
 2. CONFIG EXPANDED VERBATIM: RouteStage.config (GridRouteOverride) is expanded
    into the entry's kwargs as-is, EXPLICITLY-SET keys only
@@ -87,7 +92,8 @@ shells out to system python3.
    total_iterations, total_vias) are SUMMED across stages FROM EACH STAGE'S
    summary dict (a None summary adds 0); per-type list keys are kept separate by
    entry type (single -> routed_single/failed_single; diff ->
-   routed_diff_pairs/failed_diff_pairs). run_route_stages writes route_report.json
+   routed_diff_pairs/failed_diff_pairs; bundle -> routed_members/failed_members).
+   run_route_stages writes route_report.json
    (per-stage results, summed totals, the per-type breakdown, the up_to
    breakpoint, the final board path) and returns the RouteReport.
 
@@ -328,6 +334,30 @@ _SINGLE_THEN_BUNDLE_IR = _ir(
 
 
 # ---------------------------------------------------------------------------
+# S0 gate (bundle dispatch): does build_invocations expand a BundleStage into a
+# route_bundle.batch_route_bundle invocation? Before §E-Tier2 it raised
+# NotImplementedError ⇒ the bundle-dispatch tests are strict-xfail and flip green
+# when the runner learns the bundle shape (gate 3). The probe is PURE (no router).
+# ---------------------------------------------------------------------------
+def _bundle_dispatch_landed() -> bool:
+    if not _E1_LANDED:
+        return False
+    try:
+        plan = load_layout_plan(_BUNDLE_YAML)
+        invs = build_invocations(plan, _BUNDLE_IR, input_board=_IN, workdir=_WD)
+    except Exception:
+        return False
+    return any(i.stage_type == "bundle" for i in invs)
+
+
+needs_bundle_dispatch = pytest.mark.xfail(
+    not _bundle_dispatch_landed(),
+    reason="E-Tier2 bundle dispatch (build_invocations -> batch_route_bundle) absent",
+    strict=True,
+)
+
+
+# ---------------------------------------------------------------------------
 # e2e router guard — same pattern as test_router_smoke_batch_route.py.
 # ---------------------------------------------------------------------------
 _ROUTER_ROOT = repo_root() / "vendor" / "KiCadRoutingTools"
@@ -373,34 +403,55 @@ def test_dispatch_selects_entry_by_stage_type():
 
 
 # ===========================================================================
-# R2 — a bundle stage in the run slice is LOUD not-implemented (E-Tier2),
-# never a silent skip (S5a); paired with a single+diff positive control.
+# R2 — a bundle stage DISPATCHES to route_bundle.batch_route_bundle: the runner
+# expands bundle_artifact (segmented trunk + ordered member offsets + breakouts)
+# into the invocation, members RESOLVED to kicad names through bridge② (NOT ato
+# addresses), layers from the stackup authority. (§E-Tier2 lifted the former
+# loud-not-implemented gate.)
 # ===========================================================================
-@needs_e1
-def test_bundle_dispatch_is_loud_not_implemented():
+@needs_bundle_dispatch
+def test_bundle_dispatch_to_batch_route_bundle():
     plan = load_layout_plan(_BUNDLE_YAML)
-    with pytest.raises(NotImplementedError) as ei:
-        build_invocations(plan, _BUNDLE_IR, input_board=_IN, workdir=_WD)
-    assert "batch_route_bundle" in str(ei.value)  # named the unbuilt entry
-    # positive control: a single+diff plan builds without raising.
-    ctrl = _plan([RouteStage(name="s", nets=["top.a"], mode="single")])
-    assert _invs(ctrl, _ir({"top.a": "/A"}))
+    inv = build_invocations(plan, _BUNDLE_IR, input_board=_IN, workdir=_WD)[0]
+    assert inv.stage_type == "bundle"
+    assert inv.entry == "batch_route_bundle" and inv.module == "route_bundle"
+    # the bundle payload rides in kwargs (segmented trunk + ordered members + 2
+    # breakouts) — a geometry-driven call, not a net-name-driven one.
+    assert {"trunk", "members", "breakouts"} <= set(inv.kwargs)
+    assert len(inv.kwargs["breakouts"]) == 2
+    # members carry RESOLVED kicad net names (bridge②), in member order — NOT the
+    # ato addresses (top.a.x / top.d.p / top.d.n).
+    assert [m["net"] for m in inv.kwargs["members"]] == ["/X", "/DP", "/DN"]
+    # a diff member's PARTNER is resolved too (coupling survives the bridge).
+    dp = next(m for m in inv.kwargs["members"] if m["net"] == "/DP")
+    assert dp["kind"] == "diff" and dp["diff_partner"] == "/DN"
+    # the breakout D/E seam: bundle_artifact emits `at`-keyed, ato-address order;
+    # the runner must translate to the FROZEN batch_route_bundle shape — key `part`
+    # with `order` RESOLVED to kicad names (the smoke-frozen T-B2 shape). Pin both
+    # the key and the resolved order content (derived == member order here).
+    for bo in inv.kwargs["breakouts"]:
+        assert "part" in bo and "at" not in bo
+        assert bo["order"] == ["/X", "/DP", "/DN"]
+    # layers from the stackup authority (TS-AUTH-B), never the 4-layer default.
+    assert inv.kwargs["layers"] == ["F.Cu", "B.Cu"]
+    # net_names is the resolved member list (for chaining/reporting).
+    assert inv.net_names == ["/X", "/DP", "/DN"]
 
 
 # ===========================================================================
-# R2b — the bundle loudness is per the RUN SLICE: a bundle BEYOND the --up-to
-# cutoff must NOT raise (you can route up to the single stage while bundle is
-# still E-Tier2), but the full plan that reaches it does.
+# R2b — bundle dispatch is per the RUN SLICE: the full plan dispatches BOTH the
+# single and the bundle; --up-to before the bundle stops at the single.
 # ===========================================================================
-@needs_e1
-def test_bundle_outside_up_to_slice_does_not_raise():
+@needs_bundle_dispatch
+def test_bundle_in_vs_outside_up_to_slice():
     plan = load_layout_plan(_SINGLE_THEN_BUNDLE_YAML)
     ir = _SINGLE_THEN_BUNDLE_IR
-    with pytest.raises(NotImplementedError):  # full plan reaches the bundle
-        build_invocations(plan, ir, input_board=_IN, workdir=_WD)
-    # --up-to the single stage stops BEFORE the bundle ⇒ builds fine.
-    invs = build_invocations(plan, ir, input_board=_IN, workdir=_WD, up_to="pre")
-    assert [i.stage_name for i in invs] == ["pre"]
+    invs = build_invocations(plan, ir, input_board=_IN, workdir=_WD)
+    assert [i.stage_name for i in invs] == ["pre", "b"]
+    assert invs[0].stage_type == "single" and invs[1].stage_type == "bundle"
+    # --up-to the single stage stops BEFORE the bundle ⇒ just the single.
+    pre = build_invocations(plan, ir, input_board=_IN, workdir=_WD, up_to="pre")
+    assert [i.stage_name for i in pre] == ["pre"]
 
 
 # ===========================================================================
@@ -802,3 +853,65 @@ def test_e2e_two_stage_chaining_and_missing_summary(tmp_path):
     # and final_board resolve to a real file.
     assert report.final_board == str(tmp_path / "again.kicad_pcb")
     assert Path(report.final_board).exists()
+
+
+# a mixed bundle (1 single + 1 diff) over the LVDS board's real nets, for the
+# bucket③ e2e: a 2-copper stackup (so layers == [F.Cu, B.Cu]) + a trunk inside the
+# board area. The member addresses resolve through bridge② to real board nets.
+_BUNDLE_E2E_YAML = (
+    "board:\n"
+    "  stackup:\n"
+    "    layers:\n"
+    "      - {name: F.Cu, type: copper, thickness: 0.035}\n"
+    "      - {name: d1, type: dielectric, thickness: 0.2, "
+    "material: FR4, epsilon_r: 4.5}\n"
+    "      - {name: B.Cu, type: copper, thickness: 0.035}\n"
+    "route_stages:\n"
+    "  - type: bundle\n"
+    "    name: link\n"
+    "    lanes:\n"
+    "      - net: top.o\n"
+    "      - diff: [top.d.p, top.d.n]\n"
+    "        gap: 0.25\n"
+    "        width: 0.2\n"
+    "    trunk:\n"
+    "      centerline:\n"
+    "        - at: [150, 100]\n          spacing: 0.5\n"
+    "        - at: [160, 100]\n          spacing: 0.5\n"
+    "    breakouts:\n"
+    "      - at: top.o\n"
+    "      - at: top.d\n"
+    "    config:\n"
+    "      track_width: 0.2\n"
+    "      clearance: 0.2\n"
+)
+_BUNDLE_E2E_IR = _ir({"top.o": "/OUT_A", "top.d.p": "/DATA+", "top.d.n": "/DATA-"})
+
+
+# ===========================================================================
+# E18 — e2e (bucket③): run_route_stages dispatches a real bundle stage through
+# route_bundle.batch_route_bundle on the LVDS board, writes route_report.json with
+# a per-type 'bundle' breakdown, lands all members, and writes back a board that
+# parses. The end-to-end integration: plan -> bundle_artifact -> batch_route_bundle
+# -> board + report.
+# ===========================================================================
+@needs_bundle_dispatch
+@needs_router
+def test_e2e_bundle_run_writes_report_and_board(tmp_path):
+    if not _router_importable():
+        pytest.skip("system python3 cannot import the router (ext not built)")
+    plan = load_layout_plan(_BUNDLE_E2E_YAML)
+    report = run_route_stages(
+        plan, _BUNDLE_E2E_IR, input_board=str(_BOARD), workdir=tmp_path
+    )
+    assert (tmp_path / "route_report.json").exists()
+    # the bundle stage is dispatched and aggregated under by_type['bundle'].
+    assert "bundle" in report.by_type
+    assert "routed_members" in report.by_type["bundle"]
+    # the single + the diff pair all land along the trunk (parallel bus + fanout).
+    routed = set(report.by_type["bundle"]["routed_members"])
+    assert {"/OUT_A", "/DATA+", "/DATA-"} <= routed
+    # the routed board is actually written and parses back.
+    assert report.final_board == str(tmp_path / "link.kicad_pcb")
+    assert Path(report.final_board).exists()
+    assert "(kicad_pcb" in Path(report.final_board).read_text()[:200]
