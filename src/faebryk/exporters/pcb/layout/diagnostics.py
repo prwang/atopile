@@ -249,13 +249,63 @@ def _route_finding(rec: dict, stage_name: str, resolver: LayoutResolver,
 
 def _summary_failed_nets(stage: dict) -> list:
     """Failed net identifiers from a stage summary, for stages without an F2 diag
-    (bundle: failed_members; single/diff fallbacks). Best-effort flatten to names."""
+    (bundle: failed_members; single/diff fallbacks). Best-effort flatten to names.
+    NB: failed_multipoint is handled SEPARATELY (it is never in `diag`, and its
+    items carry per-pad detail) — see `_multipoint_finding`."""
     summary = stage.get("summary") or {}
     out: list = []
     for key in ("failed_single", "failed_diff_pairs", "failed_members"):
         for item in summary.get(key, []) or []:
             out.append(item if isinstance(item, str) else item.get("net", str(item)))
     return out
+
+
+def _multipoint_finding(item: dict, stage_name: str, resolver: LayoutResolver,
+                        addr_room: dict, ref_addr: dict) -> dict:
+    """One ROUTE-FAIL finding for a failed MULTIPOINT (tap) net. Unlike single/diff
+    failures, multipoint failures are never in the F2 diag — they live in the
+    summary's `failed_multipoint`, each with per-pad detail (component_ref /
+    pad_number / x / y). Correlated to ato addresses via the designator→addr index
+    and to a room via the pad coordinate."""
+    net = item.get("net_name", "")
+    failed_pads = item.get("failed_pads", []) or []
+    addrs = sorted({ref_addr[p["component_ref"]] for p in failed_pads
+                    if p.get("component_ref") in ref_addr})
+    rooms = sorted({addr_room[a] for a in addrs if a in addr_room})
+    room = rooms[0] if len(rooms) == 1 else None
+    if room is None:  # fall back to the first pad's coordinate
+        for p in failed_pads:
+            if p.get("x") is not None:
+                room = resolver.room_at(float(p["x"]), float(p["y"]))
+                if room:
+                    break
+    endpoints = [
+        f"{p.get('component_ref', '?')}.{p.get('pad_number', '?')}"
+        for p in failed_pads
+    ]
+    return make_finding(
+        rule_id="ROUTE-FAIL",
+        category="routing",
+        summary=f"multipoint net {net} could not connect all pads in stage "
+        f"{stage_name!r} ({len(failed_pads)} pad(s) unconnected)",
+        description=(
+            f"The router left {len(failed_pads)} tap pad(s) of multipoint net "
+            f"{net} unconnected in stage {stage_name!r}."
+        ),
+        severity="error",
+        confidence="deterministic",
+        evidence_source="router",
+        nets=[net],
+        components=addrs,
+        stage=stage_name,
+        room=room,
+        ato_path=addrs,
+        failed_endpoints=endpoints,
+        recommendation=(
+            f"net {net} has unreachable tap pads — open space to them, add a via "
+            "escape, or relax this stage's spacing in layout.yaml and re-route."
+        ),
+    )
 
 
 def _drc_finding(violation: dict, resolver: LayoutResolver,
@@ -316,12 +366,22 @@ def build_diagnostics(
     `{findings, summary, totals}` with findings deterministically ordered."""
     resolver = LayoutResolver(ir, room_polygons=room_polygons)
     addr_room = _addr_room_index(ir)
+    # designator (ref) → ato address, for multipoint failed_pads (which carry a
+    # component_ref, not an address). The IR stores ref forward; invert it.
+    ref_addr = {
+        comp.get("ref"): addr
+        for addr, comp in ir.get("components", {}).items()
+        if comp.get("ref")
+    }
     findings: list = []
 
     route_failures = 0
     for stage in route_report.get("stages", []):
         stage_name = stage.get("stage_name")
         diag = stage.get("diag")
+        summary = stage.get("summary") or {}
+        # single/diff failures: the F2 diag (with cause) when present, else the
+        # summary's failed lists (bundle/no-diag stages).
         if diag:
             for rec in diag:
                 findings.append(_route_finding(rec, stage_name, resolver, addr_room))
@@ -335,6 +395,14 @@ def build_diagnostics(
                     )
                 )
                 route_failures += 1
+        # multipoint (tap) failures are NEVER in the diag and NEVER in
+        # _summary_failed_nets — harvest them here unconditionally so they are not
+        # silently dropped (route.py counts them in the `failed` total). S5a.
+        for item in summary.get("failed_multipoint", []) or []:
+            findings.append(
+                _multipoint_finding(item, stage_name, resolver, addr_room, ref_addr)
+            )
+            route_failures += 1
 
     drc_count = 0
     for violation in drc_violations:
@@ -342,10 +410,16 @@ def build_diagnostics(
         drc_count += 1
 
     sort_findings(findings)
+    # honesty guard (S5a): the router's own `failed` total must be fully accounted
+    # for by emitted ROUTE-FAIL findings. Any residual gap is SURFACED, never
+    # silent — a non-zero `route_failures_unaccounted` means a failure class the
+    # diagnostics layer does not yet attribute (investigate, don't hide).
+    reported_failed = int(route_report.get("totals", {}).get("failed", 0) or 0)
     return {
         "findings": findings,
         "summary": {
             "route_failures": route_failures,
+            "route_failures_unaccounted": max(0, reported_failed - route_failures),
             "drc_violations": drc_count,
             "total_findings": len(findings),
             "new_drc": sum(1 for f in findings if f.get("is_new") is True),

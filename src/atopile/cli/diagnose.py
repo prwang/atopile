@@ -120,8 +120,18 @@ def run_diagnose_for_build(
     violations = drc_runner(Path(board_path))
 
     baseline_keys = None
-    if baseline_board_path is not None and Path(baseline_board_path).exists():
-        baseline_keys = {drc_violation_key(v) for v in drc_runner(Path(baseline_board_path))}
+    if baseline_board_path is not None:
+        # an explicitly-supplied baseline that is missing is LOUD — silently
+        # dropping it would degrade new-vs-existing DRC without the user knowing
+        # (S5a). (The CLI's auto-default baseline, paths.layout, always exists.)
+        if not Path(baseline_board_path).exists():
+            raise UserResourceException(
+                f"--baseline board {baseline_board_path} does not exist — cannot "
+                "diff DRC against it (omit --baseline to skip new-vs-existing)."
+            )
+        baseline_keys = {
+            drc_violation_key(v) for v in drc_runner(Path(baseline_board_path))
+        }
 
     diag = build_diagnostics(
         route_report=route_report,

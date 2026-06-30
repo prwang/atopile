@@ -157,6 +157,20 @@ def test_baseline_board_marks_existing_drc(tmp_path):
 
 
 @needs_f4cli
+def test_explicit_missing_baseline_is_loud(tmp_path):
+    """A user-supplied --baseline that does not exist is LOUD — not silently
+    ignored (which would degrade new-vs-existing DRC without the user knowing)."""
+    art = _artifacts(tmp_path)
+    with pytest.raises(UserResourceException):
+        run_diagnose_for_build(
+            drc_runner=_fake_drc([_VIOLATION]),
+            board_reader=_fake_board_reader,
+            baseline_board_path=tmp_path / "does_not_exist.kicad_pcb",
+            **art,
+        )
+
+
+@needs_f4cli
 def test_missing_route_report_is_loud(tmp_path):
     art = _artifacts(tmp_path)
     art["route_report_path"].unlink()

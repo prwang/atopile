@@ -224,6 +224,46 @@ def test_sort_findings_is_stable_and_canonicalizes_lists():
 
 
 @needs_f4
+def test_multipoint_failures_are_not_dropped():
+    """A failed MULTIPOINT net (tap pads unconnected) lives only in the summary's
+    failed_multipoint — never in diag — and must still produce a ROUTE-FAIL
+    finding, even when a single-ended net ALSO failed in the same stage (the diag
+    branch must not shadow it). S5a: no silently-dropped actionable failure."""
+    rr = _route_report()  # already has a failed single /CLK with a diag
+    rr["stages"][0]["summary"]["failed_multipoint"] = [
+        {"net_name": "/GND",
+         "failed_pads": [
+             {"component_ref": "U1", "pad_number": "7", "x": 10.0, "y": 10.0},
+             {"component_ref": "U2", "pad_number": "1", "x": 40.0, "y": 40.0},
+         ]}
+    ]
+    rr["totals"]["failed"] = 2  # the single + the multipoint
+    diag = build_diagnostics(route_report=rr, drc_violations=[], ir=_ir(),
+                             room_polygons=_RINGS)
+    rf = [f for f in diag["findings"] if f["rule_id"] == "ROUTE-FAIL"]
+    nets = {f["nets"][0] for f in rf}
+    assert nets == {"/CLK", "/GND"}  # BOTH surfaced, not just the single
+    mp = next(f for f in rf if f["nets"] == ["/GND"])
+    # multipoint pads correlated to ato addresses (designator → addr) + endpoints.
+    assert "top.u1" in mp["ato_path"] and "top.u2" in mp["ato_path"]
+    assert mp["failed_endpoints"] == ["U1.7", "U2.1"]
+    # nothing left unaccounted vs the router's failed total.
+    assert diag["summary"]["route_failures_unaccounted"] == 0
+
+
+@needs_f4
+def test_unaccounted_failures_are_surfaced_not_hidden():
+    """If the router reports more failures than the diagnostics layer can attribute,
+    the gap is SURFACED in the summary (never silently swallowed)."""
+    rr = _route_report()
+    rr["totals"]["failed"] = 5  # router says 5 failed, but only /CLK is attributable
+    diag = build_diagnostics(route_report=rr, drc_violations=[], ir=_ir(),
+                             room_polygons=_RINGS)
+    assert diag["summary"]["route_failures"] == 1
+    assert diag["summary"]["route_failures_unaccounted"] == 4
+
+
+@needs_f4
 def test_diagnostics_has_summary_totals():
     diag = build_diagnostics(route_report=_route_report(),
                              drc_violations=[_drc_violation()], ir=_ir(),
