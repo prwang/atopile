@@ -25,6 +25,7 @@ from atopile.cli import (
     configure,
     create,
     dev,
+    diagnose,
     inspect_,
     install,
     kicad_ipc,
@@ -208,6 +209,7 @@ app.command(deprecated=True, hidden=True)(install.install)
 app.command()(inspect_.inspect)
 app.command()(view.view)
 app.command()(route.route)
+app.command()(diagnose.diagnose)
 app.add_typer(package.package_app, name="package", hidden=True)
 app.add_typer(install.dependencies_app, name="dependencies", help="Manage dependencies")
 app.command(rich_help_panel="Shortcuts")(install.sync)
