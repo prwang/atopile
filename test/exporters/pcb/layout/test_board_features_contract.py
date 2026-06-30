@@ -120,10 +120,24 @@ def test_silk_text_is_emitted():
 
 @needs_f68
 def test_pour_with_unresolvable_net_is_loud():
+    """bridge② miss: the ato address is not in signal_nets at all."""
     pcb = _pcb()
     yaml = _YAML.replace("net: top.gnd", "net: top.NOPE")
     with pytest.raises(LayoutPlanError):
         generate_board_features(pcb, load_layout_plan(yaml), _IR)
+
+
+@needs_f68
+def test_pour_net_resolved_but_absent_from_board_is_loud():
+    """The load-bearing F6 invariant: a pour MUST bind a REAL board net (a net-0
+    pour is silently GC'd by KiCad). Here the ato address RESOLVES through bridge②
+    but to a net name that is NOT on the board — `_net_number` must be loud, not
+    fall through to net-0. (Mutating the raise to `return 0` re-introduces the
+    GC footgun and must fail this test.)"""
+    pcb = _pcb()
+    ir = {"signal_nets": {"top.gnd": "/NET_NOT_ON_THIS_BOARD"}}
+    with pytest.raises(LayoutPlanError):
+        generate_board_features(pcb, load_layout_plan(_YAML), ir)
 
 
 @needs_f68

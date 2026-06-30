@@ -138,16 +138,21 @@ def test_net_in_two_classes_is_loud_at_parse():
 @needs_f5
 @pytest.mark.slow
 @pytest.mark.skipif(not _HAS_KICAD_CLI, reason="requires kicad-cli")
-def test_kicad_cli_drc_honors_emitted_net_class(tmp_path):
-    """The proof that F-drc-rules WORKS: a project authoring a huge Default
-    clearance, written next to a board, makes `kicad-cli pcb drc` flag clearance
-    violations it otherwise would not (rc=0, no SEGFAULT). Pins the empirically-
-    verified round-trip so a schema/emit regression cannot silently break it."""
+def test_kicad_cli_drc_honors_emitter_output(tmp_path):
+    """The proof F-drc-rules WORKS end-to-end through the EMITTER UNDER TEST:
+    `generate_project_rules` builds a project authoring a 5 mm clearance class
+    over every board net; written next to the board, `kicad-cli pcb drc` flags
+    clearance violations it otherwise would not (rc=0, no SEGFAULT). This pins the
+    real chain (emitter → .kicad_pro → kicad-cli) — a schema/emit regression in
+    generate_project_rules WILL break it (unlike a hand-built project would)."""
     import json
     import subprocess
     from pathlib import Path
 
-    from faebryk.libs.kicad.other_fileformats import C_kicad_project_file
+    from faebryk.exporters.pcb.layout.layout_plan import (
+        Board, LayoutPlan, NetClass,
+    )
+    from faebryk.libs.kicad.fileformats import kicad
     from faebryk.libs.util import repo_root
 
     src = (
@@ -159,8 +164,23 @@ def test_kicad_cli_drc_honors_emitted_net_class(tmp_path):
     board = tmp_path / "b.kicad_pcb"
     board.write_text(src.read_text())
 
-    def _clearance_count(proj: C_kicad_project_file | None) -> int:
-        if proj is not None:
+    # map every real board net to a synthetic ato address, assign them all to a
+    # WIDE 5 mm clearance class — and emit the project THROUGH generate_project_rules.
+    pcb = kicad.loads(kicad.pcb.PcbFile, board.read_text()).kicad_pcb
+    net_names = sorted({n.name for n in pcb.nets if n.name})
+    ir = {"signal_nets": {f"top.n{i}": name for i, name in enumerate(net_names)}}
+    plan = LayoutPlan(
+        board=Board(
+            net_classes=[
+                NetClass(name="WIDE", clearance=5.0, nets=list(ir["signal_nets"]))
+            ]
+        )
+    )
+    proj = generate_project_rules(plan, ir)
+    assert proj is not None
+
+    def _clearance_count(write_project: bool) -> int:
+        if write_project:
             proj.dumps(tmp_path / "b.kicad_pro")
         elif (tmp_path / "b.kicad_pro").exists():
             (tmp_path / "b.kicad_pro").unlink()
@@ -173,11 +193,6 @@ def test_kicad_cli_drc_honors_emitted_net_class(tmp_path):
         viols = json.loads(out.read_text()).get("violations", [])
         return sum(1 for v in viols if v.get("type") == "clearance")
 
-    # a 5 mm Default clearance is absurdly tight → many clearance violations.
-    proj = C_kicad_project_file()
-    proj.net_settings.classes = [
-        C_kicad_project_file.C_net_settings.C_classes(name="Default", clearance=5.0)
-    ]
-    with_rules = _clearance_count(proj)
-    without_rules = _clearance_count(None)
+    with_rules = _clearance_count(True)
+    without_rules = _clearance_count(False)
     assert with_rules > without_rules, (with_rules, without_rules)
