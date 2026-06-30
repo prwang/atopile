@@ -413,24 +413,116 @@ E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶
     = `ato build` 从纯文本（无 reuse 源板）产出带 outline+完整 stackup 的可布线 .kicad_pcb（build 侧，较重、
     gated not_in_ci），与路由 runner 解耦。
 
-### F.【最后做，需 §E route_report + B 的 ir 反查】诊断闭环
-- [ ] **F-route** `ato route --plan layout.yaml --stage <name>`：进程内调 §E1
-  （`return_results=True`），入口按 net 类型分派（§C 边界事实 1，勿写裸 `batch_route` 当唯一入口）。
-- [ ] **F-diag** `ato diagnose` → diagnostics.json：聚合 route_report.json + `kicad-cli pcb drc
-  --format json`（uuid 经 B 反查，事实 11）+ rule-area 命中测试；字段 stage/room/ato_path/
-  constraint(JSON-pointer)/reason/blocking_nets/failed_endpoints/suggestions。schema 参考 kicad-happy。
-  - **via/几何总数勿信 `JSON_SUMMARY.total_vias`**（边界事实 3）：只计 router 本次新增，板上真实
-    总数须**重读输出 .kicad_pcb** 数。
-- [ ] **F-drc-rules** 板级 net-class / DRC 规则表文本化（从 D-Tier3 自包含审计移入）：让 KiCad DRC 有可对齐的
-  规则源（clearance/线宽类/via 类），而非吃 KiCad 工程默认。**loud-or-nothing：规则缺失时响亮（warn/拒），禁静默
-  默认**——否则 DRC"绿"是假绿（按内置默认而非设计意图判）。布线侧 design rule 已在 `route_stages.config`，此处是
-  **板级 DRC 对齐**（F 的 DRC 闭环消费），与布线侧不重复。
-- [ ] **F-fill** 铜皮 pour / 灌铜 zone 文本化（从审计移入；§E 只布线不灌铜，pour 现 reuse-only
-  `room_ops.py:296-307`）：地/电源覆铜的文本权威 + 重灌。缺失须 loud（不静默产无铜皮板）。
-- [ ] **F-keepout** 非 placement 类禁布 / rule area 文本化（从审计移入）：placement 类已由 §D 生成；其它禁布
-  zone 现 reuse-only。缺失须 loud。
-- [ ] **F-silk** 丝印 / 文字文本化（从审计移入；现 reuse-only `layout_sync.py:288-304`）：低优先，但仍 **不缺省、
-  缺失须 loud**（不静默产无丝印板当成已完成）。
+### F.【最后做，需 §E route_report + B 的 ir 反查】诊断闭环 + 板级规则文本化
+
+§E 已落（E1 route runner + E-Tier2 bundle，`route_report.json` 在场）。§F 是收官章：
+build→route→**diagnose**→(SKILL 改文本)→重建 的反馈闭环——项目的立身前提（"命令式反馈活在文件外的闭环里"）。
+把一次布线运行 + KiCad DRC 变成结构化、按 ato 地址索引的 `diagnostics.json`，并把现为 reuse-only 的
+板级 authoring 关切（DRC 规则 / 灌铜 / 禁布 / 丝印）文本化，使 DRC"绿"反映设计意图而非 KiCad 默认。
+
+**用户拍板（2026-06-30）**：scope = **全做**（F-route…F-silk）；cause depth = **含 blocking cause**
+（改 vendored router 暴露"为何没布通"，不只"哪条/哪里"）。
+
+#### §F 是什么（各件）
+1. **F-route** — `ato route` CLI：从某 build 的 config 跑 §E1 runner，产出布通板 + `route_report.json`。薄壳。
+2. **F-diag** — `ato diagnose` → `diagnostics.json`：聚合 `route_report.json`（失败身份 + blocking cause）+
+   `kicad-cli` DRC + rule-area 命中测试，反查回 ato 地址/room。
+3. **F-drc-rules** — 板级 net-class/DRC 规则（clearance、线宽类、via 类）文本化，让 DRC 判设计意图。缺失须 loud。
+4. **F-fill / F-keepout / F-silk** — 灌铜 pour、非 placement 禁布、丝印（各 reuse-only）文本化。缺失须 loud。
+
+#### 前置评估
+**已满足 ✅**
+- **`route_report.json` + 进程内 runner**：`run_route_stages(plan, ir, *, input_board, workdir, invoker=…,
+  report_path=…)`（`layout_plan_runner.py:375`）可进程内调；每 stage 完整 `JSON_SUMMARY` 逐字留在 `stages[].summary`
+  （`:114`）。失败**身份**已在：`failed_single`/`failed_diff_pairs`/`failed_members`（名）+ `failed_multipoint`
+  （逐 pad `component_ref`/`pad_number`/`x`/`y`）。
+- **CLI 框架**：Typer app `src/atopile/cli/cli.py:51`，命令显式注册 `:204-218`。模板 = `src/atopile/cli/view.py`
+  （config bootstrap：`config.apply_options(...)` + `config.select_build(name)`）。输入派生自
+  `config.build.paths.{layout, output_base, layout_config}`（`config.py:296`）；plan =
+  `output_base.with_suffix(".layout_plan.json")`，ir = `…".layout_ir.json"`。
+- **DRC 钩子**：`run_drc(pcb: Path) -> C_kicad_drc_report_file`（`src/faebryk/libs/kicad/drc.py:13`），typed
+  （`other_fileformats.py:49`）：`violations[]` 带 `description`/`severity`/`type`/`items[].uuid`+`items[].pos`。
+  kicad-cli 10.0.3 在场；DRC oracle 测试已绿（CLAUDE.md "S7 DRC oracle xfail" 是**过时**笔记——顺手纠）。
+- **rule-area 命中测试**：受管 zone 名 `rule_area_<sheetname>`，带显式 `polygon`（`rule_area.py:118`）；
+  point-in-polygon → room/ato 地址，**无需 uuid**。
+- **net 名 → ato 地址**：IR `nets`（net → `["<addr>.<pad>"]`）+ `signal_nets`（addr → net），`layout_ir.py:154,175`。
+
+**§F 必须补的缺口**
+- **G1 — "为何"只在 stdout 且被丢弃。** `BlockingInfo`（`blocking_analysis.py:63`：blocking net + frontier/track/
+  via/near-endpoint cell 数）、net-history `top_blockers`、`analyze_static_blockers`（pad/track/zone）都是
+  **print-only**；runner driver 只 regex 抽那一行 `JSON_SUMMARY:`、其余丢弃（`layout_plan_runner.py:324`）。
+  `return_results=True` **无助**——它是 geometry-to-apply、无诊断。→ **必须改 vendored router** 发结构化诊断行 +
+  教 runner 捕获。
+- **G2 — 无 uuid → ato 地址反查。** IR 把 `footprint_uuid` + pad `uuid` 作为按地址索引的正向值存、不发反向索引；
+  **track/via/zone uuid 根本不在 IR**（它们在布线时生成、晚于 build 期 IR）。DRC 按 uuid 引项 → §F 主用 net 名
+  （DRC 描述文本嵌 net 名）+ 坐标命中测试（rule-area polygon），footprint/pad-uuid 自建反向索引当 best-effort。
+  无需改 IR schema。
+- **G3 — `total_vias` 只是本次新增 via**，非板上总数（`route.py:700`）。§F 重读输出 `.kicad_pcb`（`pcb.vias`）取真值。
+- **ZonePlacement SEGFAULT 约束（锁死）**：placement zone **只**设 `enabled`+`sheetname`，绝不设
+  `source_type`/`source`（SIGSEGV kicad-cli）。F-keepout/F-fill emit 前须核其 zone 文法不重蹈。
+
+#### 推荐执行序（按依赖排，每件 tests-first 严格 xfail 棘轮）
+> 全程沿项目纪律：S0 严格 xfail（import/AST 探针守门）；consumer-oracle pinning（消费者真接口定契约）；
+> loud-or-nothing（S5a）；code=SSOT（不变量进 docstring，BACKLOG 只留结论+指针）；semantic-view 非字节等价；uuid 不透明。
+
+- [ ] **F1 — `ato route`（薄壳 CLI）**：新 `src/atopile/cli/route.py` + 注册 `cli.py:204-218`。仿 `view.py`
+  bootstrap config，从 `config.build.paths` 派生 plan/board/ir，调 `run_route_stages(...)`，打印摘要；
+  `--stage`/`--up-to` 透传。契约：build→route e2e（仿 `test/end_to_end/test_layout_plan_build.py` `_build`/`run_live`，
+  `@slow @not_in_ci @skipif(no kicad-cli/py3)`）。
+- [ ] **F2 — router 诊断暴露（vendored submodule；consumer-oracle、契约先行）**：在 `vendor/KiCadRoutingTools` 把
+  结构化失败 cause 折进**新** stdout 行 `JSON_DIAG: {…}`（与 `JSON_SUMMARY` 分开，免污染 runner `by_type` rollup）：
+  逐失败 net → `{net_name, blocked_by:[{net,blocked_count,near_target,near_source}], static:{pads,tracks,zones},
+  history:[events]}`，源自 `BlockingInfo`（`blocking_analysis.py`）+ `RoutingState.net_history`（`routing_state.py:112`）。
+  再教 `default_subprocess_invoker`（`layout_plan_runner.py:283`）也抓 `JSON_DIAG`、挂到新 `StageResult.diag` →
+  `route_report.json`。诊断**消费者**（F3/F4）冻结 `JSON_DIAG` 形状、router emit 之（同 D-Tier2→E-Tier2 方向反转）。
+  router 改在 feature 分支 + 父仓 gitlink bump（同 `route_bundle.py`）。
+- [ ] **F3 — bridge② 反查解析器（纯 helper）**：新模块（如 `src/faebryk/libs/kicad/layout_ir_resolve.py` 或
+  `diagnostics/` 包）：给 IR + 板，建 `{footprint_uuid→addr, pad_uuid→(addr,pad)}` 反向、`net 名→[addr.pad]`
+  （从 `nets`）、`coord→room`（rule-area polygon 命中）。纯、venv 单测（伪造 IR）。= F-diag 依赖的关联引擎。
+- [ ] **F4 — `ato diagnose` → `diagnostics.json`（核心交付）**：新 `src/atopile/cli/diagnose.py` + `diagnostics`
+  builder。聚合：route_report 失败 + F2 blocking cause + `run_drc()` violations + 重读板（G3 真 via/几何总数）；经 F3
+  关联回 ato 地址/room；产 findings。**schema** = kicad-happy `make_finding` 改造
+  （`/kicad_wksp/kicad-happy/skills/kicad/scripts/finding_schema.py:21`）：`rule_id`、`severity∈{error,warning,info}`、
+  `confidence∈{deterministic,heuristic,…}`、`evidence_source`、`report_context{section,impact,standard_ref}`、
+  `components`、`nets`、`recommendation` —— 加 §F 字段：`stage`、`room`、`ato_path`、`constraint`（指 layout.yaml 的
+  JSON-pointer）、`reason`、`blocking_nets`、`failed_endpoints`、`suggestions`。deterministic `sort_findings` 稳照。
+  DRC 对 未布线-vs-已布线 板分新 vs 既存（Ki-Stack 套路）。契约按**按构造定答案** fixture（已知不可布通 → finding 指名
+  blocker），非"跑了没报错"。
+- [ ] **F5 — F-drc-rules（板 authoring）**：板级 net-class/DRC 规则源文本化，使 DRC 判设计意图；规则缺失 loud
+  （warn/拒），绝不静默吃 KiCad 默认。使 F-diag 的 DRC 权威。emit 前核 zone/规则文法对照 SEGFAULT 约束。
+- [ ] **F6/F7/F8 — F-fill / F-keepout / F-silk（板 authoring）**：灌铜 pour（现 reuse-only `room_ops.py:296`）、
+  非 placement 禁布（placement 类已 §D 出）、丝印（reuse-only `layout_sync.py:288`）文本化。各：文本权威 + emit +
+  缺失 loud。本 tranche 内低优先；F-silk 最后。
+
+#### 关键文件
+- 新 CLI：`src/atopile/cli/route.py`、`src/atopile/cli/diagnose.py`；注册 `cli.py:204-218`（+ import `:23-36`）。
+- 新 lib：`diagnostics` builder + `layout_ir_resolve`（反向关联）；复用 `run_route_stages`（`layout_plan_runner.py`）、
+  `run_drc`（`libs/kicad/drc.py`）、IR（`libs/kicad/layout_ir.py`）、rule-area polygon（`exporters/pcb/layout/rule_area.py`）。
+- vendored router（submodule、feature 分支）：`blocking_analysis.py`、`routing_state.py`、`route.py`、`route_diff.py`、
+  `route_bundle.py`（emit `JSON_DIAG`）+ runner `layout_plan_runner.py`（捕获）。
+- 板 authoring：net-class/DRC-规则 + pour + keepout + silk emitter（新），受 `rule_area.py`/CLAUDE.md 的
+  ZonePlacement 约束指引。
+- 仪式：`BACKLOG.md` §F + `CLAUDE.md` sidecar 列；新契约测试 `test/exporters/pcb/layout/` + `test/end_to_end/`。
+
+#### 验收
+- **单元（venv，无 router/板）**：F3 反查器对伪造 IR（uuid/net/coord → addr/room，含 track-uuid 不可解的兜底）；
+  F4 finding builder 对 canned route_report + DRC report（deterministic `sort_findings` 快照）。
+- **router 侧（system python3）**：F2 `JSON_DIAG` 形状由 shell-out 在已知阻塞 fixture（§C/§E LVDS 板 + 故意不可布通
+  net）钉死；断言 `blocked_by` 指名真 blocker。
+- **e2e（`@slow @not_in_ci @skipif(no kicad-cli/py3)`）**：build 一例 → `ato route` → `ato diagnose`；断言
+  `diagnostics.json` 把强制失败/DRC 违规关联到正确 `ato_path`/`room`，且分清既存 vs 新 DRC。沙盒可跑
+  （kicad-cli 10.0.3 + scipy 在场）。
+
+#### 诚实记限制（落地时写）
+- uuid→地址仅 footprint/pad（自建反向）；track/via/zone DRC 项按坐标命中 + net 名关联、非 uuid（track/via uuid
+  从不进 build 期 IR）。
+- blocking cause = router frontier/static 分析（启发式排名），原样暴露。
+- 板 authoring 半边（F5–F8）：首交付 = 文本→板 emit + 缺失 loud；DRC 规则对 KiCad 完整规则文法的覆盖是增量。
+
+#### 开放技术次决策（已给推荐、不挡）
+- 独立 `JSON_DIAG` 行 vs 扩 `JSON_SUMMARY` → **独立**（保 runner 标量/列表 rollup 干净，免再像 `members` 那样膨胀 report）。
+- diagnostics.json finding schema → **采 kicad-happy `make_finding` + §F 字段**（上）。
+- F3 落点 → 小纯模块比扩 `layout_ir.py` 干净；二者皆可。
 
 ### 旁支任务（可并行 / 不挡关键路径；故意不编 E/F 序号）
 与 §E/§F 无硬依赖、可择机做；保留各自原标识（不塞进 E/F 编号，以免假称在关键路径上）。
