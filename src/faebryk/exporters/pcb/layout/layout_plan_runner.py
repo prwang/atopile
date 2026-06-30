@@ -285,13 +285,58 @@ def _bundle_invocation(
     )
 
 
+def _system_python3() -> str | None:
+    """The SYSTEM python3 to run the router under — NEVER the atopile venv's.
+
+    The rust router ext (and its apt numpy/scipy) is built for the system python3,
+    not the venv (CLAUDE.md). `shutil.which("python3")` is WRONG here: when `ato`
+    runs with the venv on PATH, `which` returns `.venv/bin/python3`, which has no
+    rust ext → the router subprocess dies rc=1. (Tests masked this by running
+    without the venv on PATH.) So we skip any interpreter living under this venv's
+    prefix and fall back to the conventional system locations."""
+    import sys
+
+    venv = Path(sys.prefix)
+    candidates: list[str] = []
+    found = shutil.which("python3")
+    if found:
+        candidates.append(found)
+    candidates += ["/usr/bin/python3", "/usr/local/bin/python3"]
+    for cand in candidates:
+        path = Path(cand)
+        if not path.exists():
+            continue
+        try:  # an interpreter whose literal path is inside the venv → skip it
+            path.relative_to(venv)
+            continue
+        except ValueError:
+            pass
+        return str(path)
+    return None
+
+
 def default_subprocess_invoker(inv: StageInvocation) -> StageResult:
     """IMPURE: run one invocation under SYSTEM python3 (the rust ext is not built
     for the venv) and parse its JSON_SUMMARY back into a StageResult. Mirrors the
     shell-out pattern in test_router_smoke_batch_route.py."""
-    sys_py = shutil.which("python3")
+    sys_py = _system_python3()
     if sys_py is None:
-        raise LayoutPlanError("route runner: no system python3 to run the router")
+        raise LayoutPlanError(
+            "route runner: no SYSTEM python3 to run the router (the rust ext is "
+            "not built for the atopile venv — need a non-venv python3 with the "
+            "router deps)"
+        )
+
+    # the router subprocess runs with cwd=_ROUTER_ROOT (the vendor dir), so any
+    # RELATIVE board path (e.g. config.build.paths.layout = "layout/top/top.kicad_pcb",
+    # relative to the project) would resolve against the wrong directory and the
+    # router would FileNotFoundError. Resolve to absolute (against the PARENT cwd =
+    # the project, where the artifacts live) so input/output paths are unambiguous
+    # across the cwd boundary — and so the board the router WRITES is the same one
+    # the parent reads back for chaining. (The pure StageInvocation keeps the
+    # as-given paths; absolutizing is the invoker's job — it owns the cwd switch.)
+    input_file = str(Path(inv.input_file).resolve())
+    output_file = str(Path(inv.output_file).resolve())
 
     # the entry call differs by stage type: single/diff are net-name-driven
     # (input, output, NETS, ...); a bundle is geometry-driven — trunk/members/
@@ -299,8 +344,8 @@ def default_subprocess_invoker(inv: StageInvocation) -> StageResult:
     if inv.stage_type == "bundle":
         call = (
             "    " + inv.module + "." + inv.entry + "("
-            + "input_file=" + repr(inv.input_file)
-            + ", output_file=" + repr(inv.output_file)
+            + "input_file=" + repr(input_file)
+            + ", output_file=" + repr(output_file)
             + ", return_results=False, verbose=False, **KW)\n"
         )
     else:
@@ -309,7 +354,7 @@ def default_subprocess_invoker(inv: StageInvocation) -> StageResult:
         # way (route.py:772, before that branch), so we still scrape it from stdout.
         call = (
             "    " + inv.module + "." + inv.entry + "("
-            + repr(inv.input_file) + ", " + repr(inv.output_file)
+            + repr(input_file) + ", " + repr(output_file)
             + ", NETS, return_results=False, verbose=False, **KW)\n"
         )
 
@@ -368,10 +413,10 @@ def default_subprocess_invoker(inv: StageInvocation) -> StageResult:
     # a zero-routed stage (nothing to route / all already connected) returns BEFORE
     # write_routed_output (route.py:349-360) — no board is written. Copy the input
     # through so the cross-stage chain (and final_board) still resolves to a board.
-    out = Path(inv.output_file)
+    out = Path(output_file)
     if not out.exists():
         out.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(inv.input_file, inv.output_file)
+        shutil.copy2(input_file, output_file)
 
     if summary is None:
         return StageResult(inv.stage_name, inv.stage_type, 0, 0, 0, None, diag=diag)

@@ -25,11 +25,13 @@ contract test, not silent gaps):
     spatial extents). `room_polygons_from_pcb` extracts them; `room_at` is the pure
     point-in-polygon consumer (unit-tested with hand-fed rings).
 
-Loud-or-nothing (S5a): a duplicate footprint/pad uuid in the IR means addr→uuid
-is not a function — a corrupt IR — and raises LayoutIRError. Every *lookup* miss
-(unknown uuid / net / a point in no room) returns None / [] (best-effort
-attribution, never a raise — a DRC item can legitimately reference KiCad-owned or
-route-time geometry the IR cannot see).
+AMBIGUITY, not loudness, on duplicate uuids: a REUSED layout (examples/layout_reuse)
+legitimately repeats the SAME footprint/pad uuid across every reused instance —
+the reuse copies the source geometry verbatim, uuids and all. So a duplicate uuid
+is NOT a corrupt IR; it is an EXPECTED case where uuid→addr is not a function.
+Such a uuid is marked ambiguous and resolves to None (the honest G2 best-effort:
+fall back to net-name + coordinate correlation), never a crash. Every other
+lookup miss (unknown uuid / net / a point in no room) likewise returns None / [].
 
 Pure: the only I/O is the optional `room_polygons_from_pcb` board read; the
 resolver itself is venv-importable and graph-free.
@@ -37,9 +39,10 @@ resolver itself is venv-importable and graph-free.
 
 from typing import Any
 
-from faebryk.libs.kicad.layout_ir import LayoutIRError
-
 _MANAGED_ZONE_PREFIX = "rule_area_"  # mirrors rule_area.py:_MANAGED_PREFIX
+
+# sentinel for a uuid seen on more than one address (reuse) → unresolvable.
+_AMBIGUOUS = object()
 
 
 def _ring_area(ring: list[tuple[float, float]]) -> float:
@@ -94,32 +97,30 @@ class LayoutResolver:
         for addr, comp in ir.get("components", {}).items():
             fp_uuid = comp.get("footprint_uuid")
             if fp_uuid is not None:
-                if fp_uuid in self._fp_addr:
-                    raise LayoutIRError(
-                        f"footprint uuid {fp_uuid!r} maps to both "
-                        f"{self._fp_addr[fp_uuid]!r} and {addr!r}: uuid→addr is not "
-                        "a function (corrupt IR)"
-                    )
-                self._fp_addr[fp_uuid] = addr
+                # a uuid already seen (reuse) is now AMBIGUOUS → unresolvable, not
+                # a crash: uuid→addr ceases to be a function but the IR is valid.
+                self._fp_addr[fp_uuid] = (
+                    _AMBIGUOUS if fp_uuid in self._fp_addr else addr
+                )
             for pad_name, pad in comp.get("pads", {}).items():
                 pad_uuid = pad.get("uuid")
                 if pad_uuid is None:
                     continue
-                if pad_uuid in self._pad_addr:
-                    prev = self._pad_addr[pad_uuid]
-                    raise LayoutIRError(
-                        f"pad uuid {pad_uuid!r} maps to both {prev} and "
-                        f"({addr!r}, {pad_name!r}): uuid→pad is not a function "
-                        "(corrupt IR)"
-                    )
-                self._pad_addr[pad_uuid] = (addr, pad_name)
+                self._pad_addr[pad_uuid] = (
+                    _AMBIGUOUS
+                    if pad_uuid in self._pad_addr
+                    else (addr, pad_name)
+                )
 
-    # --- uuid channels (footprint/pad only — track/via/zone are route-time, G2) --
+    # --- uuid channels (footprint/pad only — track/via/zone are route-time, G2;
+    #     a reuse-duplicated uuid is ambiguous → None) ---
     def footprint_addr(self, uuid: str) -> str | None:
-        return self._fp_addr.get(uuid)
+        v = self._fp_addr.get(uuid)
+        return None if v is _AMBIGUOUS else v
 
     def pad_addr(self, uuid: str) -> tuple[str, str] | None:
-        return self._pad_addr.get(uuid)
+        v = self._pad_addr.get(uuid)
+        return None if v is _AMBIGUOUS else v
 
     # --- net channel (verbatim reuse of ir["nets"]) -----------------------------
     def net_endpoints(self, net_name: str) -> list[str]:

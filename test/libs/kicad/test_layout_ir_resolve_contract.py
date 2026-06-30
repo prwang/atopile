@@ -23,8 +23,6 @@ unlanded is a test bug.
 
 import pytest
 
-from faebryk.libs.kicad.layout_ir import LayoutIRError  # the loud-path error (reused)
-
 try:
     from faebryk.libs.kicad.layout_ir_resolve import (
         LayoutResolver,
@@ -178,22 +176,28 @@ def test_room_at_without_polygons_is_none():
 
 
 # ---------------------------------------------------------------------------
-# loud-or-nothing: a corrupt (non-functional) IR is a hard error
+# reuse: a DUPLICATE uuid is ambiguous, not corrupt — it resolves to None, never
+# a crash. examples/layout_reuse repeats the same footprint/pad uuid across every
+# reused instance, so this is the COMMON case, and the diagnostics layer falls
+# back to net-name + coordinate correlation for an ambiguous uuid.
 # ---------------------------------------------------------------------------
 @needs_f3
-def test_duplicate_footprint_uuid_is_loud():
+def test_duplicate_footprint_uuid_is_ambiguous_not_loud():
     ir = _ir()
-    ir["components"]["top.r2"]["footprint_uuid"] = "fp-aaaa"  # collide with r1
-    with pytest.raises(LayoutIRError):
-        LayoutResolver(ir)
+    ir["components"]["top.r2"]["footprint_uuid"] = "fp-aaaa"  # collide with r1 (reuse)
+    r = LayoutResolver(ir)  # must NOT raise
+    assert r.footprint_addr("fp-aaaa") is None  # ambiguous → unresolvable
+    assert r.footprint_addr("fp-bbbb") is None  # also gone (r2 took the dup)
 
 
 @needs_f3
-def test_duplicate_pad_uuid_is_loud():
+def test_duplicate_pad_uuid_is_ambiguous_not_loud():
     ir = _ir()
     ir["components"]["top.r2"]["pads"]["1"]["uuid"] = "pad-a1"  # collide with r1.1
-    with pytest.raises(LayoutIRError):
-        LayoutResolver(ir)
+    r = LayoutResolver(ir)  # must NOT raise
+    assert r.pad_addr("pad-a1") is None  # ambiguous → unresolvable
+    # an un-collided pad still resolves cleanly.
+    assert r.pad_addr("pad-a2") == ("top.r1", "2")
 
 
 # ---------------------------------------------------------------------------
