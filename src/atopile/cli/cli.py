@@ -31,6 +31,7 @@ from atopile.cli import (
     lsp,
     mcp,
     package,
+    route,
     serve,
     view,
 )
@@ -206,6 +207,7 @@ app.add_typer(create.create_app, name="create")
 app.command(deprecated=True, hidden=True)(install.install)
 app.command()(inspect_.inspect)
 app.command()(view.view)
+app.command()(route.route)
 app.add_typer(package.package_app, name="package", hidden=True)
 app.add_typer(install.dependencies_app, name="dependencies", help="Manage dependencies")
 app.command(rich_help_panel="Shortcuts")(install.sync)
