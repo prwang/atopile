@@ -933,6 +933,21 @@ def generate_layout_plan(ctx: BuildStepContext) -> None:
     # wrote it — persist the change so the on-disk layout carries them.
     kicad.dumps(pcb.pcb_file, config.build.paths.layout)
 
+    # §F / F5: author board net classes into the project file so KiCad's DRC (and
+    # `ato diagnose`) judge DESIGN INTENT, not KiCad defaults. Merge onto any
+    # existing project; write nothing when no classes are authored.
+    from faebryk.exporters.pcb.layout.board_rules import generate_project_rules
+    from faebryk.libs.kicad.other_fileformats import C_kicad_project_file
+
+    proj_path = config.build.paths.kicad_project
+    base_project = (
+        C_kicad_project_file.loads(proj_path) if proj_path.exists() else None
+    )
+    project = generate_project_rules(plan, ir, base_project=base_project)
+    if project is not None:
+        project.dumps(proj_path)
+        logger.info(f"Wrote board net-class rules to {proj_path}")
+
     artifact = plan.model_dump(mode="json")
     # A bundle stage carries COMPUTED geometry — the cross-section member offsets +
     # the segmented trunk E1 routes. Replace its raw model dump with the

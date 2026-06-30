@@ -642,15 +642,56 @@ def stackup_layers(stackup: Stackup | None) -> list[str]:
     return [layer.name for layer in stackup.layers if layer.type == "copper"]
 
 
+class NetClass(BaseModel):
+    """A board net class (§F / F5): the authored copper rules — clearance, track
+    width, via geometry, optional diff-pair geometry — KiCad's DRC judges against.
+    `nets` are the ato signal ADDRESSES assigned to this class (resolved to kicad
+    net names through bridge② at emit time, like everywhere else). Textualizing
+    these makes DRC reflect DESIGN INTENT instead of silently eating KiCad's
+    defaults (the F-drc-rules goal)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    clearance: float | None = Field(default=None, gt=0)
+    track_width: float | None = Field(default=None, gt=0)
+    via_diameter: float | None = Field(default=None, gt=0)
+    via_drill: float | None = Field(default=None, gt=0)
+    diff_pair_gap: float | None = Field(default=None, gt=0)
+    diff_pair_width: float | None = Field(default=None, gt=0)
+    nets: list[str] = Field(default_factory=list)  # ato signal addresses
+
+
 class Board(BaseModel):
     """The board-level section: outline + complete stackup (both optional in the
     model — their REQUIRED-ness is enforced where consumed: outline by
-    `outline_bounds`, stackup by `stackup_layers` and the impedance check)."""
+    `outline_bounds`, stackup by `stackup_layers` and the impedance check) + the
+    authored net classes (§F / F5: F-drc-rules)."""
 
     model_config = ConfigDict(extra="forbid")
 
     outline: BoardOutline | None = None
     stackup: Stackup | None = None
+    net_classes: list[NetClass] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_net_classes(self) -> "Board":
+        # loud-or-nothing: duplicate class names, and a net assigned to more than
+        # one class, are both ambiguous DRC intent — reject at parse (S5a).
+        names = [nc.name for nc in self.net_classes]
+        dups = sorted({n for n in names if names.count(n) > 1})
+        if dups:
+            raise ValueError(f"board.net_classes: duplicate class name(s) {dups}")
+        seen: dict[str, str] = {}
+        for nc in self.net_classes:
+            for net in nc.nets:
+                if net in seen and seen[net] != nc.name:
+                    raise ValueError(
+                        f"board.net_classes: net {net!r} is assigned to both "
+                        f"{seen[net]!r} and {nc.name!r} (a net has one class)"
+                    )
+                seen[net] = nc.name
+        return self
 
 
 def _stage_requests_impedance(stage: Any) -> bool:
