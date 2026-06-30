@@ -929,8 +929,17 @@ def generate_layout_plan(ctx: BuildStepContext) -> None:
     # Tier0: draw each single stage's corridor polyline onto User.1 and flip its
     # guide_corridor_enabled (mutates `plan` so the artifact below records it).
     draw_corridors(kicad_pcb, plan)
-    # the rule areas + corridors mutate the board after `update_layout` already
-    # wrote it — persist the change so the on-disk layout carries them.
+    # §F / F6-F8: author copper pours / keepouts / silk onto the board (idempotent).
+    from faebryk.exporters.pcb.layout.board_features import generate_board_features
+
+    feats = generate_board_features(kicad_pcb, plan, ir)
+    if any(feats.values()):
+        logger.info(
+            f"Authored board features: {feats['pours']} pour(s), "
+            f"{feats['keepouts']} keepout(s), {feats['silk']} silk text(s)"
+        )
+    # the rule areas + corridors + features mutate the board after `update_layout`
+    # already wrote it — persist the change so the on-disk layout carries them.
     kicad.dumps(pcb.pcb_file, config.build.paths.layout)
 
     # §F / F5: author board net classes into the project file so KiCad's DRC (and

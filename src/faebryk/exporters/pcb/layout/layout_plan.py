@@ -662,17 +662,78 @@ class NetClass(BaseModel):
     nets: list[str] = Field(default_factory=list)  # ato signal addresses
 
 
+class Pour(BaseModel):
+    """A copper POUR zone (§F / F6): an authored filled area bound to a real net.
+    The net is REQUIRED and resolved through bridge② — a net-0 pour is silently
+    garbage-collected by KiCad (CLAUDE.md), so a pour with no net is meaningless
+    and rejected. `polygon` is the fill outline (≥ 3 points, simple)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    net: str  # ato signal address (REQUIRED — a net-0 pour is GC'd)
+    layer: str
+    polygon: list[tuple[float, float]]
+    clearance: float = Field(default=0.2, gt=0)
+    priority: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def _validate(self) -> "Pour":
+        _validate_polygon(self.polygon, f"pour on {self.layer!r}")
+        return self
+
+
+class Keepout(BaseModel):
+    """A non-placement KEEPOUT zone (§F / F7): an authored region restricting some
+    of {tracks, vias, pads, copperpour, footprints}. Carries NO net and NO
+    placement (so it never trips the ZonePlacement SEGFAULT footgun). Each flag is
+    True = DISALLOWED in the region; the defaults disallow copper (tracks/vias/
+    pour) but allow pads/footprints (the common "no routing here" keepout)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    polygon: list[tuple[float, float]]
+    layers: list[str] = Field(min_length=1)
+    tracks: bool = True
+    vias: bool = True
+    pads: bool = False
+    copperpour: bool = True
+    footprints: bool = False
+
+    @model_validator(mode="after")
+    def _validate(self) -> "Keepout":
+        _validate_polygon(self.polygon, "keepout")
+        return self
+
+
+class SilkText(BaseModel):
+    """A silkscreen TEXT (§F / F8): authored board-level lettering (rev, label,
+    fiducial caption…). Default layer is the front silk."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str
+    at: tuple[float, float]
+    layer: str = "F.SilkS"
+    rotation: float = 0.0
+    size: float = Field(default=1.0, gt=0)
+    thickness: float = Field(default=0.15, gt=0)
+
+
 class Board(BaseModel):
     """The board-level section: outline + complete stackup (both optional in the
     model — their REQUIRED-ness is enforced where consumed: outline by
     `outline_bounds`, stackup by `stackup_layers` and the impedance check) + the
-    authored net classes (§F / F5: F-drc-rules)."""
+    authored net classes (§F / F5: F-drc-rules) + the authored copper pours /
+    keepouts / silk (§F / F6-F8)."""
 
     model_config = ConfigDict(extra="forbid")
 
     outline: BoardOutline | None = None
     stackup: Stackup | None = None
     net_classes: list[NetClass] = Field(default_factory=list)
+    pours: list[Pour] = Field(default_factory=list)
+    keepouts: list[Keepout] = Field(default_factory=list)
+    silk: list[SilkText] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_net_classes(self) -> "Board":
