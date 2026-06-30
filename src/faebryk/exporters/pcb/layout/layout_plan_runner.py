@@ -80,7 +80,10 @@ class StageInvocation:
 @dataclass
 class StageResult:
     """One stage's outcome. `summary` is the parsed JSON_SUMMARY dict, or None when
-    the router returned early (no summary printed) — a zero-routed stage."""
+    the router returned early (no summary printed) — a zero-routed stage. `diag` is
+    the parsed JSON_DIAG `failed_nets` list (§F / F2: per-failed-net cause —
+    net_name / reason / blocked_by / history), or None when the stage emitted no
+    diag line (a bundle stage, or a router build predating F2)."""
 
     stage_name: str
     stage_type: str
@@ -88,6 +91,7 @@ class StageResult:
     failed: int
     total_vias: int
     summary: dict | None
+    diag: list | None = None
 
 
 @dataclass
@@ -112,6 +116,7 @@ class RouteReport:
                     "failed": s.failed,
                     "total_vias": s.total_vias,
                     "summary": s.summary,
+                    "diag": s.diag,
                 }
                 for s in self.stages
             ],
@@ -321,9 +326,15 @@ def default_subprocess_invoker(inv: StageInvocation) -> StageResult:
         + call
         + "finally:\n"
         "    sys.stdout = _o\n"
-        "_m = re.search(r'JSON_SUMMARY: (\\{.*\\})', _buf.getvalue())\n"
+        "_out = _buf.getvalue()\n"
+        "_m = re.search(r'JSON_SUMMARY: (\\{.*\\})', _out)\n"
         "_summary = json.loads(_m.group(1)) if _m else None\n"
-        "print('JSON_OUT' + json.dumps({'summary': _summary}))\n"
+        # §F / F2: a SEPARATE JSON_DIAG line carries the per-failed-net cause. It is
+        # confined to its own line (`.` excludes newlines), so the greedy match
+        # cannot bleed into the JSON_SUMMARY line above.
+        "_d = re.search(r'JSON_DIAG: (\\{.*\\})', _out)\n"
+        "_diag = json.loads(_d.group(1)).get('failed_nets') if _d else None\n"
+        "print('JSON_OUT' + json.dumps({'summary': _summary, 'diag': _diag}))\n"
     )
     try:
         proc = subprocess.run(
@@ -350,7 +361,9 @@ def default_subprocess_invoker(inv: StageInvocation) -> StageResult:
             f"route runner: stage {inv.stage_name!r} produced no JSON_OUT line\n"
             f"stdout tail:\n{proc.stdout[-2000:]}"
         )
-    summary = json.loads(line[len("JSON_OUT"):])["summary"]
+    parsed = json.loads(line[len("JSON_OUT"):])
+    summary = parsed["summary"]
+    diag = parsed.get("diag")
 
     # a zero-routed stage (nothing to route / all already connected) returns BEFORE
     # write_routed_output (route.py:349-360) — no board is written. Copy the input
@@ -361,7 +374,7 @@ def default_subprocess_invoker(inv: StageInvocation) -> StageResult:
         shutil.copy2(inv.input_file, inv.output_file)
 
     if summary is None:
-        return StageResult(inv.stage_name, inv.stage_type, 0, 0, 0, None)
+        return StageResult(inv.stage_name, inv.stage_type, 0, 0, 0, None, diag=diag)
     return StageResult(
         inv.stage_name,
         inv.stage_type,
@@ -369,6 +382,7 @@ def default_subprocess_invoker(inv: StageInvocation) -> StageResult:
         int(summary.get("failed", 0)),
         int(summary.get("total_vias", 0)),
         summary,
+        diag=diag,
     )
 
 
