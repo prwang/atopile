@@ -60,15 +60,21 @@ sheetname 同步）→ `generate_layout_plan`（§D：placement rule area + `<t>
 - `layout_plan_runner.py` — §E1 route runner：`build_invocations`（纯，route_stages → 按类型分派的 `StageInvocation`：single→`route.batch_route`／diff→`route_diff.batch_route_diff_pairs`／bundle→`route_bundle.batch_route_bundle`（经 `_bundle_invocation` 展开 `bundle_artifact` 成几何 payload、成员名 bridge② 解析、breakout `at`→`part`+kicad 序，§E-Tier2 ✅）；config 逐字展开；`layers` ← `stackup_layers` 单一权威 TS-AUTH-B，per-stage `config.layers` loud；跨 stage 板累积不加锁；`--up-to` 断点）+ `run_route_stages`（驱动 invoker、容忍缺 `JSON_SUMMARY`、按类型聚合、写 `route_report.json`）+ `default_subprocess_invoker`（shell 到 system python3 跑 router；bundle 用 geometry-driven 调用约定）。库（消费方 = `ato route`/§F），契约 `test_layout_plan_runner_contract.py`。
 - `vendor/KiCadRoutingTools/route_bundle.py` — §E-Tier2 `batch_route_bundle`：bundle = 平行总线，trunk 确定性几何（per-vertex 重排镜像 `bundle_geometry.cross_section_offsets`，刚性段不变/过渡 morph、diff 对内 gap 恒定不散 L1，输入 offset + 重排 DELTA）+ 直连 breakout 扇出（有板时 pad→trunk 端）。geometry-only 模式纯 python（无 rust/parser），有板模式惰性导入。契约 `test_bundle_contract.py` T-B1..T-B6。**限制**：扇出直连非 A*、breakout `order`/`spacing_overrides` 未消费、逐成员失败路径未穷尽测。
 - `libs/kicad/layout_ir.py` — `layout_ir.json` = **bridge②**（ato 地址 → net/pad/room）；布线与诊断按地址定位，不解析 KiCad 文件。
+- `libs/kicad/layout_ir_resolve.py` — §F/F3 bridge② **反查**：`LayoutResolver`（footprint/pad uuid→addr、net→endpoints、coord→room point-in-polygon；重复 uuid=ambiguous→None，复用板合法）；`room_polygons_from_pcb`。纯 venv。
+- `diagnostics.py` — §F/F4 `diagnostics.json` builder（纯）：聚合 route_report（含 F2 cause）+ DRC + 重读板，经 F3 关联回 ato 地址/room，产 kicad-happy-式 finding（schema 内嵌，含 §F 字段）；`sort_findings` 确定序；`failed_multipoint` 无条件收割 + `route_failures_unaccounted` 显式暴露残差。
+- `board_rules.py` — §F/F5 `board.net_classes` → `.kicad_pro` net_settings（classes + 逐 net pattern，bridge② 解析）；实测 kicad-cli DRC 认。`board_features.py` — §F/F6-F8 `board.{pours,keepouts,silk}` → Zone(fill=yes,绑真 net)/ZoneKeepout(无 placement)/gr_text，幂等（zone 名前缀先删、silk 精确去重）。
+- `cli/route.py`（§F/F1 `ato route` 壳）+ `cli/diagnose.py`（§F/F4 `ato diagnose` 壳）；二者 = 可注入核 + Typer 壳，缺件 loud。
+- `vendor/KiCadRoutingTools/diag.py` — §F/F2 纯 `failed_net_diagnostics`：`RoutingState.net_history` → 逐失败 net `{net_name,reason,blocked_by,history}`；`route.py`/`route_diff.py` 打独立 `JSON_DIAG:` 行，runner `StageResult.diag` 捕获。
 
 **布线器**（submodule `vendor/KiCadRoutingTools`，跑在 **system python3**，非 venv——rust 内核 ext 未为 venv 构建）：
 `route.py:batch_route` / `route_diff.py:batch_route_diff_pairs` / `route_bundle.py:batch_route_bundle`（§E-Tier2 ✅）；
 `return_results=True` 结构化结果 + stdout `JSON_SUMMARY` + `BlockingInfo`；`build_router.py` 下载预编译二进制。
 **跨 stage 前序铜 = 不可撕的硬障碍**（白送的优先级锁），优先级由 stage 顺序表达（BACKLOG 关键事实 16）。
 
-**诊断（§F，规划中）**：聚合 `results_data` + `BlockingInfo` + `kicad-cli pcb drc --format json`
-→ 经 layout_ir 用 uuid/地址反查 → `diagnostics.json`。风格基线可借鉴沙盒参考 clone：kicad-happy 的
-`rule_id`/`severity`/`report_context`/`confidence` schema、Ki-Stack 的"改动后渲染 + DRC 验证"流程。
+**诊断（§F ✅ 2026-06-30）**：`ato route`（F1）→ `route_report.json`（含 F2 `JSON_DIAG` 失败 cause）→
+`ato diagnose`（F4）聚合 + `kicad-cli pcb drc` + 重读板 → 经 F3 `LayoutResolver` 反查 → `diagnostics.json`
+（kicad-happy 式 `rule_id`/`severity`/`report_context`/`confidence` schema + §F 字段，确定序）。板级规则文本化：
+net-class→`.kicad_pro`（F5，DRC 认）、pour/keepout/silk（F6-F8）。模块见上 sidecar 列；不变量以 docstring 为 SSOT。
 
 ## 关键实测约束（改代码前必读）
 
