@@ -320,6 +320,12 @@ When the build finishes, give the user a summary:
 
 Gate: user has received a clear summary and knows the state of the design.
 
+> **Handoff to layout.** This skill owns the *circuit* (`.ato`). The moment the
+> work shifts to the *board* — placement, routing, DRC, copper pours/keepouts/silk,
+> or reacting to `ato route` / `ato diagnose` output — switch to the **`pcb-layout`**
+> skill (`.claude/skills/pcb-layout/SKILL.md`), which owns the `layout.yaml`
+> sidecar and the build→route→diagnose loop.
+
 ---
 
 ## 1.1 Module Naming
