@@ -424,7 +424,7 @@ class Breakout(BaseModel):
 class RipUpBudget(BaseModel):
     """Per-stage INTRA-stage rip-up budget — maps to the router's
     max_rip_up_count / ripped_route_avoidance_cost / _radius knobs. CROSS-stage
-    prior copper is a free, un-rippable obstacle (BACKLOG 关键事实 16) and is NOT
+    prior copper is a free, un-rippable obstacle (BACKLOG key fact 16) and is NOT
     expressed here; bundle priority comes from STAGE ORDER."""
 
     model_config = ConfigDict(extra="forbid")

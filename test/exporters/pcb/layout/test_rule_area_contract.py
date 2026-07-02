@@ -20,12 +20,12 @@ Room polygon:
   * explicit `origin`/`size` (D2) ⇒ the axis-aligned rectangle [origin,
     origin+size];
   * both omitted ⇒ the rectangle is DERIVED as the bbox of the room's member pad
-    positions (from the IR) — the D-spec "派生包围盒" case.
+    positions (from the IR) — the D-spec "derived bounding box" case.
 
 Constraints (BACKLOG facts 3/9): no custom S-expression tokens (sheetname is a
 native field); copper-layer geometry must carry a real net — a placement rule
 area is a keepout, it carries no copper. Multi-room boards get one independent
-zone per room (D-spec "多 room" pin), no cross-contamination.
+zone per room (D-spec "multi-room" pin), no cross-contamination.
 
 == THE RATCHET (S0 discipline) ============================================
 

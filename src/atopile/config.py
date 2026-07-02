@@ -404,8 +404,8 @@ class BuildTargetPaths(BaseConfigModel):
             # the copper (signal) layer table is single-sourced from the
             # layout.yaml `board.stackup` authority (`stackup_layers`) when this
             # build has one, else the 2-layer F.Cu/B.Cu default. This is the SAME
-            # authority E1 must feed the router (BACKLOG D-Tier3 单一层数权威), so
-            # board and router can never diverge on layer count.
+            # authority E1 must feed the router (BACKLOG D-Tier3 single layer-count
+            # authority), so board and router can never diverge on layer count.
             copper_names = self._stackup_copper_names()
             kicad.dumps(
                 kicad.pcb.PcbFile(

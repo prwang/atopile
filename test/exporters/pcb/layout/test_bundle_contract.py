@@ -3,7 +3,7 @@
 """
 test_bundle_contract — stage D-Tier2 acceptance contract (BACKLOG §D-Tier2).
 
-bundle 总线传输（mixed single/diff）+ the `batch_route_bundle` D/E boundary. This
+bundle bus transport (mixed single/diff) + the `batch_route_bundle` D/E boundary. This
 is the tests-first S0 ratchet: written BEFORE the implementation, every test is a
 strict-xfail that flips green by *removing/deactivating* its gate when the feature
 lands. A test that XPASSes while the feature is absent is a bug in the test (S0).
@@ -66,7 +66,7 @@ A / profile B); E only searches the bounded morph between them.
 `rip_up` (per-stage, INTRA-stage rip-up budget only) maps to the router knobs
 max_rip_up_count / ripped_route_avoidance_cost / _radius. CROSS-stage prior
 copper is a hard, un-rippable obstacle the router gives for free — it is NOT
-expressed here (BACKLOG 关键事实 16); bundle priority comes from STAGE ORDER.
+expressed here (BACKLOG key fact 16); bundle priority comes from STAGE ORDER.
 
 The geometry SSOT lives in a sibling module `bundle_geometry`:
 
@@ -340,9 +340,9 @@ def _ir(signal_nets: dict[str, str]) -> dict:
 
 
 # ===========================================================================
-# T-A1 — schema 正向: the mixed DDR fixture parses into typed objects, with
+# T-A1 — schema positive: the mixed DDR fixture parses into typed objects, with
 # lane order/types, segment spacings and breakout order asserted FIELD BY FIELD
-# (not "parsed without error"). BACKLOG D-Tier2 桶① T-A1.
+# (not "parsed without error"). BACKLOG D-Tier2 bucket ① T-A1.
 # ===========================================================================
 @needs_dt2
 def test_ddr_fixture_parses_field_by_field():
@@ -383,9 +383,9 @@ def test_ddr_fixture_parses_field_by_field():
 
 
 # ===========================================================================
-# T-A2 — schema 负向 (loud-or-nothing, S5a): each malformed bundle raises, and
+# T-A2 — schema negative (loud-or-nothing, S5a): each malformed bundle raises, and
 # the base bundle (the positive control) parses — PAIRED so it cannot XPASS for
-# the wrong reason. BACKLOG D-Tier2 桶① T-A2.
+# the wrong reason. BACKLOG D-Tier2 bucket ① T-A2.
 # ===========================================================================
 def _mutual(*lines: str) -> str:
     return _BASE_BUNDLE + "".join(lines)
@@ -463,7 +463,7 @@ def test_malformed_bundle_is_loud(name):
 #      change (an offset that does not move == a blind test == a bug);
 #   ③ centering invariant — the slot envelope is symmetric about the centerline;
 #   ④ transition boundary — two spacings give two distinct, each-centered profiles.
-# BACKLOG D-Tier2 桶① T-A3.
+# BACKLOG D-Tier2 bucket ① T-A3.
 # ===========================================================================
 def _tiny_lanes():
     """[single A, diff(P,N gap0.2 width0.15), single B]; default_width 0.1.
@@ -577,7 +577,7 @@ def test_transition_boundary_profiles_differ_and_each_centered():
 # ===========================================================================
 # T-A4 — resolve_nets (consumer-oracle): bundle members resolve IN ORDER through
 # bridge② (ir["signal_nets"]); a diff lane's P AND N both resolve; a missing
-# address is loud. Verbatim delegation, no transform. BACKLOG D-Tier2 桶① T-A4.
+# address is loud. Verbatim delegation, no transform. BACKLOG D-Tier2 bucket ① T-A4.
 # ===========================================================================
 @needs_dt2
 def test_resolve_nets_flattens_bundle_in_order():
@@ -604,7 +604,7 @@ def test_resolve_nets_missing_bundle_member_is_loud():
 # ===========================================================================
 # T-A5 — artifact schema: D's <t>.layout_plan.json fragment = the FILE interface
 # E1 reads. Must carry the segmented trunk, the COMPUTED offsets (ordered member
-# table), the breakout order, and resolved nets. BACKLOG D-Tier2 桶① T-A5.
+# table), the breakout order, and resolved nets. BACKLOG D-Tier2 bucket ① T-A5.
 # ===========================================================================
 @needs_dt2
 def test_bundle_artifact_carries_segmented_geometry():
@@ -647,7 +647,7 @@ def test_bundle_artifact_carries_segmented_geometry():
 # ===========================================================================
 # T-B1 — D/E contract: BundleRouteConfig fields ⊆ batch_route_bundle kwargs.
 # AST oracle (same method as D2's GridRouteOverride drift guard). strict-xfail
-# until E-Tier2 creates route_bundle.batch_route_bundle. BACKLOG D-Tier2 桶② T-B1.
+# until E-Tier2 creates route_bundle.batch_route_bundle. BACKLOG D-Tier2 bucket ② T-B1.
 # ===========================================================================
 @needs_e_tier2
 def test_bundle_config_fields_are_real_router_kwargs():
@@ -672,7 +672,7 @@ def test_bundle_config_fields_are_real_router_kwargs():
 # yields a per-member routed/blocked result (batch_route-isomorphic). The router
 # runs under the system interpreter (its rust ext is not built for this venv), so
 # this shells out — the same pattern as the §C router-oracle. strict-xfail until
-# E-Tier2. BACKLOG D-Tier2 桶② T-B2.
+# E-Tier2. BACKLOG D-Tier2 bucket ② T-B2.
 # ===========================================================================
 @needs_e_tier2
 @needs_sys_py
@@ -719,7 +719,7 @@ def test_batch_route_bundle_result_shape():
 
 
 # ===========================================================================
-# T-B3..T-B6 — E-Tier2 BEHAVIORAL contract (桶②, beyond the T-B2 shape-pin):
+# T-B3..T-B6 — E-Tier2 BEHAVIORAL contract (bucket ②, beyond the T-B2 shape-pin):
 # `batch_route_bundle` turns the frozen (segmented trunk + ordered member offsets
 # + breakouts) into a PARALLEL BUS — one offset track per member along the
 # centerline — that ① is routed per member, ② sits at each member's signed offset

@@ -10,7 +10,7 @@ geometry that §E (the router) ingests. Two operations:
   * `insert_forced_via` — pin a net to cross between two copper layers at a chosen
     board coordinate, splitting it into pad→via (in_layer) and via→pad (out_layer).
     The via and both segments carry the *real* net (never net-0: KiCad garbage-
-    collects net-0 copper, BACKLOG 事实 9). Routing *guides* are confined to the
+    collects net-0 copper, BACKLOG fact 9). Routing *guides* are confined to the
     User corridor layers (User.1 = guide corridor, User.2 = keepout); they are
     never copper.
 
@@ -34,7 +34,7 @@ from faebryk.libs.kicad.fileformats import kicad
 
 PCB = kicad.pcb.KicadPcb
 
-# Router corridor layers (BACKLOG 事实 9): guide geometry only.
+# Router corridor layers (BACKLOG fact 9): guide geometry only.
 GUIDE_LAYER = "User.1"
 GUIDE_LAYERS = {"User.1", "User.2"}
 

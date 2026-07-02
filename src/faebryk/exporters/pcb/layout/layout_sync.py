@@ -106,7 +106,7 @@ class LayoutSync:
         user's manual group survives by construction (the A4 failure mode is
         gone). Stale routes of a removed instance are not cleaned here: their net
         vanishes with the instance and KiCad garbage-collects net-0 copper on
-        save (事实 9)."""
+        save (fact 9)."""
         for room_name, fps in self.rooms.items():
             logger.debug(f"Tagging room {room_name}")
             for fp, _sub_addr in fps:

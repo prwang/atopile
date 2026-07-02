@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 """
 test_placement_contract — D-Tier3 self-contained PLACEMENT + ROOM GEOMETRY
-(BACKLOG §D-Tier3, 桶① part 1: TP1-TP6 + TR1-TR4 = 16 cases).
+(BACKLOG §D-Tier3, bucket ① part 1: TP1-TP6 + TR1-TR4 = 16 cases).
 
 == WHY ====================================================================
 

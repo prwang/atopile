@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 """
 test_router_smoke_batch_route — the E3 thin slice: the router's structured-results
-API + JSON_SUMMARY schema (BACKLOG §C "下游契约 + 自测计划", §E E3).
+API + JSON_SUMMARY schema (BACKLOG §C "downstream contract + self-test plan", §E E3).
 
 This is the minimal regression bench atopile's §C consumer-oracle tests depend on
 (a forced via is honored; a copied room stays connected) — pinned at C-time so the

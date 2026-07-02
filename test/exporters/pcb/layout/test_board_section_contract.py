@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: MIT
 """
 test_board_section_contract — D-Tier3 self-contained BOARD section: outline +
-COMPLETE stackup (BACKLOG §D-Tier3, 桶① part 2: TB1-TB3 + TS1-TS5 + TS-LM = 19
-cases) and the two layer-count authority ratchets (桶②: TS-AUTH-A/B = 2 cases).
+COMPLETE stackup (BACKLOG §D-Tier3, bucket ① part 2: TB1-TB3 + TS1-TS5 + TS-LM = 19
+cases) and the two layer-count authority ratchets (bucket ②: TS-AUTH-A/B = 2 cases).
 
 == WHY ====================================================================
 
@@ -29,7 +29,7 @@ the router would route to In1/In2.Cu layers that the board does not have.
 
 == THE RATCHET (S0 discipline) ============================================
 
-桶① (TB/TS, gated `_DT3_LANDED`): schema + pure-function oracle. D-Tier3 has
+bucket ① (TB/TS, gated `_DT3_LANDED`): schema + pure-function oracle. D-Tier3 has
 landed, so these are GREEN; negatives stay paired with a positive control so a
 regression xfails cleanly, never XPASS for the wrong reason.
 
@@ -40,7 +40,7 @@ that the board copper table is data-driven from `stackup_layers` (the old
 hardcoded 2-layer literal is gone) while the router still owns its 4-layer default
 until E1. It goes RED the day E1 unifies the router side too.
 
-桶② (TS-AUTH-A/B): the "2-layer/4-layer bug" authority ratchets.
+bucket ② (TS-AUTH-A/B): the "2-layer/4-layer bug" authority ratchets.
   * TS-AUTH-A (gated `_DT3_BUILD_LANDED`): the atopile-GENERATED board's copper
     layer table == `stackup_layers(board.stackup)`. GREEN now — the board
     generator (config.py) derives its layers from the stackup authority, killing
@@ -307,7 +307,7 @@ def test_stackup_invalid_is_loud(layers, msg):
 
 # ===========================================================================
 # TS3 — stackup → layer table SINGLE authority (pure oracle == hand-computed).
-# This is the ONLY truth for layer count (both 桶② ratchets derive from it).
+# This is the ONLY truth for layer count (both bucket ② ratchets derive from it).
 # ===========================================================================
 @needs_dt3
 def test_stackup_layers_is_the_ordered_copper_set():
@@ -456,7 +456,7 @@ def test_board_layer_table_is_single_sourced_from_stackup():
 
 
 # ===========================================================================
-# TS-AUTH-A — board layer-table authority (桶②, gated _DT3_BUILD_LANDED, RED now).
+# TS-AUTH-A — board layer-table authority (bucket ②, gated _DT3_BUILD_LANDED, RED now).
 # The atopile-GENERATED board's copper layer table == stackup_layers(board.stackup)
 # — asserted on the REAL built board (schema-parse alone is NOT enough). Kills the
 # config.py:374,380 hardcoded 2-layer default. Flips green when the generator
@@ -518,7 +518,7 @@ def test_generated_board_layers_equal_stackup_authority(built_board):
 
 
 # ===========================================================================
-# TS-AUTH-B — router layer-table authority (桶②, gated _E1_LANDED, RED now).
+# TS-AUTH-B — router layer-table authority (bucket ②, gated _E1_LANDED, RED now).
 # E1 passes stackup_layers(board.stackup) to the router as `layers`, NEVER eating
 # the route.py:231 4-layer default. Flips green when E1 is built.
 # ===========================================================================

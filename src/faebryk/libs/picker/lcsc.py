@@ -138,7 +138,7 @@ class EasyEDAAPIResponse:
                 f"No manufacturer for ({mfr} {pn}) {self.lcsc.number} found in backend."
             )
         # remove chinese manufacturer name in parentheses
-        # "TI(德州仪器)" -> "TI"
+        # strip a parenthetical Chinese vendor suffix, e.g. "TI(德州仪器)" -> "TI"
         mfr = re.sub(r"\([^)]*\)", "", mfr)
         return (mfr, pn)
 

@@ -20,7 +20,7 @@ Pins:
     room module, §C3);
   * build→build is deterministic AND re-emit is idempotent — a second build does
     not duplicate rule areas or perturb the resolved plan (the D-spec "re-emit
-    幂等" + "build→build 稳" pins; placement count == #rooms, never doubled);
+    idempotent" + "build→build stable" pins; placement count == #rooms, never doubled);
   * the rule-area-bearing board is ingestible by kicad-cli drc.
 
 S0 ratchet: `_D4_LANDED` probes the build step + the D1 path field; until D lands

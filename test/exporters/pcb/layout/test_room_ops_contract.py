@@ -16,7 +16,7 @@ from how the router actually consumes a board — exactly as B→C was pinned wi
 the `_generate_net_map` oracle. The router is the C→E consumer-oracle, just as
 `_generate_net_map` was the B→C one.
 
-Two tiers (BACKLOG §C "下游契约 + 自测计划"):
+Two tiers (BACKLOG §C "downstream contract + self-test plan"):
   Tier-1 — structural, no router, validated with layout_ir / semantic_view /
            the live LayoutSync._generate_net_map oracle.
   Tier-2 — router-oracle: C's output is handed to the real router
@@ -202,7 +202,7 @@ def test_C1_pad_board_xy_matches_geometry_abs_pos():
 def test_C1_forced_via_on_real_net_and_split_topology():
     """A forced via splits a net into pad→via@in_layer and via@out_layer→pad.
     The via and both segments live on COPPER with the REAL net (never net-0,
-    KiCad would garbage-collect net-0 copper, BACKLOG 事实 9); guide geometry
+    KiCad would garbage-collect net-0 copper, BACKLOG fact 9); guide geometry
     lives ONLY on User.1/User.2 (the router corridor layers)."""
     bf = _load(
         _board(
@@ -400,7 +400,7 @@ def _route(pcb_path: Path, nets: list[str], out_path: Path) -> dict:
 
     Single-ended nets use route.py — route_diff.py routes ONLY differential
     pairs (nets needing _P/_N, P/N, or +/- suffixes) and prints no JSON_SUMMARY
-    for a non-pair net (verified; BACKLOG §C "Tier-2 现实检验"). The diff-pair
+    for a non-pair net (verified; BACKLOG §C "Tier-2 reality check"). The diff-pair
     harness is exercised separately by the E3 thin slice."""
     import json
     import re
@@ -434,7 +434,7 @@ def test_C1_router_honors_forced_via(tmp_path):
     cleanly (failed == 0 — the board with the forced via was accepted), then
     confirm the forced via still sits at its requested coordinate in the OUTPUT
     board (survival is read from the board, not the summary's router-added via
-    count). See BACKLOG §C "Tier-2 现实检验"."""
+    count). See BACKLOG §C "Tier-2 reality check"."""
     bf = _load(
         _board(
             [

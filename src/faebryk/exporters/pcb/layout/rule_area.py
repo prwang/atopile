@@ -67,7 +67,7 @@ def _room_bbox(room: Room, ir: dict[str, Any]) -> tuple[float, float, float, flo
         w, h = room.size
         return (ox, oy, ox + w, oy + h)
 
-    # derived bbox: bound the room's member pads (the §D "派生包围盒" case)
+    # derived bbox: bound the room's member pads (the §D "derived bounding box" case)
     member_addrs = ir["rooms"][room.module]["member_addrs"]
     xs: list[float] = []
     ys: list[float] = []
@@ -174,7 +174,7 @@ def generate_rule_areas(
     Idempotent: any previously-generated rule area (name prefix `rule_area_`) is
     removed first, so re-emitting onto an already-stamped board does not duplicate
     or accrete zones (D4 re-emit). User-authored zones are untouched."""
-    # S5a (显式不静默): every plan room must name a REAL board room (= a footprint
+    # S5a (loud, never silent): every plan room must name a REAL board room (= a footprint
     # sheetname in the IR). A rule area whose sheetname matches no footprint would
     # group NOTHING — a silent half-output — so reject it loudly, in BOTH geometry
     # modes (explicit origin/size must not be a loophole around this check).

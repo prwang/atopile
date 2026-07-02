@@ -1,529 +1,539 @@
-# BACKLOG — 文本化布局工作流（deterministic text-first layout layer）
+# BACKLOG — Text-first layout workflow (deterministic text-first layout layer)
 
-## 背景
+## Background
 
-在 atopile + KiCad 10 + KiCadRoutingTools 之上构建确定性、以文本为唯一事实来源的
-PCB 布局布线工作流：`.ato` = 电路事实源，`layout.yaml` = 布局意图事实源，KiCad 工程
-为派生产物；工具输出结构化 JSON 诊断，供 **PCB Layout SKILL** 迭代。架构总览见
-`CLAUDE.md`「架构总览」；关键事实均自包含于下文，证据 = 各条就地标注的 KiCad 源 / 代码
-文件:行号（原可行性调研报告 KicadDecisions.md 已于 2026-06-19 退役，活性内容已折叠入此两处）。
+On top of atopile + KiCad 10 + KiCadRoutingTools, build a deterministic PCB layout-and-routing
+workflow with text as the single source of truth: `.ato` = circuit source of truth, `layout.yaml` =
+layout-intent source of truth, the KiCad project is a derived artifact; the tooling emits structured
+JSON diagnostics for the **PCB Layout SKILL** to iterate on. Architecture overview see
+`CLAUDE.md` "Architecture overview"; the key facts are all self-contained below, evidence = the KiCad
+source / code file:line annotated in place on each item (the original feasibility-study report
+KicadDecisions.md was retired on 2026-06-19, its live content folded into these two places).
 
-**本文档纪律（不允许熵增）**：只保留 ① 已定决策 ② 改代码前必读的当前有效事实 ③ 未完成
-任务。**已完成功能按 atopile 约定文档写在代码里**（模块 docstring / 同名测试 / schema =
-SSOT），BACKLOG 只留"结论 + 代码指针"，绝不复述实现细节或调试 narrative。
+**Discipline for this document (no entropy increase allowed)**: keep only ① settled decisions ②
+currently-valid facts that must be read before changing code ③ unfinished tasks. **Completed features
+are documented in code per atopile convention** (module docstring / same-named test / schema = SSOT),
+BACKLOG keeps only "conclusion + code pointer", never restating implementation details or debugging narrative.
 
-## 已定决策
+## Settled decisions
 
-- 不 fork KiCad 10（所需对象已实测可外部生成并完整往返）。
-- fork 基线 = 本仓库 HEAD；同时 fork KiCadRoutingTools（§E）。
-- Python 3.14 开发环境 = **`uv sync`**（`ziglang==0.15.1` 由 pip 构建依赖提供）。克隆须
-  `git fetch --tags` 否则 setuptools-scm 产非 SemVer 版本号、`ato` CLI 启动即崩。
-- **room 来源 = footprint `sheetname`【C3 改定，旧"= KiCad named group"作废】**：group 有不可修补的
-  所有权缺陷（详见 §C3）；atopile 建零个 group。component class 源后置（D5，须先修 fileformats schema）。
-- **v10-only 路线（2026-06-13 用户拍板 Option B，upgrade-on-write）**：本分支目标方言 = v10；
-  **前向兼容 v9 写出不做**（v9 仅只读，读入即在写出时升级为 v10）。推论：(i) 无"写 v9"代码
-  路径；(ii) net 名是文件内唯一键，名漂移 = 几何归属漂移；(iii) S7 后"单向门/只读不存"纪律
-  **已解除**——KiCad 10 GUI 保存不再损坏受管板子。
+- Do not fork KiCad 10 (the required objects have been empirically verified to be externally generatable with a full round-trip).
+- fork baseline = this repo's HEAD; also fork KiCadRoutingTools (§E).
+- Python 3.14 dev environment = **`uv sync`** (`ziglang==0.15.1` provided by pip build dependency). Clone must
+  `git fetch --tags` otherwise setuptools-scm produces a non-SemVer version number and the `ato` CLI crashes at startup.
+- **room source = footprint `sheetname` [changed by C3, old "= KiCad named group" is void]**: group has an unpatchable
+  ownership defect (see §C3); atopile creates zero groups. component class source deferred (D5, must first fix fileformats schema).
+- **v10-only route (2026-06-13 decided by the user, Option B, upgrade-on-write)**: this branch's target dialect = v10;
+  **forward-compatible v9 write-out is not done** (v9 is read-only, reading it in upgrades it to v10 at write-out). Corollaries: (i) no "write v9" code
+  path; (ii) net name is the unique key within the file, name drift = geometry-ownership drift; (iii) after S7 the "one-way gate / read-only don't-save" discipline
+  **is lifted**——KiCad 10 GUI save no longer corrupts managed boards.
 
-## 优先级总览
+## Priority overview
 
-| 阶段 | 内容 | 状态 |
+| Stage | Content | Status |
 |---|---|---|
-| P0 | 确定性与基础修复（§A） | ✅ |
-| P0.1 | v10 迁移测试底座（T0–T9） | ✅ |
-| P0.2 | v10 方言迁移本体（S0–S6 + D1 + BUG-1/2） | 🔶 仅剩 S7 flag-day 验收 |
-| B | layout_ir（文本↔几何唯一接口） | ✅ |
-| C | room 几何（forced via / room 复制） | ✅ |
-| **C3** | **group→sheetname 迁移（room 去 group 化）** | ✅ 2026-06-15（见 §C3 代码指针） |
-| **D** | **layout.yaml 加载 + placement rule area（D1–D4）** | ✅ 2026-06-16（见 §D 代码指针）；D5 后置 |
-| **D-Tier2** | **bundle 总线传输 schema + geometry（桶①）** | ✅ 桶① 2026-06-20（model+geometry）+ D 侧 build 集成 2026-06-25（`generate_layout_plan` 调 `bundle_artifact`，e2e `examples/sata_bundle`）；桶② `batch_route_bundle` 契约 strict-xfail，实现移 §E E-Tier2（用户拍板） |
-| **D-Tier3** | **自包含：摆放（room 相对坐标）+ 板框 outline + 完整叠层** | 🟢 桶① + 桶② TS-AUTH-A + placements→transformer 已落地（2026-06-26 / 2026-06-28）：摆放 schema+`apply_placements` build 消费 / `Room.polygon`+rotation+layers / `board.outline`+完整 `stackup` / impedance→stackup 硬依赖 / **单一层数权威板侧** `config` 派生自 `stackup_layers`（杀 2 层硬编码）；契约 `test_placement_contract.py`+`test_placement_apply_contract.py`+`test_board_section_contract.py`。**TS-AUTH-B（router 层表）✅ 2026-06-28（E1 由 `stackup_layers` 传 `layers`）**；剩 **桶③=§E DoD**（纯文本 e2e）；net-class/pour/keepout/silk 进 §F |
-| **增量执行** | **route_stages `--up-to` 断点 + stage name 唯一** | ✅ 2026-06-28：stage name 唯一 + `--up-to`（name/1-based index，越界 loud，写部分板+`route_report.json`）落在 E1 runner |
-| **Tier0** | **corridor-as-data（纯 schema 旁支，零 router 改动）** | ✅ 2026-06-28（`corridor.py` / `RouteStage.corridor`） |
-| E–F | 路由 fork + 诊断闭环——**章节字母 = 执行序** | ✅ **E1 ✅ 2026-06-28**（runner+`route_report.json`+`--up-to`+TS-AUTH-B）+ **E-Tier2 bundle ✅ 2026-06-29**（`batch_route_bundle` 平行总线+直连扇出+e2e；E2 rip-up 旋钮按用户拍板取消）+ **§F ✅ 2026-06-30**（F1–F8：`ato route`/`ato diagnose`→`diagnostics.json`+`JSON_DIAG` cause+F3 反查+net-class/pour/keepout/silk 文本化；build→route→diagnose e2e 闭环绿）；剩 E3 回归台 / §E DoD 桶③ 自包含建板 |
-| G | 不做 / 暂缓 | — |
+| P0 | Determinism and foundational fixes (§A) | ✅ |
+| P0.1 | v10 migration test scaffold (T0–T9) | ✅ |
+| P0.2 | v10 dialect migration proper (S0–S6 + D1 + BUG-1/2) | 🔶 only S7 flag-day acceptance remaining |
+| B | layout_ir (text↔geometry sole interface) | ✅ |
+| C | room geometry (forced via / room copy) | ✅ |
+| **C3** | **group→sheetname migration (room de-group-ification)** | ✅ 2026-06-15 (see §C3 code pointers) |
+| **D** | **layout.yaml loading + placement rule area (D1–D4)** | ✅ 2026-06-16 (see §D code pointers); D5 deferred |
+| **D-Tier2** | **bundle bus-transport schema + geometry (bucket ①)** | ✅ bucket ① 2026-06-20 (model+geometry) + D-side build integration 2026-06-25 (`generate_layout_plan` calls `bundle_artifact`, e2e `examples/sata_bundle`); bucket ② `batch_route_bundle` contract strict-xfail, implementation moved to §E E-Tier2 (decided by the user) |
+| **D-Tier3** | **self-contained: placement (room-relative coordinates) + board outline + full stackup** | 🟢 bucket ① + bucket ② TS-AUTH-A + placements→transformer landed (2026-06-26 / 2026-06-28): placement schema+`apply_placements` build consumption / `Room.polygon`+rotation+layers / `board.outline`+full `stackup` / impedance→stackup hard dependency / **single layer-count authority, board side** `config` derived from `stackup_layers` (kills 2-layer hardcode); contracts `test_placement_contract.py`+`test_placement_apply_contract.py`+`test_board_section_contract.py`. **TS-AUTH-B (router layer list) ✅ 2026-06-28 (E1 passes `layers` from `stackup_layers`)**; remaining **bucket ③=§E DoD** (pure-text e2e); net-class/pour/keepout/silk go to §F |
+| **Incremental execution** | **route_stages `--up-to` breakpoint + stage name unique** | ✅ 2026-06-28: stage name uniqueness + `--up-to` (name/1-based index, out-of-range → loud, writes partial board + `route_report.json`) lands in the E1 runner |
+| **Tier0** | **corridor-as-data (pure-schema side branch, zero router changes)** | ✅ 2026-06-28 (`corridor.py` / `RouteStage.corridor`) |
+| E–F | routing fork + diagnostics closed loop——**chapter letter = execution order** | ✅ **E1 ✅ 2026-06-28** (runner+`route_report.json`+`--up-to`+TS-AUTH-B) + **E-Tier2 bundle ✅ 2026-06-29** (`batch_route_bundle` parallel bus+direct-connect fanout+e2e; E2 rip-up knob cancelled per the user's decision) + **§F ✅ 2026-06-30** (F1–F8: `ato route`/`ato diagnose`→`diagnostics.json`+`JSON_DIAG` cause+F3 reverse-resolve+net-class/pour/keepout/silk textualization; build→route→diagnose e2e closed loop green); remaining E3 regression bench / §E DoD bucket ③ self-contained board build |
+| G | Won't do / deferred | — |
 
-### 依赖与关键路径（v10 数据模型推导；**章节字母 = 执行序**）
+### Dependencies & critical path (derived from v10 data model; **chapter letter = execution order**)
 
-v10 三条硬约束逼出排序：① 无顶层 net 表 + 随机 FBRK uuid → **唯一稳定键 = ato 地址**；
-② **net 名 = net 唯一键**，名漂移 = 几何归属漂移；③ 引导/铜层几何分层挂 net（事实 9）。
+The three hard constraints of v10 force the ordering: ① no top-level net table + random FBRK uuid → **sole stable key = ato address**;
+② **net name = net's unique key**, name drift = geometry-ownership drift; ③ guide/copper-layer geometry hangs off net by layer (fact 9).
 
 ```
-A 确定性基础（✅）
-B layout_ir（✅ 基石）── addr↔uuid↔net名 桥表，下游全依赖
-├─► C room 几何（✅ forced via / room 复制）
-└─► C3 group→sheetname 迁移（✅ 2026-06-15）room = footprint sheetname，atopile 不建/不删 group
+A Determinism foundation (✅)
+B layout_ir (✅ cornerstone) ── addr↔uuid↔net-name bridge table, all downstream depends
+├─► C room geometry (✅ forced via / room copy)
+└─► C3 group→sheetname migration (✅ 2026-06-15) room = footprint sheetname, atopile does not create/delete groups
                        │
-   C3 ─► D layout.yaml + rule area（✅ 2026-06-16；room via (placement (sheetname)))
+   C3 ─► D layout.yaml + rule area (✅ 2026-06-16; room via (placement (sheetname)))
                        │
-   C1 + D(plan+rule area) ─► E 路由 fork（E1 plan_runner→E2 锁定）─► F 诊断闭环
-E3 回归台（全程并行先搭 = §E 的 S0 底座；最小切片【✅ 已提前到 §C】当 router-oracle）
+   C1 + D(plan+rule area) ─► E routing fork (E1 plan_runner→E2 locking) ─► F diagnostics closed loop
+E3 regression bench (built first, parallel throughout = §E's S0 scaffold; minimal slice [✅ pulled forward to §C] as router-oracle)
 
-   D ─► D-Tier2 契约冻结（bundle schema + batch_route_bundle oracle，先 xfail）
-            │  （consumer-oracle：D 的 bundle schema 钉在尚不存在的 router entry 上，
-            │    故 D 与 E 必须共冻同一契约——不能先做 E 再倒逼 schema 重构）
-            └─► E-Tier2 实现该契约（batch_route_bundle + breakout 扇出；跨 stage 锁是 router 白送的硬障碍，
-                 见「关键事实」16，E2 只暴露 stage 内 rip-up 旋钮、不新建锁）
-   D ─► D-Tier3 桶① + TS-AUTH-A（schema + 纯函数 + rule_area 几何 + config 板表←stackup，✅）
-            └─► 剩余下游（棘轮留 D，contract-first）：TS-AUTH-B → §E1（router layers←stackup）；桶③ e2e → §E DoD
-   E1 dispatch 从一开始就按「single / diff / bundle」三类 stage 设计（勿事后改）
+   D ─► D-Tier2 contract freeze (bundle schema + batch_route_bundle oracle, xfail first)
+            │  (consumer-oracle: D's bundle schema is pinned on a router entry that does not yet exist,
+            │    so D and E must co-freeze the same contract——cannot do E first and then force a schema refactor)
+            └─► E-Tier2 implements this contract (batch_route_bundle + breakout fanout; cross-stage locking is a hard obstacle the router gives for free,
+                 see "key facts" 16, E2 only exposes the in-stage rip-up knob, creates no new locks)
+   D ─► D-Tier3 bucket ① + TS-AUTH-A (schema + pure functions + rule_area geometry + config board table←stackup, ✅)
+            └─► remaining downstream (ratchet kept in D, contract-first): TS-AUTH-B → §E1 (router layers←stackup); bucket ③ e2e → §E DoD
+   E1 dispatch designed from the start around the three stage types "single / diff / bundle" (don't change it after the fact)
 ```
 
-**C3 为何在 D 前（已完成的背景）**：room=KiCad group 有不可修补的所有权缺陷——group 是通用选择原语
-（`pcb_group.h:44`），名不唯一、复制即碰撞、无 provenance 槽（逼出 uuid 塞名 hack）。KiCad 多通道事实源
-是每 footprint 的 sheet 标识，group 只是派生投影。C3 改回本意：room = footprint `sheetname`。**详见 §C3。**
+**Why C3 comes before D (completed background)**: room=KiCad group has an unpatchable ownership defect——group is a generic selection primitive
+(`pcb_group.h:44`), name not unique, copy immediately collides, no provenance slot (forced the uuid-name-stuffing hack). The KiCad multi-channel source of truth
+is each footprint's sheet identity, group is just a derived projection. C3 restores the original intent: room = footprint `sheetname`. **See §C3.**
 
-**双向钉死纪律**（写消费者前先用消费者的真接口把上游验收钉死）：B→C 用
-`_generate_net_map` consumer-oracle（已钉）；C→E 用真 router consumer-oracle（E3 薄片已提前）。
-**D-Tier2→E-Tier2 方向反转（契约先行 co-design）**：`batch_route_bundle` 今天不存在，无现成接口可钉，故由
-D 先定义并 strict-xfail 钉死契约、E 照此实现（不能先做 E 再倒逼 schema 重构，见 §D-Tier2）。
-
----
-
-## 关键事实与约束（改代码前必读；全部实测，证据 = 各条就地标注的 KiCad 源 / 代码 文件:行号）
-
-### 文件方言与解析器
-
-1. **写方言 = v10**（S7 后）：`PcbFile.dumps`（`src/faebryk/core/zig/src/sexp/kicad/pcb.zig`）恒写 v10、
-   stamp `version=20260206`；v9/v5 可读，读入后写出即升级 v10（upgrade-on-write）。
-   `KICAD_PCB_VERSION/KICAD_FP_VERSION = 20260206`（`pcb.zig:12-15`）。
-2. **v10 net 模型**：v10 文件**无顶层 net 表**——net 只在引用处 `(net "名")`；无 `net_name`
-   冗余；keepout zone 省略 net 子句。`pcb.nets` 读入时由引用扫描**按名排序合成编号**
-   （"" 恒 0、1..n 稠密，引用序无关、跨进程确定）。编号 = 进程内句柄，Python 可见模型不变
-   （`segment.net:int`、`pad.net:Net{number,name}`）。推论：**未被引用的 net 不持久化**——
-   `insert_net` 必须随后绑定 pad/routing 才留存。
-3. **解析器对未知内容**：KiCad 遇未知 token 直接报错（`pcb_io_kicad_sexpr_parser.cpp:1388`）→
-   自有元数据只能放 footprint `(property ...)` 或 sidecar，禁发明自定义 token。Zig 侧未知键
-   已改为响亮警告/strict 抛错（`fileformats.py` `UnknownSexpKeys`/`last_unknown_keys`）。
-4. **`kicad.loads` 缓存 + pyzig 所有权【✅ S1】**：缓存按 (mtime_ns, size) 失效，
-   `kicad.dumps(obj, path)` 回写缓存；子对象包装持 owner 强引用链，`loads(...).kicad_pcb` 安全。
-5. **version 守卫【✅ S2】**：超 `PCB_MAX_SUPPORTED_VERSION`(20260206) 抛
-   `kicad.UnsupportedKicadVersion`。
-
-### 确定性边界
-
-6. **UUID 不透明 ⟹ 确定性 = 语义等价（非字节）【2026-06-15 重定，旧"uuid4+FBRK 后缀 / 增量稳态
-   字节一致 / .kicad_pcb 必须入库"作废】**：`gen_uuid`（`fileformats.py`）= 纯 uuid4、无 mark
-   （§G/事实 7）。uuid 既随机又无意义 ⟹ **不可 desire 字节等价**，确定性测试一律用 `semantic_view`
-   （位置+net 名连通性+结构，剔 uuid/net 编号）；生成态 `.kicad_pcb` 不必作字节锚入库（CI 可两次
-   从零构建比 semantic）。完整推论见 §G。
-7. **uuid 不透明 = 不塞元数据/不读 flag（FBRK 侧信道已删，2026-06-15）**：`gen_uuid`
-   （`fileformats.py`）现无 `mark` 参数、纯返回 uuid4；`transformer.py` 的 `gen_uuid(mark)`/
-   `is_marked`/`_add_group` 已清。旧"变长-mark 塞进定长 uuid 静默畸形"的根因（往 uuid 塞数据）随之
-   消失。provenance 走 `atopile_address` property + `FBRK:notouch` fp_text。常驻不变量见 §G。
-8. **`keep_net_names` 默认随 `frozen`**（`config.py:605-606,639-640`）：常态每次 build 重 derive
-   net 名——名字漂移源头。v10 下名字漂移 = 几何归属漂移（事实 2）。
-
-### KiCad 行为
-
-9. **net-0 悬空铜被 KiCad 重存清理**（连带空 group）：写铜层几何必须挂真实 net；引导/标记
-   几何放 User.x（User.1=引导走廊、User.2=禁布区）。
-10. **atopile 不生成 .kicad_sch，但 `sheetname` 仍可用（旧结论已纠正，见 §C3）**：room/多通道
-    **不走 group**，走**每 footprint 的合成 `sheetname`(+`sheetfile`)**（从 ato 层级派生）+ rule area
-    `(placement (sheetname "<addr>"))`。**实测（2026-06-14，已落 `test_C3_4`）**：31 字节 room 名给无对应
-    .kicad_sch 的 footprint 打 `sheetname`/`sheetfile` + zone placement，`kicad-cli pcb upgrade --force`
-    重存（v20260206）**`sheetname`/`sheetfile` 逐字保真**、placement 保真、`drc` rc 不变。
-    **关键修正：`path` 不保真**——KiCad 拥有 sheet-instance path，upgrade 时把合成的 `path` 重写成全新
-    UUID（实测）。故 **room 键 = `sheetname`（非 `path`），atopile 不写 `path`**（写了也被 KiCad 改且引入
-    UUID 不确定性）。zig schema 已建模 `sheetname`/`sheetfile`（`pcb.zig:690-692`）、`ZonePlacement.sheetname`
-    （`pcb.zig:828`），故 **rule area 走 sheetname 不需要改 zig**。
-11. **DRC JSON 无结构化 net 字段**（net 名嵌描述文本）：诊断层用 items[].uuid 经 layout_ir 反查。
-12. **SWIG Python 绑定全禁**（KiCad 10 移除板级 API）；Repeat Layout 仅 GUI 入口。
-
-### 周边
-
-13. **KiCadRoutingTools 已有结构化结果**（`return_results=True`、`JSON_SUMMARY`、`BlockingInfo`）：
-    诊断层是聚合+映射；其解析器独立、v9/v10 兼容、不解析 groups——不受本仓库迁移影响。
-14. **room rule area 走 sheetname 源，不改 zig**：room rule area 用 `(placement (sheetname ...))`，
-    `ZonePlacement.sheetname`（`pcb.zig:828`）已存在 → 不需要改 zig。（曾计划给 zig 加 `group` 枚举/字段
-    `pcb.zig:322/824` 当 room 源，C3 改走 sheetname 后弃用——group 无 provenance 槽，见 §C3。）
-15. **EasyEDA 取件 = CloudFront WAF（非"限流"）【✅ D1】**：(a) UA 拒绝名单——`easyeda2kicad`
-    硬编码 UA / `python-requests` / `Mozilla` 全 403，`curl/*`、node UA 放行；(b) 按 IP 速率——
-    突发后即便放行 UA 也短时全 403（响应体 `Request blocked` HTML → `r.json()` 抛
-    `Expecting value: line 1 column 1`）。修复见 `easyeda_resilient.py`；warm build 走 1 天缓存零调用。
-16. **router 锁定模型 = 跨 stage 硬障碍（白送）+ stage 内软互撕（唯一可调）+ 无 per-net 锁**【源码实测
-    2026-06-19】：E1 把每个 route stage 作为**独立** `batch_route`/`batch_route_diff_pairs`/`batch_route_bundle`
-    调用、逐 stage 累积 pcb_data。① **跨 stage = 硬障碍、撕不动**：建障碍图时凡不在本次 `nets_to_route` 的
-    segment/via/pad 一律当硬障碍（`obstacle_map.py:82-120`：segment :82-96 / via :98- / pad :114-），rip-up 只动本次 `net_ids` 内的 net
-    （`rip_up_reroute.py`）——前序 stage 的铜对后续 stage 天然不可撕。故"有序流水线 = 布线优先级**硬保证**"
-    无需在 router 加任何锁，**把要保护的 net 放进更早 stage 即不可撕**。② **stage 内（同一次 batch）兄弟 net
-    可软互撕**，且这是**唯一可调**项：`max_rip_up_count`（默认 3）/`ripped_route_avoidance_cost`/`_radius`
-    （`routing_config.py:60/83-84`）。③ router **无任何 per-net `lock/fixed/frozen` 原语**（已搜证）。
-    **推论**：layout.yaml 表达"优先级/不可撕"的正确手段 = **stage 拆分与排序**，不是 per-net 标志；想让一条线
-    连兄弟都不动 → 给它单独的更早 stage。
+**Bidirectional pinning discipline** (before writing the consumer, first use the consumer's real interface to pin down the upstream acceptance): B→C uses
+the `_generate_net_map` consumer-oracle (pinned); C→E uses the real router consumer-oracle (the E3 thin slice was pulled forward).
+**D-Tier2→E-Tier2 direction reversal (contract-first co-design)**: `batch_route_bundle` does not exist today, there is no ready interface to pin against, so
+D defines and strict-xfail pins the contract first and E implements accordingly (cannot do E first and then force a schema refactor, see §D-Tier2).
 
 ---
 
-## 已完成（结论 + 代码指针；细节看代码）
+## Key facts & constraints (must read before changing code; all empirically verified, evidence = the KiCad source / code file:line annotated in place on each item)
 
-> 下列各项的实现/契约/不变量已全部写进源码（docstring / 同名测试 / schema）。BACKLOG 只留
-> "源码里看不到的结论 + 指针"。要细节请读指针文件，**不要回来这里找**。
+### File dialects & parsers
 
-### §A 确定性基础【✅ 2026-06-12】
-group 成员排序漂移、keep_designators、手工命名 group 被静默删除——全修。
-指针：`test/end_to_end/test_group_determinism.py`（变异验证过）；修复 = `pull_group_layout`
-末尾全量排序、`_is_managed_group()`（仅清 uuid 后缀=组名 hex 的自管组）。
+1. **Write dialect = v10** (after S7): `PcbFile.dumps` (`src/faebryk/core/zig/src/sexp/kicad/pcb.zig`) always writes v10,
+   stamps `version=20260206`; v9/v5 are readable, reading in then writing out upgrades to v10 (upgrade-on-write).
+   `KICAD_PCB_VERSION/KICAD_FP_VERSION = 20260206` (`pcb.zig:12-15`).
+2. **v10 net model**: a v10 file has **no top-level net table**——net exists only at reference sites `(net "name")`; no `net_name`
+   redundancy; keepout zone omits the net clause. `pcb.nets` on read is **synthesized with numbering sorted by name** from a reference scan
+   ("" is always 0, 1..n dense, reference-order-independent, cross-process deterministic). The number = an in-process handle, the Python-visible model is unchanged
+   (`segment.net:int`, `pad.net:Net{number,name}`). Corollary: **an unreferenced net is not persisted**——
+   `insert_net` must subsequently bind a pad/routing to survive.
+3. **Parser toward unknown content**: KiCad errors out on an unknown token (`pcb_io_kicad_sexpr_parser.cpp:1388`) →
+   own metadata can only go into footprint `(property ...)` or a sidecar, inventing custom tokens is forbidden. On the Zig side unknown keys
+   were changed to loud warning / strict throw (`fileformats.py` `UnknownSexpKeys`/`last_unknown_keys`).
+4. **`kicad.loads` cache + pyzig ownership [✅ S1]**: cache invalidates by (mtime_ns, size),
+   `kicad.dumps(obj, path)` writes back to the cache; child-object wrappers hold a strong-reference chain to the owner, `loads(...).kicad_pcb` is safe.
+5. **version guard [✅ S2]**: exceeding `PCB_MAX_SUPPORTED_VERSION`(20260206) throws
+   `kicad.UnsupportedKicadVersion`.
 
-### P0.1 v10 迁移测试底座（T0–T9）【✅ 2026-06-12】
-原则：测试多样性由 harness 制造（corrupter / PYTHONHASHSEED），不靠天然语料（天然语料表序=
-编号序，按位置绑定的 loader 能蒙混；T8 变异自检实证 corrupter 必需）。
-指针：`libs/test/sexp_tree.py`、`test_fileformats_corpus.py`、`semantic_view.py`、
-`test_net_binding_corruption.py`、`test_net_name_properties.py`、CI `.github/workflows/pytest.yml`、
-离线 fixture `test/common/resources/{fileformats/kicad/v10,easyeda-cache}/`。
+### Determinism boundary
 
-### P0.2 v10 方言迁移 S0–S6 + D1【✅ 2026-06-13】
-v10-only（upgrade-on-write）落地：写方言=v10、版本守卫、tenting 嵌套化、net 模型按名合成、
-未知键响亮化 + schema 补全、Python 消费方迁移、EasyEDA 取件韧性。
-指针（测试即 SSOT）：`test_v10_acceptance.py`、`test_pyzig_ownership.py`、`test_version_guard.py`、
-`test_tenting_dialect.py`、`test_unknown_key_loudness.py`、`test_gui_edit_roundtrip.py`（GUI 编辑
-回环门）、`easyeda_resilient.py`+`test_easyeda_resilient.py`。
-两个 CONFIRMED+FIXED bug 已带回归测试，调试 narrative 不留 BACKLOG：
-- **BUG-2** v10 读侧不回填 pad net 名 → rebuild 丢 room 布线：修在 `pcb.zig PcbFile.loads`
-  合成 net 表后回填 `pad.net.name`，回归 `test_v10_acceptance.py::test_v10_read_backfills_pad_net_names`。
-  （教训"pull≠sync 增量稳态"由 e2e determinism 测试钉；PATH footgun 已记 `CLAUDE.md`。）
-- **BUG-1** 测试写回源 fixture：`app` fixture 改 `shutil.copy2` 到 tmp 副本。
+6. **UUID opaque ⟹ determinism = semantic equivalence (not bytes) [redefined 2026-06-15, old "uuid4+FBRK suffix / incremental steady-state
+   byte-identical / .kicad_pcb must be committed" is void]**: `gen_uuid` (`fileformats.py`) = pure uuid4, no mark
+   (§G/fact 7). uuid is both random and meaningless ⟹ **byte equivalence must not be desired**, determinism tests always use `semantic_view`
+   (position+net-name connectivity+structure, stripping uuid/net numbering); a generated `.kicad_pcb` need not be committed as a byte anchor (CI can build
+   from scratch twice and compare semantic). Full corollaries see §G.
+7. **uuid opaque = no metadata stuffing / no flag reading (FBRK side channel deleted, 2026-06-15)**: `gen_uuid`
+   (`fileformats.py`) now has no `mark` parameter, purely returns uuid4; `transformer.py`'s `gen_uuid(mark)`/
+   `is_marked`/`_add_group` are cleared. The old "variable-length mark stuffed into a fixed-length uuid, silent malformation" root cause (stuffing data into uuid) vanishes
+   with it. provenance goes through the `atopile_address` property + `FBRK:notouch` fp_text. Resident invariants see §G.
+8. **`keep_net_names` defaults to follow `frozen`** (`config.py:605-606,639-640`): normally each build re-derives
+   net names——the source of name drift. Under v10 name drift = geometry-ownership drift (fact 2).
 
-### §B layout_ir（文本↔几何唯一接口）【✅ 2026-06-14 全绿；I7 将由 C3 取代为 I7′】
-不变量 **I1–I8 + Igeo + B2 全部 = `test/libs/kicad/test_layout_ir_contract.py` 的同名测试**
-（**I7「group 成员==sync_groups」由 C3 取代为 I7′「room=atopile_address 前缀派生」**，IR 去 `groups{}`）；
-IR 形状/语义 = `src/faebryk/libs/kicad/layout_ir.py` 模块 docstring；
-schema = `src/faebryk/libs/kicad/layout_ir.schema.json`（draft 2020-12，随包发布）；
-build 步骤产 `build/builds/<t>/<t>.layout_ir.json`（`build_steps.py` 注册 "layout-ir"）。
-源码里看不到的结论：
-- net 名解析复用 `semantic_view._NetTable`（I3 与第二读者同源，非独立 derive）。
-- **bridge②（`signal_nets`, I4b）是唯一需 graph 的部分**，pcb-only IR 不含——故 §C 不阻塞于它。
-- **消费者-oracle**：仅用 IR 重建 `_generate_net_map` 必 == 现役（`layout_sync.py`）——C2 重写
-  须守此等价（与遗留问题 3 绑定）。
+### KiCad behavior
 
-### §C room 几何（forced via / room 复制）【✅ 2026-06-14 全绿；room 表示由 C3 改（C3.6 回开）】
-实现 = `src/faebryk/exporters/pcb/layout/room_ops.py`（模块 docstring 即行为权威）；
-（room_ops 已 address 派生，逻辑不改；仅随 C3 的新 IR 形状保持兼容，契约测试钉新边界 C3.6。）
-契约/DoD = `test/exporters/pcb/layout/test_room_ops_contract.py`（8 测：Tier-1 纯函数 6 +
-Tier-2 真 router 2）。冻结 API：`pad_board_xy`、`insert_forced_via→ForcedVia`、
-`address_prefix_map`、`room_net_map`（==现役 `_generate_net_map`）、`copy_room_layout→RoomCopy`。
-源码里看不到的结论：
-- forced via 三件铜（pad→via@in / 跨层 via / via@out→pad）全挂真实 net（非 0，事实 9），
-  引导线只在 User.1；C2 复制段未映射 net→0（KiCad 落盘清理，忠实不静默错连）。
-- **§B 现实检验通过**：三纯函数一次实现即对，`layout_ir` 零改动。
+9. **net-0 dangling copper is cleaned up by KiCad on re-save** (along with empty groups): copper-layer geometry written must hang off a real net; guide/marker
+   geometry goes on User.x (User.1=guide corridor, User.2=keepout region).
+10. **atopile does not generate .kicad_sch, but `sheetname` is still usable (old conclusion corrected, see §C3)**: room/multi-channel
+    **does not go through group**, goes through **each footprint's synthesized `sheetname`(+`sheetfile`)** (derived from the ato hierarchy) + rule area
+    `(placement (sheetname "<addr>"))`. **Empirically verified (2026-06-14, landed as `test_C3_4`)**: a 31-byte room name applied as `sheetname`/`sheetfile`
+    + zone placement to a footprint with no corresponding .kicad_sch, `kicad-cli pcb upgrade --force`
+    re-saves (v20260206) with **`sheetname`/`sheetfile` verbatim faithful**, placement faithful, `drc` rc unchanged.
+    **Key correction: `path` is not faithful**——KiCad owns the sheet-instance path, and on upgrade rewrites the synthesized `path` into a brand-new
+    UUID (empirically verified). Hence **room key = `sheetname` (not `path`), atopile does not write `path`** (if written it is changed by KiCad and introduces
+    UUID nondeterminism). The zig schema already models `sheetname`/`sheetfile` (`pcb.zig:690-692`), `ZonePlacement.sheetname`
+    (`pcb.zig:828`), so **rule area going through sheetname does not require changing zig**.
+11. **DRC JSON has no structured net field** (net name embedded in description text): the diagnostics layer uses items[].uuid to reverse-resolve via layout_ir.
+12. **SWIG Python binding fully banned** (KiCad 10 removed the board-level API); Repeat Layout is GUI-only entry.
 
-#### C→E/F 边界事实（源码外——router 不在 atopile 内，§E/§F 必读）
-真 router = consumer-oracle（实测 system python3，`grid_router.so` 非本 venv）：
-1. **两入口、键集不同**：单端 net → `route.py:batch_route`（`JSON_SUMMARY` 键
-   `routed_single`/`failed_single`）；差分对（net 带 `_P/_N`、`P/N`、`+/-`）→
-   `route_diff.py:batch_route_diff_pairs`（`routed_diff_pairs`/`failed_diff_pairs`）。共有键
-   `failed`/`successful`/`total_vias`。**喂错入口 → 不打印 `JSON_SUMMARY`**。
-2. **只路由未连通 net**：已连通 net → `failed=1` 无输出，或 "nothing to route" 不打 summary。
-   故无"预置 via 当软 waypoint 绕行"模式——forced via 被"尊重" = 它已使 net 连通、router 不动它；
-   C2 复制段同理（普通已连通铜）自动保留，**§E 无需 lock/preserve §C 预置几何**。
-3. **`total_vias` 只计 router 新增 via**，不含预置 forced via——存活/板上总数须**重读输出板**。
-4. **User.* 默认 router 不读**（只读铜层）——但 router 有原生开关
-   （`vendor/KiCadRoutingTools/routing_config.py:117-123`）：`guide_corridor_enabled`（读 User.1 引导线，
-   把 net 沿走廊牵引）+ `keepout_enabled`（读 User.2 禁布多边形，挡走线）。故 §C 的 User.1 引导
-   / §D 的 User.2 room 边界**可被 E1 显式启用为一等布线约束**（默认关、按 stage 开，见 §D/§E1）——
-   非仅可视件。这两路与 §D 的 placement rule area（KiCad 自身的分组/DRC，另一机制）不要混淆。
-- **设计决策（双入口非缺陷）**：两入口 = 两套真算法共享同一 Rust 网格内核
-  （`grid_router:GridObstacleMap/GridRouter`）。差分 = `PoseRouter` 位姿法 + `diff_pair_gap`
-  恒定间距 + `centerline_setback`（pad 附近自动 fanout/打散，对应 decoupling 抽头 / 连接器
-  pitch）+ `fix_polarity` + `length/time_matching` + `gnd_via`；单端 = `route_multipoint_main`/
-  `power_nets`。行业惯例（Altium 亦分差分/单线两器），**非 bug**。**不合并算法（合并=倒退，丢
-  耦合/极性/等长/位姿/centerline）**；mode 由 `route_stages` 显式声明（§D/§E1）。
-- E3 薄片仅验**差分对** schema（`test/exporters/pcb/layout/test_router_smoke_batch_route.py`，shell-out 至 system py3 跑 `vendor/KiCadRoutingTools`）；
-  单端 schema 待 §E3 补。
+### Periphery
 
-### §C3 room 去 group 化（room = footprint sheetname）【✅ 2026-06-15】
-决策：room 不再 = KiCad group。atopile **建零个/删零个 group**（用户 group 按构造永存，A4 失效模式消失）；
-room 载体 = footprint `sheetname`(+`sheetfile`)（值 = ato 地址前缀，`_get_room_name` 派生；**不写 `path`**——
-KiCad 拥有并重写它，事实 10）；route/via/zone 归属 = 内部 net；rule area 走 `(placement (sheetname))`，无 zig 改动。
-协议 + 接口 delta = 代码 SSOT：
-- 契约 `test/exporters/pcb/layout/test_room_migration_contract.py`（模块 docstring = 协议全文 + 棘轮）；
-  e2e `test/end_to_end/test_room_migration_e2e.py`（建组数=0 / pull 语义确定性）。
-- 实现 `layout_ir.py`（`rooms` 派生）+ `layout_sync.py`（`sync_rooms`/`pull_room_layout`/`_clean_room`，
-  删 `_is_managed_group`）+ `room_ops.py`（`copy_room_layout` 只复制本 room）+ `build_steps.py`/`cli/kicad_ipc.py`。
-源码里看不到的结论：
-- committed fixtures 仍含旧 group，但**已无任何测试把 group 当 room 源读**：曾经的一次性迁移证明
-  `test_C3_1_corpus_groups_are_address_prefix_recoverable`（从 pcb 读旧 group 比对地址前缀）**已退役**
-  （`test_room_migration_contract.py` 注释记其移除——保留会延续 C3 已废除的 ato→group 耦合）；现役
-  `test_C3_1_inline_room_equals_address_prefix_grouping` 只读 sheetname 派生的 `ir['rooms']`。含 group 的板
-  仅由 parser corpus（`test_fileformats_corpus`）当不透明用户内容回环覆盖。
-- `transformer._add_group`/`is_marked`/`gen_uuid(mark)` 已删（§G uuid 不透明）——atopile 无 ato→group 映射。
-- cascade：§B I7→I7′（IR 去 `groups{}`）、§C room_ops 随新 IR 形状（契约钉 C3.6）。
-
-### §D layout.yaml 加载 + KiCad placement rule area（D1–D4）【✅ 2026-06-16】
-layout.yaml = 布局意图源（.ato 电路源 / .kicad_pcb 几何源的对等源）。D1 路径配置 → D2 解析校验成 `LayoutPlan`
-→ D3 每 room 落 placement rule area → D4 build 步骤接线 + 产 `<t>.layout_plan.json`（供 E1）。
-**架构（声明式 rooms + 有序 route_stages 流水线、为何用 yaml 非 .tcl）= `layout_plan.py` 模块 docstring「FORM」节（SSOT）。**
-实现：
-- `src/atopile/config.py`（`BuildTargetPaths.layout_config`，D1）。
-- `src/faebryk/exporters/pcb/layout/layout_plan.py`（`LayoutPlan/Room/RouteStage/GridRouteOverride` +
-  `load_layout_plan`/`resolve_nets`，D2；模块 docstring = 协议全文）。
-- `src/faebryk/exporters/pcb/layout/rule_area.py`（`generate_rule_areas`，D3）。
-- `src/atopile/build_steps.py`（`generate_layout_plan` 步骤，挂入 `generate_default`，D4）。
-契约：`test/test_config.py`（D1）、`test_layout_plan_contract.py`（D2）、`test_rule_area_contract.py`（D3）、
-`test/end_to_end/test_layout_plan_build.py`（D4）。
-源码里看不到的结论：
-- **`GridRouteOverride` 的 oracle = 两 router 入口入参 union，NOT `GridRouteConfig`**【2026-06-16 独立验证纠偏】：
-  `route.py:batch_route`/`route_diff.py:batch_route_diff_pairs` 收扁平 kwargs，内部才建 `GridRouteConfig`
-  并改名（`impedance`→`impedance_target` 等）。mode 互斥键（`guide_corridor_*` 单端 /
-  `diff_pair_*`·`fix_polarity`·`gnd_via_*` 差分）在 **D2 parse 期按 mode 拒错键**，E1 不重复校验。漂移钉 =
-  `test_layout_plan_contract` 的 union drift guard + mode 一致性自测（AST 取真 router 签名，漂移即红）。
-- 实施期查出并修的两个真缺陷：① placement 写 `source_type`/`source` → **SEGFAULT KiCad loader**（错建的内存/
-  protobuf 字段，文件语法无此 token；见「关键事实」placement 条 + 回归 `test_generated_placement_has_no_source_type`）；
-  ② 显式 origin/size 的未知 room module 曾**静默落空 rule area**（S5a 违规）→ 改为两 geometry mode 都响亮
-  （回归 `test_unknown_room_module_is_loud`）。
-- D 的产物 = E/F 输入：`<t>.layout_plan.json`（resolved route_stages + room 元数据）给 E1；板上 rule area 供
-  KiCad placement/DRC + F-diag 命中测试。E1 把 `RouteStage.config` 原样展开成入口 kwargs（翻译在 router 内）。
-
-### §D-Tier2 bundle 总线传输（mixed single/diff schema + 几何）【✅ 桶① 2026-06-20；D 侧 build 集成 2026-06-25】
-bundle = 有序 lanes（single/diff）+ 分段 trunk + 两端 breakout 的布线意图单元（flat `route_stages` 表达不了）。
-桶①（D 内 model + 几何 SSOT + build 注入）已落地；桶②（`batch_route_bundle` 实现 + breakout 扇出）= **§E-Tier2**
-（契约已 strict-xfail 冻死，实现见未完成 §E-Tier2；协议全文 = `test_bundle_contract.py` 模块 docstring SSOT）。
-指针：`layout_plan.py`（`BundleStage`/`SingleLane`/`DiffLane`/`Trunk`/`Breakout`/`RipUpBudget`，模块 docstring = 协议）、
-`bundle_geometry.py`（`cross_section_offsets` 几何 SSOT + `bundle_artifact`）、`build_steps.generate_layout_plan`
-（bundle stage 调 `bundle_artifact` 注入算好的 offset，plain stage 走 model_dump）；契约 `test_bundle_contract.py`
-（桶① 全绿、桶② strict-xfail 待 E-Tier2）；e2e `examples/sata_bundle` + `test/end_to_end/test_bundle_build.py`。
-源码外结论：差分对全程不解散（L1 内在耦合），bundle 只在外层加顺序+lane 间距；过渡段两端 offset 给死、只 E 搜 morph。
-
-### §D-Tier3 自包含摆放 + 板级 `board` 段【✅ 桶① 2026-06-26；桶② TS-AUTH-A 2026-06-28】
-生成式 / agent flow 里 `.ato`（电路）+ `layout.yaml`（布局）必须自包含、是唯一权威；`.kicad_pcb` 是派生产物、
-reuse 仅可选优化、不得是任何事实的唯一通道（「为避免 GUI 必须先用 GUI」= 设计缺陷）。已落地：
-- 摆放：`Placement`/`resolve_placement`（room 相对解析 + `absolute` 板绝对逃逸口）/`resolve_component_pose`
-  （placements>reuse 优先级；文本给值即覆盖、缺省回退 reuse、皆无则 loud），坐标系 = room 相对（块可复用）。
-- room 几何：`Room.polygon`（≥3 点、非自交，dependency-free 自交检测）+ rotation（绕首点 CCW）+ per-room layers
-  接线生效（`rule_area._room_boundary`/`_rotate`；修了"声明却被 D3 静默忽略"的 S5a 隐患——要么生效要么删字段）。
-- `board` 段：`BoardOutline`（origin/size 或 polygon）/`Stackup`/`StackupLayer` + 纯函数 `stackup_layers`/`outline_bounds`；
-  impedance→stackup **硬依赖** plan 级校验（无 stackup 即 loud，钉 `route.py:256-258` 静默退固定线宽 = 阻抗失控）。
-- **单一层数权威（板侧已闭环，TS-AUTH-A 绿）**：`config._stackup_copper_names`/`_copper_layer_table` 由
-  `stackup_layers(board.stackup)` 派生 fresh board 的 copper 层表（KiCad 编号 F.Cu=0/内层 1../B.Cu=31），杀
-  `config.py` 旧 2 层硬编码——board 与 router 层数同源，物理上不可再分叉。
-指针：`layout_plan.py`、`rule_area.py`、`config.py`（`ensure_layout`/`_stackup_copper_names`/`_copper_layer_table`）；
-契约 `test_placement_contract.py`（TP/TR）、`test_board_section_contract.py`（TB/TS/TS-AUTH-A 绿、TS-LM′ 单一权威锁）。
-源码外结论（仍未完成、归 §E）：**路由侧**层数权威（E1 把 `stackup_layers` 当 `layers` 传 router、不吃 4 层默认）=
-**TS-AUTH-B = §E1**；纯文本无 reuse 端到端建板 = **桶③ = §E DoD**；reuse-only 的板级 net-class/pour/keepout/silk
-（缺失须 loud、不缺省）= **§F**（F-drc-rules/F-fill/F-keepout/F-silk）。
-
-### Tier0 corridor-as-data【✅ 2026-06-28】
-single stage 的 `corridor: [[x,y],...]` 文本字段 → build 画 User.1 polyline + 置 `guide_corridor_enabled`，零 router
-改动（复用 router 原生 guide reader，§C 边界事实 4）；软牵引、非硬 checkpoint。指针：`corridor.py`（`draw_corridors`，
-idempotent）、`RouteStage.corridor`（`layout_plan.py`，single-only + ≥2 点 loud）、`build_steps.generate_layout_plan`；
-契约 `test_corridor_contract.py`。
-
-### route_stage `name` 唯一【✅ 2026-06-28】
-stage name 唯一性 loud 校验 = `--up-to` 断点按名寻址的前提，且杜绝 `resolve_nets` 同名 stage 静默覆盖。指针：
-`LayoutPlan._validate_unique_stage_names`（`layout_plan.py`）；契约
-`test_layout_plan_contract.py::test_duplicate_stage_name_is_loud`（+ 正向控制 `test_distinct_stage_names_pass`）。
-
-### placements → transformer build 时消费【✅ 2026-06-28】
-纯函数权威 `resolve_component_pose`（文本>reuse 优先级，§D-Tier3 已落）现已接进 build：`apply_placements` 把每个
-文本 placement 命中的受管 footprint（按 `atopile_address` property 匹配）移到解析后的位姿，**覆盖** transformer 的
-自动 10mm 网格摊开（`transformer.py:176`/`:2013-2080`）——room 相对经 room origin 复合、`absolute` 逐字落、
-rotation+side 经 transformer 的翻转感知 `move_fp` 应用；命中不存在的 footprint = loud。在 `generate_layout_plan` 里于
-`layout_ir` 之前调用，故 room 派生 bbox 反映最终位置。指针：`placement.py`（`apply_placements`/`_room_for`，room =
-component 地址最长前缀的 room）、`build_steps.generate_layout_plan`；契约 `test_placement_apply_contract.py`（PA1-6）。
-
-### §E1 route runner（route_stages → 路由调用 + route_report.json）【✅ 2026-06-28】
-`layout_plan_runner.py`：纯 `build_invocations`（route_stages → `StageInvocation` 列表，零 subprocess/零 router import）
-+ `run_route_stages`（按 stage 驱动 invoker、聚合、写 `route_report.json`）+ `default_subprocess_invoker`（shell 到
-system python3 跑 router、解析 `JSON_SUMMARY`，早返=None）。落地契约：按 stage 类型分派（single→`route.batch_route`／
-diff→`route_diff.batch_route_diff_pairs`，union tag 先于 `RouteStage.mode`）；config 逐字展开（仅 explicitly-set，余走
-router 默认、不漏 None、不重校 D2 已校的 mode 键）；**层表唯一权威** = `stackup_layers(board.stackup)`，绝不吃
-`route.py:230` 四层默认（**翻绿 TS-AUTH-B**）；缺 board/stackup 或 per-stage `config.layers` 一律 loud（单一权威）；
-跨 stage 板累积（前序铜=白送硬障碍，不加锁）；容忍缺 `JSON_SUMMARY`（早返=零布线、不 KeyError）；聚合 common
-标量键（含 `total_time`/`total_iterations`）从 summary dict 求和、per-type 列表分桶；`--up-to <name|1-based index>`
-断点（写部分板+report，越界/未知 loud、bundle 在 slice 外不报，`report.up_to` 归一为 stage 名）。
-指针：`layout_plan_runner.py`、契约 `test_layout_plan_runner_contract.py`（R1-R14 纯 + E15/E16/E17 e2e；
-bundle 分派 R2/R2b/R2c/R2d/R2e + bundle e2e E18 见下「§E-Tier2」）；TS-AUTH-B 棘轮探针改指 runner
-（`test_board_section_contract.py::_e1_passes_stackup_to_router`，旧指 build_steps——路由非 build step，已纠）。
-源码外结论（诚实记限制）：
-- E1 是**库**：现由 e2e 测试消费，CLI `ato route` 走 §F（路由非 `ato build` 步骤，故不进 build pipeline）。
-- **bundle 分派**（`batch_route_bundle`）= **§E-Tier2 已落地**（见下），E1 经 `_bundle_invocation` 展开
-  `bundle_artifact` 成几何 payload、成员名经 bridge② 解析、breakout `at`→`part`+kicad 序。
-- e2e（E15/E16/E17/E18）gated on system python3 + router 板；**本沙盒 scipy 在场、真跑过**（LVDS 2 层板，diff 对
-  真布通 `successful>=1`，bundle 真铺 3 成员铜）；无单端 fixture 板，故 E15 用单端入口路由 diff 对的一条线并容忍早返。
-- **per-stage 层子集化 = 有意非目标**（单一权威）：per-stage `config.layers` 响亮拒；将来若需按 stage 限层另议。
-
-### §E-Tier2 bundle 路由（`batch_route_bundle` + runner 分派 + e2e）【✅ 2026-06-29】
-`vendor/KiCadRoutingTools/route_bundle.py:batch_route_bundle`：把冻结的 bundle 契约（分段 trunk + 有序成员 offset
-表 + 2 breakout）变成**平行总线**——每成员一条沿 centerline 的 offset 轨。trunk = **确定性几何、零 A***：横截面
-按每 vertex 的 `spacing` **重排**（`_repack_offsets` 镜像 `bundle_geometry.cross_section_offsets`），成员宽度与每
-diff 对的 intra gap 恒定（bundle-global 不变量）；刚性段不变、过渡段 morph 但 **L1 耦合不散**（只动 inter-lane
-spacing、绝不动对内 gap）。成员输入 offset 当可信入口 profile，per-vertex offset = 输入 + 重排 DELTA（刚性=输入逐字、
-过渡=加 morph 增量，P/N 同增量故 gap 恒定）。breakout 扇出（pad→trunk 端）仅在有板时跑。逐成员 routed/blocked 结果 +
-stdout `JSON_SUMMARY`（含 `members[*].polyline`/`routed_members`/`failed_members`/标量键）。geometry-only 模式（无
-input_file）= 纯 python、无 rust/无 parser，故 D-Tier2 契约直接驱动它；有板模式惰性导入 parser/writer。
-runner 侧：`build_invocations` 经 `_bundle_invocation` 分派 bundle（entry/module=`route_bundle`/`batch_route_bundle`、
-config 逐字展开、层表←stackup、跨 stage 板累积）；`default_subprocess_invoker` 按 stage 类型选调用约定（bundle =
-geometry-driven，trunk/members/breakouts 在 KW，input/output 为关键字参数）。
-指针：`route_bundle.py`、`layout_plan_runner.py:_bundle_invocation`；契约 `test_bundle_contract.py`（T-B1 AST 漂移钉 /
-T-B2 result-shape / T-B3 平行总线 / T-B3b offset→轨变异自检 / T-B4 刚性 diff 耦合 / T-B6 过渡 morph 钉 SSOT+刚性段不
-morph+对内 gap 恒定）+ `test_layout_plan_runner_contract.py`（R2/R2b 分派 / R2c config / R2d 层冲突 / R2e 聚合 /
-E18 e2e：LVDS 板真跑、route_report by_type['bundle']、板真增铜）。
-源码外结论（诚实记限制）：
-- **breakout 扇出 = 直连**（pad→较近 trunk 端的直线段），**非** obstacle-aware A*；breakout `order` 排列与
-  `spacing_overrides` **尚未被几何消费**（仅 schema/校验存在）；交叉局部化/扇出优化 = 后续。
-- **逐成员失败路径未被测试穷尽**：trunk 几何永成功 ⇒ routed=True；有板而缺 pad 时 `blocked` 记串但不翻 routed=False、
-  不计 failed。真正的 failed 计数路径（无效几何）未被 fixture 触发。
-- **过渡 morph 保真**：用「输入 offset + 重排 DELTA」模型，刚性段精确、过渡按 cross_section_offsets 语义重排（对内
-  gap 恒定）；曲折 centerline 顶点法线用相邻段角平分线（直线 trunk 精确，强弯角 miter 近似）。
+13. **KiCadRoutingTools already has structured results** (`return_results=True`, `JSON_SUMMARY`, `BlockingInfo`):
+    the diagnostics layer is aggregation+mapping; its parser is independent, v9/v10 compatible, does not parse groups——unaffected by this repo's migration.
+14. **room rule area goes through the sheetname source, no zig change**: room rule area uses `(placement (sheetname ...))`,
+    `ZonePlacement.sheetname` (`pcb.zig:828`) already exists → no zig change needed. (There was a plan to add a `group` enum/field
+    to zig `pcb.zig:322/824` as the room source, abandoned after C3 switched to sheetname——group has no provenance slot, see §C3.)
+15. **EasyEDA part fetching = CloudFront WAF (not "rate limiting") [✅ D1]**: (a) UA deny-list——`easyeda2kicad`
+    hardcoded UA / `python-requests` / `Mozilla` all 403, `curl/*`, node UA allowed; (b) per-IP rate——
+    after a burst even an allowed UA is briefly all-403 (response body `Request blocked` HTML → `r.json()` throws
+    `Expecting value: line 1 column 1`). Fix see `easyeda_resilient.py`; warm build goes through the 1-day cache with zero calls.
+16. **router locking model = cross-stage hard obstacle (free) + in-stage soft mutual rip-up (the only tunable) + no per-net lock** [source empirically verified
+    2026-06-19]: E1 calls each route stage as an **independent** `batch_route`/`batch_route_diff_pairs`/`batch_route_bundle`,
+    accumulating pcb_data stage by stage. ① **cross-stage = hard obstacle, cannot be ripped**: when building the obstacle map, any segment/via/pad not in this run's
+    `nets_to_route` is treated as a hard obstacle (`obstacle_map.py:82-120`: segment :82-96 / via :98- / pad :114-), rip-up only touches nets within this run's `net_ids`
+    (`rip_up_reroute.py`)——copper from a prior stage is inherently unrippable for a later stage. Hence "ordered pipeline = routing-priority **hard guarantee**"
+    needs no lock added to the router, **put the net to be protected into an earlier stage and it is unrippable**. ② **within a stage (the same batch) sibling nets
+    can soft-rip each other**, and this is the **only tunable** item: `max_rip_up_count` (default 3) / `ripped_route_avoidance_cost` / `_radius`
+    (`routing_config.py:60/83-84`). ③ the router has **no per-net `lock/fixed/frozen` primitive whatsoever** (searched and confirmed).
+    **Corollary**: the correct means for layout.yaml to express "priority/unrippable" = **stage splitting and ordering**, not a per-net flag; to keep a trace
+    untouched even by siblings → give it its own earlier stage.
 
 ---
 
-## 未完成任务
+## Completed (conclusion + code pointer; for details see the code)
 
-**本节自上而下 = 执行序**（章节字母 = 关键路径顺序）。已完成前置（C3+D / D-Tier2 桶①② / D-Tier3 桶①·TS-AUTH-A /
-Tier0 corridor / stage-name 唯一 / placements→transformer / **§E1 runner+TS-AUTH-B+`--up-to`** /
-**§E-Tier2 bundle 路由+e2e**）全见上「已完成」。
-**剩余关键路径 = §E DoD（桶③ 纯文本自包含建板 e2e）→ §F**。
+> The implementation/contract/invariants of each item below are all written into the source (docstring / same-named test / schema). BACKLOG keeps only
+> "conclusions not visible in the source + pointers". For details read the pointer files, **do not come back here to look**.
 
-contract-first 下游棘轮的契约留在各自 D 测试文件、实现**就地落进 §E**，故**不再另列 D 残块**：
-桶② = **§E-Tier2 ✅**；**TS-AUTH-B（router 层表）✅ 落在 §E1**；桶③ 纯文本 e2e = **§E DoD**（路由半边已由
-E18 bundle e2e 证；剩自包含建板半边）。
+### §A Determinism foundation [✅ 2026-06-12]
+group member ordering drift, keep_designators, manually-named groups silently deleted——all fixed.
+Pointers: `test/end_to_end/test_group_determinism.py` (mutation-verified); fix = full sort at the end of `pull_group_layout`,
+`_is_managed_group()` (only cleans self-managed groups whose uuid suffix = group-name hex).
 
-真正不在关键路径上的旁支（P0.2-S7 终验、D5 component_class）收进 §E/§F **之后**的「旁支任务」节、**故意不编 E/F
-序号**（编入会假称其在关键路径上）。
+### P0.1 v10 migration test scaffold (T0–T9) [✅ 2026-06-12]
+Principle: test diversity is manufactured by the harness (corrupter / PYTHONHASHSEED), not relying on natural corpus (natural corpus table order =
+numbering order, a position-bound loader can slip through; T8 mutation self-check empirically proves the corrupter is necessary).
+Pointers: `libs/test/sexp_tree.py`, `test_fileformats_corpus.py`, `semantic_view.py`,
+`test_net_binding_corruption.py`, `test_net_name_properties.py`, CI `.github/workflows/pytest.yml`,
+offline fixture `test/common/resources/{fileformats/kicad/v10,easyeda-cache}/`.
 
-### E.【需 §C + §D】KiCadRoutingTools fork
-E1 需 §D 的 plan + 板上 rule area，且用 §C1 的 forced via 当布线阶段能力。E3 全程并行先搭。
-**E1 dispatch 从一开始按「single / diff / bundle」三类 stage 设计**（D-Tier2 契约冻结后填 bundle 实现，勿事后改）。
-- [x] **E1** `layout_plan_runner.py`【✅ 2026-06-28，见上「已完成 §E1」】：route_stages → 按 stage 类型分派的
-  路由调用（single→`batch_route`／diff→`batch_route_diff_pairs`／bundle→`route_bundle.batch_route_bundle` 见 E-Tier2）+
-  `route_report.json`；config 逐字展开、层表 ← `stackup_layers`（**翻绿 TS-AUTH-B**）、`--up-to` 断点、跨 stage
-  板累积不加锁、容忍缺 `JSON_SUMMARY`、按类型聚合。契约 `test_layout_plan_runner_contract.py`。
-- [x] **E-Tier2 `batch_route_bundle` + breakout 扇出 + e2e**【✅ 2026-06-29，见上「已完成 §E-Tier2」】：平行总线
-  确定性几何（per-vertex 重排 = `cross_section_offsets` 镜像，刚性段不变/过渡 morph、diff 对内 gap 恒定不散 L1）+
-  直连 breakout 扇出（有板时 pad→trunk 端）+ 逐成员 routed/blocked + `JSON_SUMMARY`；runner `_bundle_invocation`
-  分派 + `default_subprocess_invoker` bundle 调用约定。契约 `test_bundle_contract.py` T-B1..T-B6 +
-  `test_layout_plan_runner_contract.py` R2/R2b/R2c/R2d/R2e + E18 e2e（LVDS 板真跑）。
-  - 限制（诚实记，见上「§E-Tier2」）：breakout = 直连非 A*、`order` 排列/`spacing_overrides` 未消费、逐成员失败
-    路径未被测试穷尽、强弯 centerline 法线 miter 近似。交叉局部化/扇出优化 = 后续按需。
-  - **E2 阶段内 rip-up 旋钮 = 不做（用户 2026-06-29 拍板：非必要、与「关键事实」16 重复）**：跨 stage 前序铜本就是
-    router 白送的不可撕硬障碍（优先级由 stage 顺序表达），bundle/流水线的"前线占位、后线绕行"已是硬保证。
-    `BundleStage.rip_up`（`RipUpBudget`）schema 已在（D-Tier2 落），如将来真需 stage 内"几乎不重排"再把
-    `max_rip_up_count`/`ripped_route_avoidance_cost`/`_radius` 接进 config——无新建跨 stage 锁的需求。
-- [ ] **E3** 独立回归台（全程并行先搭 = §E 的 S0 底座）：无需装 KiCad，预编译 Rust 二进制 +
-  内置测试板 + numpy/scipy/shapely；失败注入 + 报告 schema 校验。
-  - 最小切片已提前到 §C【✅】：`test/exporters/pcb/layout/test_router_smoke_batch_route.py`
-    钉死差分对 C→E 接口（`return_results=True` 四元组 / `results_data` 几何字段 / `JSON_SUMMARY`
-    schema）。整台 E3（失败注入 + 多板矩阵）仍待此处。
-  - **待补：单端 `route.py:batch_route` 的 JSON_SUMMARY schema 校验**（边界事实 1）——薄片只验
-    差分对键集，单端走 `routed_single`/`failed_single`，须扩第二条 schema 校验防静默失配。
-- [ ] **§E DoD — 桶③ 纯文本 e2e（翻绿 D-Tier3 桶③棘轮）**：无 reuse，`board.outline` + 完整 `board.stackup` +
-  `placements` 全文本给定 → 生成 .kicad_pcb → 重读 `semantic_view` 验层表 / 板框 / 摆放落位 == plan（板上无
-  In1/In2.Cu 幽灵层）。证明 `.ato`+`layout.yaml` 自包含建板，是 §E 路由落地后的完工判据。
-  - **路由半边已证**（§E-Tier2 E18 bundle e2e：真板真布线 + `route_report.json` + 板真增铜）；**剩自包含建板半边**
-    = `ato build` 从纯文本（无 reuse 源板）产出带 outline+完整 stackup 的可布线 .kicad_pcb（build 侧，较重、
-    gated not_in_ci），与路由 runner 解耦。
+### P0.2 v10 dialect migration S0–S6 + D1 [✅ 2026-06-13]
+v10-only (upgrade-on-write) landed: write dialect=v10, version guard, tenting nesting, net model synthesized by name,
+unknown-key loudening + schema completion, Python consumer-side migration, EasyEDA part-fetching resilience.
+Pointers (tests are the SSOT): `test_v10_acceptance.py`, `test_pyzig_ownership.py`, `test_version_guard.py`,
+`test_tenting_dialect.py`, `test_unknown_key_loudness.py`, `test_gui_edit_roundtrip.py` (GUI-edit
+round-trip gate), `easyeda_resilient.py`+`test_easyeda_resilient.py`.
+Two CONFIRMED+FIXED bugs carry regression tests, the debugging narrative is not kept in BACKLOG:
+- **BUG-2** v10 read side does not backfill pad net names → rebuild loses room routing: fixed in `pcb.zig PcbFile.loads`
+  by backfilling `pad.net.name` after synthesizing the net table, regression `test_v10_acceptance.py::test_v10_read_backfills_pad_net_names`.
+  (The lesson "pull≠sync incremental steady-state" is pinned by the e2e determinism test; the PATH footgun is recorded in `CLAUDE.md`.)
+- **BUG-1** test writes back to source fixture: the `app` fixture changed to `shutil.copy2` to a tmp copy.
 
-### F. 诊断闭环 + 板级规则文本化 ✅ 2026-06-30（F1–F8 全落，e2e 闭环 + 三轮对抗评审）
+### §B layout_ir (text↔geometry sole interface) [✅ 2026-06-14 all green; I7 to be replaced by C3 with I7′]
+Invariants **I1–I8 + Igeo + B2 are all = same-named tests in `test/libs/kicad/test_layout_ir_contract.py`**
+(**I7 "group members == sync_groups" is replaced by C3 with I7′ "room = atopile_address prefix-derived"**, IR drops `groups{}`);
+IR shape/semantics = `src/faebryk/libs/kicad/layout_ir.py` module docstring;
+schema = `src/faebryk/libs/kicad/layout_ir.schema.json` (draft 2020-12, shipped with the package);
+the build step produces `build/builds/<t>/<t>.layout_ir.json` (`build_steps.py` registers "layout-ir").
+Conclusions not visible in the source:
+- net-name resolution reuses `semantic_view._NetTable` (I3 shares the same source as the second reader, not an independent derive).
+- **bridge② (`signal_nets`, I4b) is the only part that needs the graph**, the pcb-only IR does not include it——so §C is not blocked on it.
+- **consumer-oracle**: rebuilding `_generate_net_map` using only the IR must == the in-service one (`layout_sync.py`)——the C2 rewrite
+  must uphold this equivalence (bound to outstanding issue 3).
 
-收官章——项目的立身前提（"命令式反馈活在文件外的闭环里"）已实现：
-**build→route→diagnose→(SKILL 改 layout.yaml)→重建** 的反馈闭环就位。一次布线运行 + KiCad DRC
-被聚合成结构化、按 ato 地址索引的 `diagnostics.json`；板级 authoring（DRC 规则 / 灌铜 / 禁布 / 丝印）
-已文本化，使 DRC"绿"反映设计意图而非 KiCad 默认。**结论 + 代码指针如下；不变量以 code/docstring 为 SSOT。**
+### §C room geometry (forced via / room copy) [✅ 2026-06-14 all green; room representation changed by C3 (C3.6 reopens)]
+Implementation = `src/faebryk/exporters/pcb/layout/room_ops.py` (the module docstring is the behavior authority);
+(room_ops is already address-derived, logic unchanged; it merely stays compatible with C3's new IR shape, the contract test pins the new boundary C3.6.)
+Contract/DoD = `test/exporters/pcb/layout/test_room_ops_contract.py` (8 tests: Tier-1 pure functions 6 +
+Tier-2 real router 2). Frozen API: `pad_board_xy`, `insert_forced_via→ForcedVia`,
+`address_prefix_map`, `room_net_map` (== the in-service `_generate_net_map`), `copy_room_layout→RoomCopy`.
+Conclusions not visible in the source:
+- the three copper pieces of a forced via (pad→via@in / cross-layer via / via@out→pad) all hang off a real net (not 0, fact 9),
+  the guide line is only on User.1; the C2 copied segment with unmapped net→0 (KiCad cleans it up on write, faithful rather than silently mis-connecting).
+- **§B reality-check passed**: the three pure functions were correct on first implementation, `layout_ir` zero changes.
 
-#### 落地件（结论 + 指针）
-- **F1 `ato route`**（`src/atopile/cli/route.py`，注册 `cli.py`）：薄壳。`run_route_for_build`（可测核，显式路径 +
-  可注入 invoker）重解析 layout.yaml + 读 `.layout_ir.json`，驱动 `run_route_stages`，写 `.route_report.json`；
-  `--up-to` 透传；缺件 loud（`UserResourceException`）。契约 `test/cli/test_route_cli_contract.py`。
-- **F2 router 诊断暴露**（submodule `vendor/KiCadRoutingTools`，分支 `feat/f2-json-diag`，父仓 gitlink 已 bump）：
-  新纯模块 `diag.py:failed_net_diagnostics` 把 `RoutingState.net_history` 重塑成逐失败 net 记录
-  `{net_name, reason, blocked_by, history}`；`route.py`/`route_diff.py` 在 summary 后打**独立** `JSON_DIAG:` 行
-  （区别于 `JSON_SUMMARY`，不污染 runner rollup）。runner 侧 `StageResult.diag` + `default_subprocess_invoker`
-  抓 `JSON_DIAG` → `route_report.json`。契约 `test_route_diag_contract.py`。
-- **F3 bridge② 反查引擎**（`src/faebryk/libs/kicad/layout_ir_resolve.py`，纯 venv）：`LayoutResolver` 反转 IR =
-  footprint_uuid→addr / pad_uuid→(addr,pad) / net→endpoints（复用 `ir["nets"]`）/ coord→room（rule-area ring
-  point-in-polygon，最小面积最具体优先）；`room_polygons_from_pcb` 从受管 zone 抽 ring。契约
-  `test/libs/kicad/test_layout_ir_resolve_contract.py`。
-- **F4 `ato diagnose` → `diagnostics.json`（核心）**（`diagnostics.py` 纯 builder + `cli/diagnose.py` 壳）：聚合
-  route_report 失败（含 F2 cause）+ `run_drc()` violations + 重读板（G3 真 via/几何总数），经 F3 关联回
-  ato 地址/room/stage，产 finding（kicad-happy `make_finding` schema 内嵌于 `diagnostics.py` + §F 字段
-  stage/room/ato_path/reason/blocking_nets/failed_endpoints/…）；`sort_findings` 确定序；DRC 对**自动 pre-route
-  基线**（`paths.layout`，route 写入 workdir 不覆盖它）分新 vs 既存。契约 `test_diagnostics_contract.py` +
-  `test/cli/test_diagnose_cli_contract.py`。
-- **F5 F-drc-rules**（`board_rules.py:generate_project_rules`，schema `layout_plan.Board.net_classes`/`NetClass`）：
-  `board.net_classes`（clearance/track_width/via/diff-pair + 指派 ato nets）→ `C_kicad_project_file.net_settings`
-  （classes + 逐 net `netclass_patterns`，net 经 bridge② 解析）。`generate_layout_plan` 写到 `paths.kicad_project`
-  （与板同 basename，kicad-cli 自动关联）。**实测 kicad-cli DRC 认这些类**（5mm clearance → 0→36 违规，rc=0 无崩）。
-  契约 `test_board_rules_contract.py`。
-- **F6/F7/F8 pour/keepout/silk**（`board_features.py:generate_board_features`，schema `Pour`/`Keepout`/`SilkText`）：
-  `board.pours`（铜 Zone fill=yes，绑真 net via bridge② / net-0 loud）、`board.keepouts`（ZoneKeepout 限制，
-  **无 net/无 placement → 结构上规避 SEGFAULT footgun**）、`board.silk`（gr_text）。`generate_layout_plan` emit，
-  跨重建幂等（受管 zone 按名前缀 `fbrk_pour_`/`fbrk_keepout_` 先删；silk 按 (text,pos,layer) 精确去重）。
-  三者 kicad-cli upgrade rc=0；实测 build×2 不增殖。契约 `test_board_features_contract.py`。
-- **e2e 闭环**（`test/end_to_end/test_diagnose_loop_build.py`，`@slow @not_in_ci @skipif(no kicad-cli/py3)`）：
-  build(examples/layout_reuse) → `ato route` → `ato diagnose` → 断言 `diagnostics.json` 把失败/DRC 关联到
-  ato_path/room、分清新旧 DRC。**实测绿**（39 DRC findings、10 new vs 自动基线）。
+#### C→E/F boundary facts (outside the source——the router is not inside atopile, must read for §E/§F)
+Real router = consumer-oracle (empirically verified system python3, `grid_router.so` not in this venv):
+1. **Two entries, different key sets**: single-ended net → `route.py:batch_route` (`JSON_SUMMARY` keys
+   `routed_single`/`failed_single`); differential pair (net with `_P/_N`, `P/N`, `+/-`) →
+   `route_diff.py:batch_route_diff_pairs` (`routed_diff_pairs`/`failed_diff_pairs`). Shared keys
+   `failed`/`successful`/`total_vias`. **Feed the wrong entry → no `JSON_SUMMARY` printed**.
+2. **Only routes unconnected nets**: an already-connected net → `failed=1` with no output, or "nothing to route" prints no summary.
+   Hence there is no "preset via as a soft waypoint to detour" mode——a forced via is "respected" = it has already made the net connected and the router doesn't touch it;
+   the C2 copied segment likewise (ordinary already-connected copper) is auto-preserved, **§E does not need to lock/preserve §C preset geometry**.
+3. **`total_vias` only counts router-added vias**, not preset forced vias——the surviving/on-board total must **re-read the output board**.
+4. **User.* is not read by the router by default** (reads copper layers only)——but the router has native switches
+   (`vendor/KiCadRoutingTools/routing_config.py:117-123`): `guide_corridor_enabled` (reads the User.1 guide line,
+   pulls the net along the corridor) + `keepout_enabled` (reads the User.2 keepout polygon, blocks traces). Hence §C's User.1 guide
+   / §D's User.2 room boundary **can be explicitly enabled by E1 as a first-class routing constraint** (off by default, on per stage, see §D/§E1)——
+   not merely a visual artifact. Do not confuse these two paths with §D's placement rule area (KiCad's own grouping/DRC, a different mechanism).
+- **Design decision (dual entry is not a defect)**: two entries = two real algorithm sets sharing the same Rust grid kernel
+  (`grid_router:GridObstacleMap/GridRouter`). Differential = `PoseRouter` pose method + `diff_pair_gap`
+  constant spacing + `centerline_setback` (auto fanout/spread near pads, corresponding to decoupling taps / connector
+  pitch) + `fix_polarity` + `length/time_matching` + `gnd_via`; single-ended = `route_multipoint_main`/
+  `power_nets`. Industry convention (Altium also splits differential/single into two routers), **not a bug**. **Do not merge the algorithms (merging = regression, losing
+  coupling/polarity/length-matching/pose/centerline)**; mode is explicitly declared by `route_stages` (§D/§E1).
+- the E3 thin slice only verifies the **differential-pair** schema (`test/exporters/pcb/layout/test_router_smoke_batch_route.py`, shells out to system py3 to run `vendor/KiCadRoutingTools`);
+  the single-ended schema awaits §E3 to fill in.
 
-#### 缺口闭合（G1/G2/G3）
-- **G1**（"为何"只在 stdout 被丢）→ F2 `JSON_DIAG` 暴露 + runner 捕获。
-- **G2**（无 uuid→地址）→ F3：footprint/pad uuid 反向 best-effort；track/via/zone uuid **从不进 build 期 IR**，
-  按 net 名 + 坐标命中兜底。
-- **G3**（`total_vias` 只是新增）→ F4 `_default_board_reader` 重读 `.kicad_pcb` 取 `board_vias`/`board_segments`。
+### §C3 room de-group-ification (room = footprint sheetname) [✅ 2026-06-15]
+Decision: room is no longer = KiCad group. atopile **creates zero/deletes zero groups** (user groups persist by construction, the A4 failure mode disappears);
+room carrier = footprint `sheetname`(+`sheetfile`) (value = ato address prefix, derived by `_get_room_name`; **does not write `path`**——
+KiCad owns and rewrites it, fact 10); route/via/zone ownership = internal net; rule area goes through `(placement (sheetname))`, no zig change.
+Protocol + interface delta = code SSOT:
+- contract `test/exporters/pcb/layout/test_room_migration_contract.py` (module docstring = full protocol + ratchet);
+  e2e `test/end_to_end/test_room_migration_e2e.py` (groups-created=0 / pull-semantics determinism).
+- implementation `layout_ir.py` (`rooms` derivation) + `layout_sync.py` (`sync_rooms`/`pull_room_layout`/`_clean_room`,
+  deletes `_is_managed_group`) + `room_ops.py` (`copy_room_layout` copies only this room) + `build_steps.py`/`cli/kicad_ipc.py`.
+Conclusions not visible in the source:
+- committed fixtures still contain old groups, but **no test reads group as a room source anymore**: the former one-time migration proof
+  `test_C3_1_corpus_groups_are_address_prefix_recoverable` (reads old groups from the pcb and compares against address prefixes) **is retired**
+  (`test_room_migration_contract.py` comment records its removal——keeping it would perpetuate the ato→group coupling that C3 abolished); the in-service
+  `test_C3_1_inline_room_equals_address_prefix_grouping` only reads the sheetname-derived `ir['rooms']`. A board containing groups
+  is covered only by the parser corpus (`test_fileformats_corpus`) as opaque user content round-trip.
+- `transformer._add_group`/`is_marked`/`gen_uuid(mark)` are deleted (§G uuid opaque)——atopile has no ato→group mapping.
+- cascade: §B I7→I7′ (IR drops `groups{}`), §C room_ops follows the new IR shape (contract pins C3.6).
 
-#### 诚实记限制（落地实记）
-- **e2e 抓出三个单测全漏的真集成 bug**（已修，见 commit）：① runner shell router 用相对板路径但 cwd=router_root →
-  绝对化（invoker 负责跨 cwd 边界）；② `shutil.which("python3")` 在 venv 上 PATH 时取到 venv python（无 rust ext）→
-  新 `_system_python3` 跳过 venv 前缀解释器；③ F3 对重复 uuid 原本 raise，但 **layout_reuse 复用实例合法地重复
-  uuid** → 改为 ambiguous→None（降级到坐标/net 关联），非 corrupt。
-- **对抗评审抓出**（已修）：multipoint 路由失败原只在 summary、被 `if diag/else` 分支吞 → `build_diagnostics`
-  无条件收割 `failed_multipoint` 成 ROUTE-FAIL finding，并加 `route_failures_unaccounted` 显式暴露任何残余差额；
-  显式 `--baseline` 不存在原静默忽略 → 改 loud。
-- uuid→地址仅 footprint/pad（重复即 ambiguous）；track/via/zone DRC 项按坐标命中 + net 名、非 uuid。
-- blocking cause = router net_history `top_blockers`（net 名 + reason，非 per-blocker cell 数；后者只在布线 loop 内、
-  未入 net_history——暴露其需侵入式 loop-site 捕获，暂缓）。
-- DRC `nets` 从描述文本抽（kicad-cli 无结构化 net 字段）——best-effort。
-- 板 authoring：首交付 = 文本→板 emit + 缺失 loud；DRC 规则对 KiCad 完整规则文法的覆盖是增量。
-  F-silk 幂等仅对**未改**文本（gr_text 无受管标记槽；改文本/移位会留旧孤本，需手清）。
+### §D layout.yaml loading + KiCad placement rule area (D1–D4) [✅ 2026-06-16]
+layout.yaml = layout-intent source (a peer source to the .ato circuit source / .kicad_pcb geometry source). D1 path config → D2 parse-and-validate into `LayoutPlan`
+→ D3 lands a placement rule area per room → D4 build step wiring + produces `<t>.layout_plan.json` (for E1).
+**Architecture (declarative rooms + ordered route_stages pipeline, why yaml not .tcl) = the "FORM" section of the `layout_plan.py` module docstring (SSOT).**
+Implementation:
+- `src/atopile/config.py` (`BuildTargetPaths.layout_config`, D1).
+- `src/faebryk/exporters/pcb/layout/layout_plan.py` (`LayoutPlan/Room/RouteStage/GridRouteOverride` +
+  `load_layout_plan`/`resolve_nets`, D2; module docstring = full protocol).
+- `src/faebryk/exporters/pcb/layout/rule_area.py` (`generate_rule_areas`, D3).
+- `src/atopile/build_steps.py` (`generate_layout_plan` step, hooked into `generate_default`, D4).
+Contracts: `test/test_config.py` (D1), `test_layout_plan_contract.py` (D2), `test_rule_area_contract.py` (D3),
+`test/end_to_end/test_layout_plan_build.py` (D4).
+Conclusions not visible in the source:
+- **`GridRouteOverride`'s oracle = the union of the two router entries' parameters, NOT `GridRouteConfig`** [independently verified correction 2026-06-16]:
+  `route.py:batch_route`/`route_diff.py:batch_route_diff_pairs` take flat kwargs, and only internally build `GridRouteConfig`
+  and rename (`impedance`→`impedance_target` etc.). Mode-exclusive keys (`guide_corridor_*` single-ended /
+  `diff_pair_*`·`fix_polarity`·`gnd_via_*` differential) are **rejected by mode during D2 parse**, E1 does not re-validate. Drift pin =
+  `test_layout_plan_contract`'s union drift guard + mode-consistency self-test (AST takes the real router signature, drift goes red).
+- Two real defects found and fixed during implementation: ① placement writing `source_type`/`source` → **SEGFAULT KiCad loader** (mis-built memory/
+  protobuf fields, the file syntax has no such token; see the "key facts" placement item + regression `test_generated_placement_has_no_source_type`);
+  ② an unknown room module with explicit origin/size once **silently produced no rule area** (S5a violation) → changed so both geometry modes are loud
+  (regression `test_unknown_room_module_is_loud`).
+- D's artifacts = E/F inputs: `<t>.layout_plan.json` (resolved route_stages + room metadata) for E1; the on-board rule area serves
+  KiCad placement/DRC + F-diag hit-testing. E1 expands `RouteStage.config` verbatim into entry kwargs (translation happens inside the router).
 
-### 旁支任务（可并行 / 不挡关键路径；故意不编 E/F 序号）
-与 §E/§F 无硬依赖、可择机做；保留各自原标识（不塞进 E/F 编号，以免假称在关键路径上）。
+### §D-Tier2 bundle bus-transport (mixed single/diff schema + geometry) [✅ bucket ① 2026-06-20; D-side build integration 2026-06-25]
+bundle = a routing-intent unit of ordered lanes (single/diff) + segmented trunk + breakouts at both ends (flat `route_stages` cannot express it).
+Bucket ① (in-D model + geometry SSOT + build injection) landed; bucket ② (`batch_route_bundle` implementation + breakout fanout) = **§E-Tier2**
+(contract already strict-xfail frozen, implementation see unfinished §E-Tier2; full protocol = `test_bundle_contract.py` module docstring SSOT).
+Pointers: `layout_plan.py` (`BundleStage`/`SingleLane`/`DiffLane`/`Trunk`/`Breakout`/`RipUpBudget`, module docstring = protocol),
+`bundle_geometry.py` (`cross_section_offsets` geometry SSOT + `bundle_artifact`), `build_steps.generate_layout_plan`
+(a bundle stage calls `bundle_artifact` to inject the computed offsets, a plain stage goes through model_dump); contract `test_bundle_contract.py`
+(bucket ① all green, bucket ② strict-xfail awaiting E-Tier2); e2e `examples/sata_bundle` + `test/end_to_end/test_bundle_build.py`.
+Conclusion outside the source: the differential pair is never dissolved throughout (L1 intrinsic coupling), the bundle only adds ordering + lane spacing at the outer layer; the transition-segment offsets at both ends are fixed, only E searches for morph.
 
-- [ ] **P0.2-S7 flag-day 终验剩余**（写 v10 代码已落 + 单测/e2e determinism 已绿；**需可跑全量 example build 的环境**——
-  本仓库 sandbox 缺 router scipy 等 build 依赖，无法在此验，故未做、不可盲改已提交输入板）：
-  - examples/fixtures 的 v9 输入板（esp32_minimal / layout_reuse·sub / led_badge×3 / test-project×2 / faebryk example
-    共 8 块；sata_bundle 已是 v10）一次性 v9→v10 升级提交（load+dump 即升级，`kicad-cli` 在场）；build→build→diff 确认
-    增量稳态（事实 6，复用 `test_group_determinism.py`+`semantic_view`，现仅覆盖 layout_reuse，需小幅参数化到其余）。
-    **勿动** `fileformats/kicad/v8|v9` 语料板（它们是有意保留的旧版只读输入）。
-  - BOM / 制造产物 / DRC smoke：BOM+DRC 已在默认 build 跑、mfg-data 在 `all` target；缺的只是一个断言
-    `.bom.csv`/`.bom.json`/`.gerber.zip`/`.pick_and_place.csv` 产出且 BOM 非空的 smoke e2e（复用现有 `_build` fixture）。
-- [ ] **D5 component_class placement**（component_class 源的 placement rule area；与 sheetname 源并存）：
-  - **token 已实测安全（2026-06-28）**：`(placement (enabled yes) (component_class "X"))` 经 `kicad-cli pcb upgrade --force`
-    加载 rc=0、逐字回写——是合法 KiCad-10 文法，**不属** `source_type`/`source` 的 SEGFAULT 类（那两个是错建的内存/
-    protobuf 字段、文件无此 token、写出即崩，见 §D 结论 + 回归 `test_generated_placement_has_no_source_type`）。
-  - 余下实现（5 件，非快速 fact&pointer）：① 给 zig `ZonePlacement` 加 `component_class: ?str = null` 字段（镜像现有
-    `sheetname`，自动 build-on-import 重编，`E_zone_placement_source_type` 枚举已有该成员）；② layout.yaml/`Room` 加
-    component_class 源字段；③ `rule_area` 按源 emit `(component_class "X")`；④ **写 `.kicad_pro` 声明 class 成员归属**
-    （atopile 现不写 .kicad_pro——`set_kicad_netlist_path_in_project` 是死代码，模型 `C_kicad_project_file` 在；属净新通道）；
-    ⑤ 加 `(component_class)` 往返 + kicad-cli ingest 测试。
+### §D-Tier3 self-contained placement + board-level `board` section [✅ bucket ① 2026-06-26; bucket ② TS-AUTH-A 2026-06-28]
+In a generative / agent flow, `.ato` (circuit) + `layout.yaml` (layout) must be self-contained and the single source of authority; `.kicad_pcb` is a derived artifact,
+reuse is only an optional optimization, and must not be the sole channel for any fact ("to avoid the GUI you must first use the GUI" = design defect). Landed:
+- placement: `Placement`/`resolve_placement` (room-relative resolution + `absolute` board-absolute escape hatch)/`resolve_component_pose`
+  (placements>reuse priority; text value overrides, absent falls back to reuse, neither → loud), coordinate system = room-relative (block reusable).
+- room geometry: `Room.polygon` (≥3 points, non-self-intersecting, dependency-free self-intersection detection) + rotation (CCW around the first point) + per-room layers
+  wired into effect (`rule_area._room_boundary`/`_rotate`; fixed the S5a hazard of "declared but silently ignored by D3"——either it takes effect or the field is removed).
+- `board` section: `BoardOutline` (origin/size or polygon)/`Stackup`/`StackupLayer` + pure functions `stackup_layers`/`outline_bounds`;
+  impedance→stackup **hard dependency** plan-level validation (no stackup → loud, pinning `route.py:256-258` silently falling back to fixed track width = impedance out of control).
+- **single layer-count authority (board side closed the loop, TS-AUTH-A green)**: `config._stackup_copper_names`/`_copper_layer_table` derives the fresh board's copper layer list from
+  `stackup_layers(board.stackup)` (KiCad numbering F.Cu=0/inner 1../B.Cu=31), killing
+  the old 2-layer hardcode in `config.py`——board and router layer counts share one source, physically no longer forkable.
+Pointers: `layout_plan.py`, `rule_area.py`, `config.py` (`ensure_layout`/`_stackup_copper_names`/`_copper_layer_table`);
+contracts `test_placement_contract.py` (TP/TR), `test_board_section_contract.py` (TB/TS/TS-AUTH-A green, TS-LM′ single-authority lock).
+Conclusions outside the source (still unfinished, belong to §E): **routing-side** layer-count authority (E1 passes `stackup_layers` as `layers` to the router, does not eat the 4-layer default) =
+**TS-AUTH-B = §E1**; pure-text no-reuse end-to-end board build = **bucket ③ = §E DoD**; reuse-only board-level net-class/pour/keepout/silk
+(missing must be loud, no default) = **§F** (F-drc-rules/F-fill/F-keepout/F-silk).
 
-### G. 不做 / 暂缓
-- ❌ **hack uuid = 绝对禁止**（不可逾越原则）：uuid 是 128bit 不透明 id，atopile **既不往里写
-  任何非标内容、也不从里读任何 flag**。旧 `gen_uuid(mark="FBRK")` 写 + `is_marked` 读的 FBRK
-  uuid 侧信道**已从代码彻底删除**（`fileformats.py gen_uuid` 无 mark 参数、纯 uuid4；
-  `transformer.py` `gen_uuid`/`is_marked`/`_add_group` 已清）。provenance/所有权只走合法载体：
-  footprint `atopile_address` property（受管判定）+ `FBRK:notouch` fp_text（用户锁）。
-  *（这是原"遗留问题 3 gen_uuid 变长-mark 溢出"的终局：根因 = 把元数据塞进 uuid，根治 = 不塞，
-  故整条从遗留问题移到此处作为常驻不变量。）*
-  - **推论（不可 desire 字节等价）**：uuid 不透明 ⟹ 两次 build 可字节不同而语义相同 ⟹ **任何
-    断言字节等价的测试都是范畴错误，必须改语义等价**（`semantic_view`：位置+net 名连通性+结构，
-    剔 uuid/net 编号）。已改 `test_group_determinism.py` + `test_room_migration_e2e.py::test_C3_3`
-    三处 byte 断言。**再推论**：生成态 `.kicad_pcb` 不必作字节锚入库——CI 可两次从零构建比 semantic；
-    仅**输入态**布局（`examples/layout_reuse/.../sub.kicad_pcb`）+ parser 语料样本仍入库。
-    残留：`semantic_view` group 成员仍按 uuid 表达，完整 oracle 应改按成员地址（未排期）。
-- ❌ fork KiCad 10；❌ 旧 SWIG 绑定；❌ **v9 写出/双向方言 shim**（v10-only 决策）；
-  ❌ 盲随机语法 fuzz（危险类 bug = "合法文件静默误绑"，由 corrupter + property 测试覆盖）；
-  ❌ KiCad 原生 design block 库；❌ 调 GUI Repeat Layout。
-- ⏸ clean-checkout 可重现（增量稳态已够，事实 6）；⏸ 向 KiCad 上游提 DRC JSON 增强补丁；
-  ⏸ 改 `.ato` 语法（布局走 sidecar）。
-- ⏸ **§P1+ GUI 高级布线构造保真**：teardrop / generated 蛇形等长 / via padstack 的 v10 子键
-  形变补全（schema 有 KiCad 9 形模型，缺 v10 验证）；现由 S5a 响亮警告兜底、演示脚本回避。
-  验收 = 从"警告集"挪进"保真集"。
+### Tier0 corridor-as-data [✅ 2026-06-28]
+A single stage's `corridor: [[x,y],...]` text field → build draws a User.1 polyline + sets `guide_corridor_enabled`, zero router
+changes (reuses the router's native guide reader, §C boundary fact 4); soft pull, not a hard checkpoint. Pointers: `corridor.py` (`draw_corridors`,
+idempotent), `RouteStage.corridor` (`layout_plan.py`, single-only + ≥2 points → loud), `build_steps.generate_layout_plan`;
+contract `test_corridor_contract.py`.
 
-## 遗留问题（未完成 / 硬化项）
-1. **net 名漂移**（自动编号 `unnamed[N]`，事实 8）：v10 下名字 = 唯一键，漂移 = 几何归属漂移。
-   已焊进 B 的 I4（无稳定地址 net 响亮标记、不可引用）+ 验收"稳态重建下全部 net 名字节稳定"。
-2. 是否向 KiCad 上游提 DRC JSON 增强补丁（见 §G）。
-3. **`_generate_net_map` 并列判据死代码**（`layout_sync.py:183`，函数定义 `:116`）：
-   `mapping_counts[src][tgt] > max(values())` 自增后恒 false → 注释写"最频映射"实为"首次胜"。
-   当前 pull 迭代序确定故未发病，歧义映射下是休眠隐患。修法：并列取字典序最小 tgt + 迭代按
-   src_addr/pad 排序。**注**：B/C 的消费者-oracle 以现役 `_generate_net_map` 为真值；此处硬化改
-   行为须同步更新 oracle 期望（两者绑定）。
+### route_stage `name` unique [✅ 2026-06-28]
+stage-name uniqueness loud validation = the prerequisite for `--up-to` breakpoints addressing by name, and prevents `resolve_nets` silently overwriting a same-named stage. Pointers:
+`LayoutPlan._validate_unique_stage_names` (`layout_plan.py`); contract
+`test_layout_plan_contract.py::test_duplicate_stage_name_is_loud` (+ positive control `test_distinct_stage_names_pass`).
+
+### placements → consumed by transformer at build time [✅ 2026-06-28]
+The pure-function authority `resolve_component_pose` (text>reuse priority, landed in §D-Tier3) is now wired into build: `apply_placements` moves each
+managed footprint hit by a text placement (matched by `atopile_address` property) to the resolved pose, **overriding** transformer's
+automatic 10mm grid spread (`transformer.py:176`/`:2013-2080`)——room-relative composes through room origin, `absolute` lands verbatim,
+rotation+side apply through transformer's flip-aware `move_fp`; hitting a nonexistent footprint = loud. Called inside `generate_layout_plan` before
+`layout_ir`, so the room-derived bbox reflects final positions. Pointers: `placement.py` (`apply_placements`/`_room_for`, room =
+the room with the longest prefix of the component address), `build_steps.generate_layout_plan`; contract `test_placement_apply_contract.py` (PA1-6).
+
+### §E1 route runner (route_stages → routing calls + route_report.json) [✅ 2026-06-28]
+`layout_plan_runner.py`: pure `build_invocations` (route_stages → `StageInvocation` list, zero subprocess / zero router import)
++ `run_route_stages` (drives the invoker per stage, aggregates, writes `route_report.json`) + `default_subprocess_invoker` (shells to
+system python3 to run the router, parses `JSON_SUMMARY`, early-return=None). Landed contract: dispatch by stage type (single→`route.batch_route` /
+diff→`route_diff.batch_route_diff_pairs`, union tag precedes `RouteStage.mode`); config expanded verbatim (only explicitly-set, the rest go to
+router defaults, no None leaks, no re-validating the mode keys D2 already validated); **layer-list single authority** = `stackup_layers(board.stackup)`, never eating
+the `route.py:230` four-layer default (**turns TS-AUTH-B green**); missing board/stackup or per-stage `config.layers` are all loud (single authority); cross-stage board accumulation (prior copper = free hard obstacle, no lock added); tolerates missing `JSON_SUMMARY` (early-return = zero routing, no KeyError); aggregates common
+scalar keys (including `total_time`/`total_iterations`) by summing from the summary dict, per-type lists bucketed; `--up-to <name|1-based index>`
+breakpoint (writes partial board + report, out-of-range/unknown → loud, a bundle outside the slice is not reported, `report.up_to` normalized to the stage name).
+Pointers: `layout_plan_runner.py`, contract `test_layout_plan_runner_contract.py` (R1-R14 pure + E15/E16/E17 e2e;
+bundle dispatch R2/R2b/R2c/R2d/R2e + bundle e2e E18 see below "§E-Tier2"); the TS-AUTH-B ratchet probe re-points to the runner
+(`test_board_section_contract.py::_e1_passes_stackup_to_router`, previously pointed to build_steps——routing is not a build step, corrected).
+Conclusions outside the source (honestly recording limitations):
+- E1 is a **library**: currently consumed by e2e tests, the CLI `ato route` goes through §F (routing is not an `ato build` step, so it does not enter the build pipeline).
+- **bundle dispatch** (`batch_route_bundle`) = **§E-Tier2 landed** (see below), E1 expands via `_bundle_invocation` the
+  `bundle_artifact` into a geometry payload, member names resolved via bridge②, breakout `at`→`part`+kicad order.
+- e2e (E15/E16/E17/E18) gated on system python3 + router board; **this sandbox has scipy present, actually ran** (LVDS 2-layer board, diff pair
+  actually routed through `successful>=1`, bundle actually laid 3 members' copper); no single-ended fixture board, so E15 routes one trace of a diff pair through the single-ended entry and tolerates the early return.
+- **per-stage layer subsetting = intentional non-goal** (single authority): per-stage `config.layers` is loudly rejected; if per-stage layer limiting is ever needed it will be discussed separately.
+
+### §E-Tier2 bundle routing (`batch_route_bundle` + runner dispatch + e2e) [✅ 2026-06-29]
+`vendor/KiCadRoutingTools/route_bundle.py:batch_route_bundle`: turns the frozen bundle contract (segmented trunk + ordered member offset
+table + 2 breakouts) into a **parallel bus**——one offset track per member along the centerline. trunk = **deterministic geometry, zero A***: the cross-section
+is **repacked** by each vertex's `spacing` (`_repack_offsets` mirrors `bundle_geometry.cross_section_offsets`), member width and each
+diff pair's intra gap constant (bundle-global invariant); rigid segments unchanged, transition segments morph but **L1 coupling does not disperse** (only touches inter-lane
+spacing, never touches the intra-pair gap). Member input offset is taken as a trusted entry profile, per-vertex offset = input + repack DELTA (rigid = input verbatim,
+transition = plus morph increment, P/N same increment so gap constant). breakout fanout (pad→trunk end) runs only when a board is present. Per-member routed/blocked results +
+stdout `JSON_SUMMARY` (including `members[*].polyline`/`routed_members`/`failed_members`/scalar keys). geometry-only mode (no
+input_file) = pure python, no rust / no parser, so the D-Tier2 contract drives it directly; board mode lazily imports parser/writer.
+Runner side: `build_invocations` dispatches the bundle via `_bundle_invocation` (entry/module=`route_bundle`/`batch_route_bundle`,
+config expanded verbatim, layer list←stackup, cross-stage board accumulation); `default_subprocess_invoker` selects the calling convention by stage type (bundle =
+geometry-driven, trunk/members/breakouts in KW, input/output as keyword arguments).
+Pointers: `route_bundle.py`, `layout_plan_runner.py:_bundle_invocation`; contract `test_bundle_contract.py` (T-B1 AST drift pin /
+T-B2 result-shape / T-B3 parallel bus / T-B3b offset→track mutation self-check / T-B4 rigid diff coupling / T-B6 transition morph pins SSOT + rigid segment does not
+morph + intra-pair gap constant) + `test_layout_plan_runner_contract.py` (R2/R2b dispatch / R2c config / R2d layer conflict / R2e aggregation /
+E18 e2e: LVDS board actually runs, route_report by_type['bundle'], board actually gains copper).
+Conclusions outside the source (honestly recording limitations):
+- **breakout fanout = direct-connect** (a straight segment pad→the nearer trunk end), **not** obstacle-aware A*; breakout `order` permutation and
+  `spacing_overrides` are **not yet consumed by the geometry** (only schema/validation exist); crossing localization/fanout optimization = later.
+- **per-member failure paths are not exhaustively tested**: trunk geometry always succeeds ⇒ routed=True; when a board is present but a pad is missing, `blocked` records a string but does not flip routed=False,
+  and does not count as failed. The genuine failed-count path (invalid geometry) is not triggered by the fixture.
+- **transition morph fidelity**: using the "input offset + repack DELTA" model, rigid segments exact, transitions repacked per cross_section_offsets semantics (intra-pair
+  gap constant); a winding centerline's vertex normal uses the angle bisector of adjacent segments (straight trunk exact, sharp bend miter approximation).
+
+---
+
+## Unfinished tasks
+
+**This section top-to-bottom = execution order** (chapter letter = critical-path order). Completed prerequisites (C3+D / D-Tier2 buckets ①② / D-Tier3 bucket ①·TS-AUTH-A /
+Tier0 corridor / stage-name unique / placements→transformer / **§E1 runner+TS-AUTH-B+`--up-to`** /
+**§E-Tier2 bundle routing+e2e**) all see "Completed" above.
+**Remaining critical path = §E DoD (bucket ③ pure-text self-contained board-build e2e) → §F**.
+
+Under contract-first the downstream ratchet's contract stays in its respective D test file, and the implementation **lands in place in §E**, so **no separate D residual block is listed**:
+bucket ② = **§E-Tier2 ✅**; **TS-AUTH-B (router layer list) ✅ lands in §E1**; bucket ③ pure-text e2e = **§E DoD** (the routing half is already proven by the
+E18 bundle e2e; the self-contained board-build half remains).
+
+Side branches genuinely not on the critical path (P0.2-S7 final acceptance, D5 component_class) are collected into the "Side tasks" section **after** §E/§F, **deliberately not numbered in the E/F
+sequence** (numbering them would falsely claim they are on the critical path).
+
+### E. [needs §C + §D] KiCadRoutingTools fork
+E1 needs §D's plan + on-board rule area, and uses §C1's forced via as a routing-stage capability. E3 is built first in parallel throughout.
+**E1 dispatch is designed from the start around the three stage types "single / diff / bundle"** (fill in the bundle implementation after the D-Tier2 contract freeze, don't change it after the fact).
+- [x] **E1** `layout_plan_runner.py` [✅ 2026-06-28, see "Completed §E1" above]: route_stages → routing calls dispatched by stage type
+  (single→`batch_route` / diff→`batch_route_diff_pairs` / bundle→`route_bundle.batch_route_bundle` see E-Tier2) +
+  `route_report.json`; config expanded verbatim, layer list ← `stackup_layers` (**turns TS-AUTH-B green**), `--up-to` breakpoint, cross-stage
+  board accumulation without locking, tolerates missing `JSON_SUMMARY`, aggregates by type. Contract `test_layout_plan_runner_contract.py`.
+- [x] **E-Tier2 `batch_route_bundle` + breakout fanout + e2e** [✅ 2026-06-29, see "Completed §E-Tier2" above]: parallel-bus
+  deterministic geometry (per-vertex repack = `cross_section_offsets` mirror, rigid segments unchanged/transition morph, diff intra-pair gap constant does not disperse L1) +
+  direct-connect breakout fanout (pad→trunk end when a board is present) + per-member routed/blocked + `JSON_SUMMARY`; runner `_bundle_invocation`
+  dispatch + `default_subprocess_invoker` bundle calling convention. Contract `test_bundle_contract.py` T-B1..T-B6 +
+  `test_layout_plan_runner_contract.py` R2/R2b/R2c/R2d/R2e + E18 e2e (LVDS board actually runs).
+  - Limitations (honestly recorded, see "§E-Tier2" above): breakout = direct-connect not A*, `order` permutation/`spacing_overrides` not consumed, per-member failure
+    paths not exhaustively tested, sharp-bend centerline normal miter approximation. Crossing localization/fanout optimization = later as needed.
+  - **E2 in-stage rip-up knob = won't do (decided by the user 2026-06-29: unnecessary, duplicates "key facts" 16)**: cross-stage prior copper is already the router's free unrippable hard obstacle (priority expressed by stage order), the bundle/pipeline's "front line occupies, later line detours" is already a hard guarantee.
+    The `BundleStage.rip_up` (`RipUpBudget`) schema is already present (landed in D-Tier2); if a stage-internal "almost no rerouting" is ever truly needed, then wire
+    `max_rip_up_count`/`ripped_route_avoidance_cost`/`_radius` into config——no need to create a new cross-stage lock.
+- [ ] **E3** independent regression bench (built first in parallel throughout = §E's S0 scaffold): no KiCad install needed, precompiled Rust binary +
+  built-in test board + numpy/scipy/shapely; failure injection + report schema validation.
+  - the minimal slice was pulled forward to §C [✅]: `test/exporters/pcb/layout/test_router_smoke_batch_route.py`
+    pins the differential-pair C→E interface (`return_results=True` 4-tuple / `results_data` geometry fields / `JSON_SUMMARY`
+    schema). The full E3 bench (failure injection + multi-board matrix) still awaits here.
+  - **to fill in: JSON_SUMMARY schema validation for single-ended `route.py:batch_route`** (boundary fact 1)——the thin slice only verifies
+    the differential-pair key set, single-ended goes through `routed_single`/`failed_single`, must extend a second schema validation to prevent silent mismatch.
+- [ ] **§E DoD — bucket ③ pure-text e2e (turns the D-Tier3 bucket ③ ratchet green)**: no reuse, `board.outline` + full `board.stackup` +
+  `placements` all given as text → generate .kicad_pcb → re-read `semantic_view` to verify layer list / board outline / placement landing == plan (no
+  In1/In2.Cu ghost layers on the board). Proves `.ato`+`layout.yaml` self-contained board build, the completion criterion after §E routing lands.
+  - **the routing half is proven** (§E-Tier2 E18 bundle e2e: real board real routing + `route_report.json` + board actually gains copper); **the self-contained board-build half remains**
+    = `ato build` produces from pure text (no reuse source board) a routable .kicad_pcb with outline + full stackup (build side, heavier,
+    gated not_in_ci), decoupled from the routing runner.
+
+### F. Diagnostics closed loop + board-level rule textualization ✅ 2026-06-30 (F1–F8 all landed, e2e closed loop + three rounds of adversarial review)
+
+Capstone chapter——the project's founding premise ("imperative feedback lives in a closed loop outside the files") is realized:
+the **build→route→diagnose→(SKILL edits layout.yaml)→rebuild** feedback closed loop is in place. One routing run + KiCad DRC
+are aggregated into a structured `diagnostics.json` indexed by ato address; board-level authoring (DRC rules / pour / keepout / silk)
+is textualized, making DRC "green" reflect design intent rather than KiCad defaults. **Conclusion + code pointers below; invariants have code/docstring as SSOT.**
+
+#### Landed items (conclusion + pointers)
+- **F1 `ato route`** (`src/atopile/cli/route.py`, registered in `cli.py`): thin shell. `run_route_for_build` (testable core, explicit paths +
+  injectable invoker) re-parses layout.yaml + reads `.layout_ir.json`, drives `run_route_stages`, writes `.route_report.json`;
+  `--up-to` passthrough; missing artifact → loud (`UserResourceException`). Contract `test/cli/test_route_cli_contract.py`.
+- **F2 router diagnostics exposure** (submodule `vendor/KiCadRoutingTools`, branch `feat/f2-json-diag`, parent-repo gitlink already bumped):
+  the new pure module `diag.py:failed_net_diagnostics` reshapes `RoutingState.net_history` into per-failed-net records
+  `{net_name, reason, blocked_by, history}`; `route.py`/`route_diff.py` print an **independent** `JSON_DIAG:` line after the summary
+  (distinct from `JSON_SUMMARY`, does not pollute the runner rollup). Runner side `StageResult.diag` + `default_subprocess_invoker`
+  grabs `JSON_DIAG` → `route_report.json`. Contract `test_route_diag_contract.py`.
+- **F3 bridge② reverse-resolve engine** (`src/faebryk/libs/kicad/layout_ir_resolve.py`, pure venv): `LayoutResolver` inverts the IR =
+  footprint_uuid→addr / pad_uuid→(addr,pad) / net→endpoints (reuses `ir["nets"]`) / coord→room (rule-area ring
+  point-in-polygon, smallest-area most-specific first); `room_polygons_from_pcb` extracts rings from managed zones. Contract
+  `test/libs/kicad/test_layout_ir_resolve_contract.py`.
+- **F4 `ato diagnose` → `diagnostics.json` (core)** (`diagnostics.py` pure builder + `cli/diagnose.py` shell): aggregates
+  route_report failures (including F2 cause) + `run_drc()` violations + board re-read (G3 real via/geometry totals), correlated via F3 back to
+  ato address/room/stage, producing findings (kicad-happy `make_finding` schema embedded in `diagnostics.py` + §F fields
+  stage/room/ato_path/reason/blocking_nets/failed_endpoints/…); `sort_findings` deterministic order; DRC against the **automatic pre-route
+  baseline** (`paths.layout`, route writes to workdir without overwriting it) splits new vs existing. Contracts `test_diagnostics_contract.py` +
+  `test/cli/test_diagnose_cli_contract.py`.
+- **F5 F-drc-rules** (`board_rules.py:generate_project_rules`, schema `layout_plan.Board.net_classes`/`NetClass`):
+  `board.net_classes` (clearance/track_width/via/diff-pair + assigned ato nets) → `C_kicad_project_file.net_settings`
+  (classes + per-net `netclass_patterns`, net resolved via bridge②). `generate_layout_plan` writes to `paths.kicad_project`
+  (same basename as the board, kicad-cli auto-associates). **Empirically verified kicad-cli DRC recognizes these classes** (5mm clearance → 0→36 violations, rc=0 no crash).
+  Contract `test_board_rules_contract.py`.
+- **F6/F7/F8 pour/keepout/silk** (`board_features.py:generate_board_features`, schema `Pour`/`Keepout`/`SilkText`):
+  `board.pours` (copper Zone fill=yes, bound to a real net via bridge② / net-0 → loud), `board.keepouts` (ZoneKeepout restriction,
+  **no net / no placement → structurally avoids the SEGFAULT footgun**), `board.silk` (gr_text). `generate_layout_plan` emits,
+  idempotent across rebuilds (managed zones deleted first by name prefix `fbrk_pour_`/`fbrk_keepout_`; silk exact-deduplicated by (text,pos,layer)).
+  All three kicad-cli upgrade rc=0; empirically verified build×2 does not proliferate. Contract `test_board_features_contract.py`.
+- **e2e closed loop** (`test/end_to_end/test_diagnose_loop_build.py`, `@slow @not_in_ci @skipif(no kicad-cli/py3)`): build(examples/layout_reuse) → `ato route` → `ato diagnose` → asserts `diagnostics.json` correlates failures/DRC to
+  ato_path/room, distinguishes new vs old DRC. **Empirically verified green** (39 DRC findings, 10 new vs the automatic baseline).
+
+#### Gap closure (G1/G2/G3)
+- **G1** (the "why" was only in stdout and discarded) → F2 `JSON_DIAG` exposure + runner capture.
+- **G2** (no uuid→address) → F3: footprint/pad uuid reverse best-effort; track/via/zone uuid **never enters the build-time IR**,
+  falls back on net name + coordinate hit.
+- **G3** (`total_vias` is only the additions) → F4 `_default_board_reader` re-reads `.kicad_pcb` to get `board_vias`/`board_segments`.
+
+#### Honestly recording limitations (recorded as landed)
+- **the e2e caught three genuine integration bugs all missed by unit tests** (fixed, see commit): ① runner shell router used a relative board path but cwd=router_root →
+  absolutized (the invoker is responsible for the cross-cwd boundary); ② `shutil.which("python3")` picks the venv python (no rust ext) when the venv is on PATH →
+  the new `_system_python3` skips venv-prefixed interpreters; ③ F3 originally raised on a duplicate uuid, but **layout_reuse's reused instances legitimately duplicate
+  uuids** → changed to ambiguous→None (downgrade to coordinate/net correlation), not corrupt.
+- **caught by adversarial review** (fixed): multipoint routing failures were originally only in the summary, swallowed by the `if diag/else` branch → `build_diagnostics`
+  unconditionally harvests `failed_multipoint` into a ROUTE-FAIL finding, and adds `route_failures_unaccounted` to explicitly expose any residual difference;
+  an explicit `--baseline` that does not exist was originally silently ignored → changed to loud.
+- uuid→address is footprint/pad only (a duplicate is ambiguous); track/via/zone DRC items are by coordinate hit + net name, not uuid.
+- blocking cause = router net_history `top_blockers` (net name + reason, not per-blocker cell count; the latter is only inside the routing loop,
+  not in net_history——exposing it needs intrusive loop-site capture, deferred).
+- DRC `nets` extracted from description text (kicad-cli has no structured net field)——best-effort.
+- board authoring: first delivery = text→board emit + missing → loud; DRC-rule coverage of KiCad's full rule grammar is incremental.
+  F-silk idempotency is only for **unchanged** text (gr_text has no managed-marker slot; changing text/shifting leaves an old orphan, needs manual cleanup).
+
+### Side tasks (can be parallelized / do not block the critical path; deliberately not numbered in the E/F sequence)
+No hard dependency on §E/§F, can be done when convenient; each keeps its original identifier (not stuffed into the E/F numbering, to avoid falsely claiming they are on the critical path).
+
+- [x] **Agent-facing layout skill** [✅ 2026-07-02]: `.claude/skills/pcb-layout/SKILL.md`——the board-level parallel of the schematic-level `ato` skill
+  (handoff after `ato` skill Step 6). Fills the long-missing **consumer-side documentation** in "the imperative feedback closed loop needs the PCB Layout SKILL to consume `diagnostics.json`":
+  `layout.yaml` per-feature schema + `diagnostics.json` contract + **finding→remedy playbook**
+  (`ROUTE-FAIL`/`DRC-*`, forced waypoint `corridor`, stage order=priority, `config` knobs, classes layout.yaml cannot fix). Previously the agent
+  had to reverse-read `layout_plan.py`/diagnostics to change the board, counterproductive.
+- [ ] **`diagnostics.json` finding `suggestions` population** (a genuine gap found when the above skill landed): `diagnostics.py`'s finding
+  schema has a `suggestions` field but **all 3 `make_finding` sites leave it unfilled** (always `[]`), so machine-readable remedies do not exist, temporarily backstopped by skill §5
+  human reading. Remedy = under the existing contract tests, fill `suggestions=` by finding class (`ROUTE-FAIL` blocking→reorder/corridor suggestion; `DRC-clearance`→net_class
+  suggestion …), raising the closed loop from "human-read playbook" to "machine-appliable". **Must go through the 3-gate discipline** (test-first then code, mutation-verified).
+
+- [ ] **P0.2-S7 flag-day final acceptance remainder** (write-v10 code has landed + unit/e2e determinism is green; **needs an environment that can run the full example build**——
+  this repo's sandbox lacks build dependencies like router scipy, cannot verify here, so not done, must not blindly change committed input boards):
+  - the v9 input boards of examples/fixtures (esp32_minimal / layout_reuse·sub / led_badge×3 / test-project×2 / faebryk example
+    8 boards total; sata_bundle is already v10) one-time v9→v10 upgrade commit (load+dump is the upgrade, `kicad-cli` present); build→build→diff confirms
+    incremental steady-state (fact 6, reusing `test_group_determinism.py`+`semantic_view`, currently only covers layout_reuse, needs light parameterization to the rest).
+    **Do not touch** the `fileformats/kicad/v8|v9` corpus boards (they are deliberately kept old-version read-only inputs).
+  - BOM / manufacturing artifacts / DRC smoke: BOM+DRC already run in the default build, mfg-data in the `all` target; all that's missing is a smoke e2e asserting
+    `.bom.csv`/`.bom.json`/`.gerber.zip`/`.pick_and_place.csv` are produced and the BOM is non-empty (reusing the existing `_build` fixture).
+- [ ] **D5 component_class placement** (placement rule area from the component_class source; coexisting with the sheetname source):
+  - **the token is empirically verified safe (2026-06-28)**: `(placement (enabled yes) (component_class "X"))` loads via `kicad-cli pcb upgrade --force`
+    rc=0, written back verbatim——it is legal KiCad-10 grammar, **not in** the `source_type`/`source` SEGFAULT class (those two are mis-built memory/
+    protobuf fields, the file has no such token, writing them out crashes, see §D conclusion + regression `test_generated_placement_has_no_source_type`).
+  - remaining implementation (5 items, not a quick fact&pointer): ① add a `component_class: ?str = null` field to the zig `ZonePlacement` (mirroring the existing
+    `sheetname`, automatic build-on-import recompile, the `E_zone_placement_source_type` enum already has this member); ② add a
+    component_class source field to layout.yaml/`Room`; ③ `rule_area` emits `(component_class "X")` by source; ④ **write `.kicad_pro` to declare class-member ownership**
+    (atopile currently does not write .kicad_pro——`set_kicad_netlist_path_in_project` is dead code, the model `C_kicad_project_file` exists; a net-new channel);
+    ⑤ add a `(component_class)` round-trip + kicad-cli ingest test.
+
+### G. Won't do / deferred
+- ❌ **hack uuid = absolutely forbidden** (inviolable principle): uuid is a 128-bit opaque id, atopile **neither writes
+  any non-standard content into it nor reads any flag from it**. The old FBRK uuid side channel written by `gen_uuid(mark="FBRK")` + read by `is_marked`
+  **is thoroughly deleted from the code** (`fileformats.py gen_uuid` has no mark parameter, pure uuid4;
+  `transformer.py` `gen_uuid`/`is_marked`/`_add_group` are cleared). provenance/ownership goes only through legal carriers:
+  footprint `atopile_address` property (managed determination) + `FBRK:notouch` fp_text (user lock).
+  *(This is the endgame of the original "outstanding issue 3 gen_uuid variable-length-mark overflow": root cause = stuffing metadata into uuid, root fix = don't stuff,
+  so the whole item is moved from outstanding issues to here as a resident invariant.)*
+  - **Corollary (byte equivalence must not be desired)**: uuid opaque ⟹ two builds can be byte-different yet semantically identical ⟹ **any
+    test asserting byte equivalence is a category error and must be changed to semantic equivalence** (`semantic_view`: position+net-name connectivity+structure,
+    stripping uuid/net numbering). Already changed the three byte assertions in `test_group_determinism.py` + `test_room_migration_e2e.py::test_C3_3`.
+    **Further corollary**: a generated `.kicad_pcb` need not be committed as a byte anchor——CI can build from scratch twice and compare semantic;
+    only **input-state** layouts (`examples/layout_reuse/.../sub.kicad_pcb`) + parser corpus samples are still committed.
+    Residual: `semantic_view` group members are still expressed by uuid, the full oracle should be changed to by member address (not scheduled).
+- ❌ fork KiCad 10; ❌ old SWIG binding; ❌ **v9 write-out / bidirectional dialect shim** (v10-only decision);
+  ❌ blind random syntax fuzz (the dangerous bug class = "legal file silently mis-bound", covered by corrupter + property tests);
+  ❌ KiCad-native design block library; ❌ calling GUI Repeat Layout.
+- ⏸ clean-checkout reproducibility (incremental steady-state is enough, fact 6); ⏸ submitting a DRC JSON enhancement patch to KiCad upstream;
+  ⏸ changing `.ato` syntax (layout goes through sidecar).
+- ⏸ **§P1+ GUI advanced routing-construct fidelity**: teardrop / generated serpentine length-matching / via padstack's v10 subkey
+  shape-morph completion (the schema has the KiCad 9 shape model, lacks v10 validation); currently backstopped by S5a loud warning, the demo script avoids it.
+  Acceptance = moving from the "warning set" into the "fidelity set".
+
+## Outstanding issues (unfinished / hardening items)
+1. **net name drift** (auto-numbered `unnamed[N]`, fact 8): under v10 the name = unique key, drift = geometry-ownership drift.
+   Already welded into B's I4 (a net with no stable address is loudly flagged and cannot be referenced) + acceptance "all net names byte-stable under steady-state rebuild".
+2. Whether to submit a DRC JSON enhancement patch to KiCad upstream (see §G).
+3. **`_generate_net_map` tie-breaking dead code** (`layout_sync.py:183`, function definition `:116`):
+   `mapping_counts[src][tgt] > max(values())` is always false after self-increment → the comment says "most-frequent mapping" but it is actually "first wins".
+   Currently the pull iteration order is deterministic so it does not manifest, but it is a dormant hazard under ambiguous mapping. Fix: on a tie take the lexicographically smallest tgt + iterate sorted by
+   src_addr/pad. **Note**: B/C's consumer-oracle takes the in-service `_generate_net_map` as ground truth; hardening the behavior here
+   must synchronously update the oracle expectations (the two are bound).
