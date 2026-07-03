@@ -572,6 +572,47 @@ and H3 (sidecar constraints) properly address.
     layout_plan_runner) through the atomic helper. Backup names → sub-second/uuid unique (backups collide within
     one second today). Add the two-process stress harness on `examples/layout_reuse`.
 
+### I. DRC-honest P&R: rules header + headless eyes + placement authority [✅ 2026-07-03]
+Driver (user): "the DRC is obviously failing but we are cheating to say it is green" — the acceptance boards routed with
+touching diff pairs, no board outline, and relic copper, and nothing looked. Landed (conclusion + pointer; code is SSOT):
+
+- [x] **I1 diff-pair short-circuit geometry fix**: `DiffLane.gap` was applied CENTER-TO-CENTER (`bundle_geometry.cross_section_offsets`
+  put P/N at ±gap/2), so gap == width meant the pair's copper edges touched — a hard short on the SATA board. Now gap = copper
+  EDGE gap (pitch = gap + width), diff slot envelope = 2·width + gap. `route_bundle` self-corrects (derives pitch from nominal
+  offsets). Oracles updated + a pinned edge-gap assertion (`test_bundle_contract.py`).
+- [x] **I2 `rules:` header (DesignRules)**: the router cannot start with no rules — route_stages without `rules:` is loud AT PARSE.
+  Rules fill stage/lane geometry defaults (track_width/clearance/diff_pair_width/diff_pair_gap; fills marked set so
+  `exclude_unset` forwarding carries them) and enforce board minimums at parse (clearance floor, intra-pair gap ≥ clearance,
+  trunk spacing ≥ inter_pair_clearance). "5mil"/"mm" strings accepted. DRC judges the same numbers: rules → `.kicad_pro`
+  Default net class + generated `.kicad_dru` (clearance floor / courtyard component spacing / diff-pair max uncoupled —
+  ALL empirically honored by kicad-cli DRC, incl. uncoupled on our net names). `layout_plan.py DesignRules` +
+  `board_rules.generate_dru_rules` + `test_design_rules_contract.py` (21).
+- [x] **I3 `ato snapshot` (headless eyes)**: headless board PNG + DRC so the loop can SEE shorts without a human in the GUI.
+  kicad-cli export svg page-size-mode 1 (absolute origin ⇒ DRC mm → px = pure scaling) → `rsvg-convert` (**ImageMagick's
+  builtin SVG renderer silently DROPS KiCad tracks** — pads render, copper gone; librsvg is faithful) → PIL numbered circle
+  per violation → content-crop. Stages the built board's `.kicad_pro`/`.kicad_dru`/`fp-lib-table` next to the routed board
+  (DRC only honors rule files SITTING NEXT TO the board — without staging it silently judges KiCad defaults).
+  `cli/snapshot.py` + `test_snapshot_contract.py`.
+- [x] **I4 `board.outline` → Edge.Cuts**: was validated but NEVER drawn (boards shipped with no outline; DRC "malformed
+  outline"). A declared outline is now stamped as a closed gr_line loop — the edge AUTHORITY (replace, never accrete;
+  no declared outline leaves reuse edges untouched). `board_features.py` + 3 tests.
+- [x] **I5 placement invalidates pulled room copper**: `apply_placements` moving a footprint orphans its room's pulled
+  intra-room copper (anchored to the OLD poses ⇒ dangles off-board or shorts; empirically the 6 layout_reuse relic tracks
+  ALSO made every chain net unroutable — the router must reach all of a net's copper → "no rippable blockers"). A placed
+  room's copper is now derived-only: `placement.py` calls `LayoutSync.clean_room_copper` for each moved room.
+  Companion S5a fix: `_sync_routes` no longer pulls an unmapped-net track as net-0 dead copper (KiCad GC's it on save
+  anyway) — drop + warn. Contract updates in `test_placement_apply_contract.py` + `test_layout_sync_nets.py`.
+- [x] **I6 acceptance, honestly green**: sata_bundle = 4-layer (17um Cu / 7628 0.176mm er4.6 / 1.1 core), pair geometry from
+  the vendored 2D field solver (`vendor/2d_fields`, headless node CLI, W=0.2 S=0.15 ⇒ Zdiff 99.44Ω; 50Ω sanity 49.31Ω),
+  placements iterated WITH the eyes: empirically pinned trunk offset + == west of southbound travel, pad 1 faces the trunk,
+  both breakout rows read rx.n/rx.p/tx.n/tx.p left→right, 1.6mm pitch, uncoupled_max_length 200mil (50mil unattainable for
+  a discrete 0402 breakout — ~2.3mm uncoupled per end is inherent). Result: **sata_bundle 4/4 routed, 0 DRC errors**;
+  **layout_reuse 9/9 routed, 0 DRC errors, 0 unconnected** (was 57 violations). Remaining warnings = silk overlap (0402
+  refdes bigger than the part) + lib_footprint_issues (DRC library config noise) — cosmetic, not copper.
+- Follow-ons (not scheduled): silk refdes auto-placement (kill the silk_overlap warnings); fp-lib-table staging does not
+  silence lib_footprint_issues (investigate kicad-cli library resolution); `_generate_net_map` misses that forced the old
+  net-less pulls (see Outstanding issue 3 — the drop is now loud, the map miss is diagnosable from the warning).
+
 ### Side tasks (can be parallelized / do not block the critical path; deliberately not numbered in the E/F sequence)
 No hard dependency on §E/§F, can be done when convenient; each keeps its original identifier (not stuffed into the E/F numbering, to avoid falsely claiming they are on the critical path).
 

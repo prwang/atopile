@@ -63,6 +63,7 @@ def apply_placements(pcb, plan: LayoutPlan) -> list[str]:
 
     fps = _footprints_by_address(pcb)
     moved: list[str] = []
+    moved_fps: list = []
     for placement in plan.placements:
         fp = fps.get(placement.component)
         if fp is None:
@@ -77,4 +78,22 @@ def apply_placements(pcb, plan: LayoutPlan) -> list[str]:
             fp, kicad.pcb.Xyr(x=x, y=y, r=placement.rotation), layer
         )
         moved.append(placement.component)
+        moved_fps.append(fp)
+
+    # A moved footprint orphans its room's pulled intra-room copper: those tracks
+    # are anchored to the OLD (reuse/grid) poses, so after the move they can only
+    # dangle off the pads or short what they now cross (empirically: the
+    # layout_reuse relic tracks — off-board copper islands that also made every
+    # chain net unroutable, since the router must reach ALL of a net's copper).
+    # Text placement is the pose AUTHORITY, so a placed room's copper is
+    # derived-only: invalidate it and let the route stages re-lay it.
+    rooms_to_clean = sorted(
+        {fp.sheetname for fp in moved_fps if getattr(fp, "sheetname", None)}
+    )
+    if rooms_to_clean:
+        from faebryk.exporters.pcb.layout.layout_sync import LayoutSync
+
+        sync = LayoutSync(pcb)
+        for room_name in rooms_to_clean:
+            sync.clean_room_copper(room_name)
     return moved

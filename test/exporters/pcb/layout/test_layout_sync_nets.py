@@ -134,26 +134,31 @@ SUB_TRACKS = """
 """
 
 
-def test_sync_routes_remaps_nets_and_moves_geometry(sync):
+def test_sync_routes_remaps_nets_and_moves_geometry(sync, caplog):
     sub_file = _load(
         _board({0: "", 1: "SUB_VCC", 2: "SUB_UNMAPPED"}, [], tracks=SUB_TRACKS)
     )
     sub = sub_file.kicad_pcb
     offset = kicad.pcb.Xy(x=100.0, y=50.0)
 
-    new = sync._sync_routes(sub, sync.pcb, {"SUB_VCC": "TOP_VCC"}, offset)
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        new = sync._sync_routes(sub, sync.pcb, {"SUB_VCC": "TOP_VCC"}, offset)
 
     segments = [t for t in new if isinstance(t, kicad.pcb.Segment)]
     zones = [t for t in new if isinstance(t, kicad.pcb.Zone)]
-    assert len(segments) == 2 and len(zones) == 1
+    # the SUB_UNMAPPED segment is DROPPED, loudly — a track whose net cannot be
+    # mapped must not be pulled as net-0 dead copper (it dangles off-board AND
+    # makes its net unroutable: the router must reach all of a net's copper).
+    # (The old contract disconnected it to net 0; that was the relic-track bug.)
+    assert len(segments) == 1 and len(zones) == 1
+    assert any("SUB_UNMAPPED" in r.message for r in caplog.records)
 
-    mapped = next(s for s in segments if s.start.x == 101.0)
+    mapped = segments[0]
+    assert mapped.start.x == 101.0
     assert mapped.net == 7  # SUB_VCC → TOP_VCC → top number
     assert mapped.start.y == 51.0  # offset applied
-
-    # a net absent from the map disconnects (current contract: net 0)
-    unmapped = next(s for s in segments if s.start.x == 103.0)
-    assert unmapped.net == 0
 
     # zones carry the v9 dual key: both number and name must be remapped
     assert zones[0].net == 7

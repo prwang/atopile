@@ -165,3 +165,83 @@ def test_no_placements_is_a_noop_and_unplaced_untouched():
     # and a plan with no placements at all returns [] (pure noop)
     pcb2 = _board(_FPS).kicad_pcb
     assert apply_placements(pcb2, LayoutPlan()) == []
+
+
+# ===========================================================================
+# PA-clean — a text placement INVALIDATES the placed room's intra-room copper:
+# pulled/manual tracks are anchored to the OLD poses, so after the move they can
+# only dangle or short (the layout_reuse relic-track bug: off-board copper
+# islands that also made every chain net unroutable). Inter-room copper and
+# other rooms' copper survive (the _clean_room semantics, pinned here from the
+# placement side).
+# ===========================================================================
+def _board_with_copper() -> kicad.pcb.PcbFile:
+    text = """(kicad_pcb
+\t(version 20241229)
+\t(generator "test_placement_apply")
+\t(generator_version "10.0")
+\t(general (thickness 1.6))
+\t(layers (0 "F.Cu" signal) (31 "B.Cu" signal))
+\t(net 0 "")
+\t(net 1 "A_INTRA")
+\t(net 2 "AB_INTER")
+\t(footprint "test:FP"
+\t\t(layer "F.Cu")
+\t\t(uuid "00000000-0000-0000-0000-00000000000a")
+\t\t(at 1 1 0)
+\t\t(sheetname "top.a")
+\t\t(property "Reference" "r1" (at 0 0) (layer "F.SilkS") (effects (font (size 1 1))))
+\t\t(property "atopile_address" "top.a.r1" (at 0 0) (layer "F.Fab") (effects (font (size 1 1))))
+\t\t(pad "1" smd rect (at 0.5 0 0) (size 1 1) (layers "F.Cu") (net 1 "A_INTRA") (uuid "00000000-0000-0000-0000-00000000001a"))
+\t)
+\t(footprint "test:FP"
+\t\t(layer "F.Cu")
+\t\t(uuid "00000000-0000-0000-0000-00000000000b")
+\t\t(at 3 1 0)
+\t\t(sheetname "top.a")
+\t\t(property "Reference" "r2" (at 0 0) (layer "F.SilkS") (effects (font (size 1 1))))
+\t\t(property "atopile_address" "top.a.r2" (at 0 0) (layer "F.Fab") (effects (font (size 1 1))))
+\t\t(pad "1" smd rect (at -0.5 0 0) (size 1 1) (layers "F.Cu") (net 1 "A_INTRA") (uuid "00000000-0000-0000-0000-00000000001b"))
+\t\t(pad "2" smd rect (at 0.5 0 0) (size 1 1) (layers "F.Cu") (net 2 "AB_INTER") (uuid "00000000-0000-0000-0000-00000000001c"))
+\t)
+\t(footprint "test:FP"
+\t\t(layer "F.Cu")
+\t\t(uuid "00000000-0000-0000-0000-00000000000c")
+\t\t(at 6 1 0)
+\t\t(sheetname "top.b")
+\t\t(property "Reference" "r3" (at 0 0) (layer "F.SilkS") (effects (font (size 1 1))))
+\t\t(property "atopile_address" "top.b.r3" (at 0 0) (layer "F.Fab") (effects (font (size 1 1))))
+\t\t(pad "1" smd rect (at -0.5 0 0) (size 1 1) (layers "F.Cu") (net 2 "AB_INTER") (uuid "00000000-0000-0000-0000-00000000001d"))
+\t)
+\t(segment (start 1.5 1) (end 2.5 1) (width 0.2) (layer "F.Cu") (net 1) (uuid "00000000-0000-0000-0000-0000000000e1"))
+\t(segment (start 3.5 1) (end 5.5 1) (width 0.2) (layer "F.Cu") (net 2) (uuid "00000000-0000-0000-0000-0000000000e2"))
+)
+"""
+    return kicad.loads(kicad.pcb.PcbFile, text)
+
+
+def test_placement_invalidates_placed_rooms_intra_copper():
+    pcb = _board_with_copper().kicad_pcb
+    assert len(pcb.segments) == 2
+    plan = LayoutPlan(
+        rooms=[Room(module="top.a", origin=(10.0, 10.0), size=(8.0, 4.0))],
+        placements=[Placement(component="top.a.r1", at=(1.0, 1.0))],
+    )
+    moved = apply_placements(pcb, plan)
+    assert moved == ["top.a.r1"]
+    # the intra-room net's copper is gone; the inter-room net's copper survives
+    remaining_nets = {s.net for s in pcb.segments}
+    intra = next(n.number for n in pcb.nets if n.name == "A_INTRA")
+    inter = next(n.number for n in pcb.nets if n.name == "AB_INTER")
+    assert intra not in remaining_nets
+    assert inter in remaining_nets
+
+
+def test_placement_without_room_copper_is_noop_clean():
+    pcb = _board(_FPS).kicad_pcb  # no segments at all
+    plan = LayoutPlan(
+        rooms=[Room(module="top.r1", origin=(5.0, 5.0), size=(4.0, 4.0))],
+        placements=[Placement(component="top.r1.u1", at=(1.0, 1.0))],
+    )
+    apply_placements(pcb, plan)  # must not raise
+    assert len(pcb.segments) == 0

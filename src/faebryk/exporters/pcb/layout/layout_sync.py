@@ -277,7 +277,21 @@ class LayoutSync:
                 new_track.net = self._get_net_number(top_pcb, net_map[sub_net.name])
                 if isinstance(new_track, kicad.pcb.Zone):
                     new_track.net_name = net_map[sub_net.name]
+            elif not isinstance(new_track, kicad.pcb.Zone):
+                # S5a: a track whose net cannot be mapped to the top board must
+                # NOT be pulled as net-0 dead copper — KiCad GC's net-0 dangling
+                # copper on save, and until then it silently shorts whatever it
+                # crosses (empirically: relic segments overlapping pads, DRC
+                # shorting_items). Drop it LOUDLY instead.
+                logger.warning(
+                    f"reuse pull: dropping {type(track).__name__} on "
+                    f"{getattr(track, 'layer', '?')} — sub net "
+                    f"{sub_net.name if sub_net else track.net!r} has no top-board "
+                    "mapping (a net-less track is dead copper)"
+                )
+                continue
             else:
+                # a zone may legitimately carry net 0 (keepouts); keep behavior.
                 new_track.net = 0
 
             PCB_Transformer.move_object(new_track, offset)
@@ -345,6 +359,15 @@ class LayoutSync:
 
         # TODO rotation?
         return kicad.pcb.Xy(x=offset.x, y=offset.y)
+
+    def clean_room_copper(self, room_name: str):
+        """Public entry for `_clean_room`: delete a room's intra-room-net copper.
+
+        Used by the placement consumer — a TEXT placement moving a room's
+        footprint orphans the room's pulled intra-room copper (it is anchored to
+        the old poses and can only dangle or short), so the room's copper becomes
+        derived-only and is invalidated."""
+        self._clean_room(room_name)
 
     def _clean_room(self, room_name: str):
         """Delete a room's intra-room-net copper before a re-pull, so routes are
