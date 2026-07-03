@@ -405,8 +405,15 @@ def _route(pcb_path: Path, nets: list[str], out_path: Path) -> dict:
     import json
     import re
 
+    from faebryk.exporters.pcb.layout.layout_plan_runner import _system_python3
+
+    # NEVER bare "python3": under `uv run` that resolves to the venv python,
+    # which has no scipy/router ext (see _system_python3's docstring).
+    sys_py = _system_python3()
+    if sys_py is None:
+        pytest.skip("no system python3 outside the venv")
     cmd = [
-        "python3",
+        sys_py,
         "route.py",
         str(pcb_path),
         str(out_path),

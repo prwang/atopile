@@ -28,17 +28,19 @@ router.
 """
 
 import json
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
+from faebryk.exporters.pcb.layout.layout_plan_runner import _system_python3
 from faebryk.libs.util import repo_root
 
 _ROUTER_ROOT = repo_root() / "vendor" / "KiCadRoutingTools"
 _BOARD = _ROUTER_ROOT / "kicad_files" / "lvds_converter_dualclk.kicad_pcb"
-_SYS_PY = shutil.which("python3")
+# NEVER bare shutil.which("python3"): under `uv run` that resolves to the venv
+# python, which has no scipy/router ext (see _system_python3's docstring).
+_SYS_PY = _system_python3()
 
 # the C→E contract this slice pins (kept here, in the test, so a drift goes red).
 _RESULTS_DATA_KEYS = {"results", "all_swap_vias", "exclusion_zone_lines"}
