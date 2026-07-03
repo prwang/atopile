@@ -172,3 +172,64 @@ def test_features_round_trip_through_kicad_cli(tmp_path):
     assert proc.returncode == 0, proc.stderr
     text = out.read_text()
     assert "REV A" in text and "keepout" in text
+
+
+# ===========================================================================
+# board.outline → Edge.Cuts (the outline AUTHORITY):
+#   * a declared rect/polygon outline is drawn as a closed gr_line loop on
+#     Edge.Cuts (was: validated but NEVER drawn — DRC "malformed outline");
+#   * re-emit replaces (never accretes) existing Edge.Cuts lines;
+#   * no declared outline ⇒ the board's own edges are untouched (reuse case).
+# ===========================================================================
+_OUTLINE_YAML = """\
+board:
+  outline:
+    origin: [0, 0]
+    size: [60, 70]
+  stackup:
+    layers:
+      - {name: F.Cu, type: copper}
+      - {name: core, type: dielectric, thickness: 1.5, material: FR4, epsilon_r: 4.5}
+      - {name: B.Cu, type: copper}
+route_stages: []
+"""
+
+
+def _edge_lines(pcb):
+    return [ln for ln in pcb.gr_lines if getattr(ln, "layer", None) == "Edge.Cuts"]
+
+
+@needs_f68
+def test_outline_is_drawn_as_closed_edge_cuts_loop():
+    pcb = _pcb()
+    plan = load_layout_plan(_OUTLINE_YAML)
+    counts = generate_board_features(pcb, plan, _IR)
+    assert counts["outline_edges"] == 4
+    edges = _edge_lines(pcb)
+    assert len(edges) == 4
+    # closed rectangle over exactly the declared bounds
+    pts = {(ln.start.x, ln.start.y) for ln in edges} | {
+        (ln.end.x, ln.end.y) for ln in edges
+    }
+    assert pts == {(0.0, 0.0), (60.0, 0.0), (60.0, 70.0), (0.0, 70.0)}
+    # each corner appears exactly once as a start and once as an end (a loop)
+    starts = sorted((ln.start.x, ln.start.y) for ln in edges)
+    ends = sorted((ln.end.x, ln.end.y) for ln in edges)
+    assert starts == ends
+
+
+@needs_f68
+def test_outline_reemit_replaces_never_accretes():
+    pcb = _pcb()
+    plan = load_layout_plan(_OUTLINE_YAML)
+    generate_board_features(pcb, plan, _IR)
+    generate_board_features(pcb, plan, _IR)
+    assert len(_edge_lines(pcb)) == 4
+
+
+@needs_f68
+def test_no_declared_outline_leaves_existing_edges_untouched():
+    pcb = _pcb()
+    before = len(_edge_lines(pcb))
+    generate_board_features(pcb, load_layout_plan(_YAML), _IR)  # no outline key
+    assert len(_edge_lines(pcb)) == before

@@ -35,6 +35,7 @@ from atopile.cli import (
     package,
     route,
     serve,
+    snapshot,
     view,
 )
 from atopile.errors import (
@@ -210,6 +211,7 @@ app.command(deprecated=True, hidden=True)(install.install)
 app.command()(inspect_.inspect)
 app.command()(view.view)
 app.command()(route.route)
+app.command()(snapshot.snapshot)
 app.command()(bom.bom)
 app.command()(diagnose.diagnose)
 app.add_typer(package.package_app, name="package", hidden=True)

@@ -16,7 +16,10 @@ rules:
   diff_pair_gap: 0.15        # solver: 100Ω intra-pair edge gap
   inter_pair_clearance: 20mil
   component_spacing: 20mil   # courtyard-to-courtyard (DRC courtyard_clearance)
-  uncoupled_max_length: 50mil
+  # uncoupled budget: the 0402 breakout fanout (1.6mm pad pitch -> 0.35mm
+  # pair pitch over ~1.6mm) is inherently ~2.3mm uncoupled per end; 200mil
+  # covers both ends with margin. 50mil is unattainable for discrete parts.
+  uncoupled_max_length: 200mil
 
 rooms:
   - module: host
@@ -29,31 +32,36 @@ rooms:
 # Explicit poses (room-relative): each port's four 0402 terminations sit in a
 # row ACROSS the bundle axis, line pads facing the trunk, in the same left-to-
 # right order as the trunk cross-section at that end — so the breakout fanout
-# never crosses itself. 2mm pitch clears the 20mil courtyard spacing rule.
+# never crosses itself. 1.6mm pitch clears the 20mil courtyard spacing rule
+# and keeps the uncoupled fanout short.
+# Trunk lane x-order at BOTH ends (offset + == west of southbound travel,
+# empirically pinned by the fanout zooms): rx.n, rx.p, tx.n, tx.p left→right.
+# rotation puts pad 1 (the line pad) on the trunk-facing side: host 90 (south),
+# device 270 (north) — the wrong side makes the fanout plow through pad 2.
 placements:
-  - component: host.term[0]   # tx.p — leftmost, matches trunk member order
-    at: [3, 6]
+  - component: host.term[0]   # tx.p — rightmost (east), matching its trunk lane
+    at: [8.4, 6]
     rotation: 90
   - component: host.term[1]   # tx.n
-    at: [5, 6]
+    at: [6.8, 6]
     rotation: 90
   - component: host.term[2]   # rx.p
-    at: [7, 6]
+    at: [5.2, 6]
     rotation: 90
-  - component: host.term[3]   # rx.n
-    at: [9, 6]
+  - component: host.term[3]   # rx.n — leftmost (west)
+    at: [3.6, 6]
     rotation: 90
-  - component: device.term[0]  # tx.p — device order is the mirror (see breakouts)
-    at: [9, 2]
+  - component: device.term[0]  # tx.p — same left→right order as host
+    at: [8.4, 2]
     rotation: 270
   - component: device.term[1]  # tx.n
-    at: [7, 2]
+    at: [6.8, 2]
     rotation: 270
   - component: device.term[2]  # rx.p
-    at: [5, 2]
+    at: [5.2, 2]
     rotation: 270
   - component: device.term[3]  # rx.n
-    at: [3, 2]
+    at: [3.6, 2]
     rotation: 270
 
 # The board-level facts (D-Tier3): the SATA pairs carry controlled 100Ω
@@ -89,11 +97,11 @@ route_stages:
       centerline:
         # north → south between the two rooms. Equal spacings ⇒ rigid; the final
         # unequal pair ⇒ a transition (neck-down) into the device breakout.
-        - at: [30, 16]
+        - at: [30, 14]
           spacing: 0.6
         - at: [30, 48]
           spacing: 0.6
-        - at: [30, 54]
+        - at: [30, 56]
           spacing: 0.508
     breakouts:
       # host derives its fanout order from the lane order; the device end mirrors it

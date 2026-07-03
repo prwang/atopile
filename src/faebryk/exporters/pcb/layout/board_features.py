@@ -12,6 +12,8 @@ source layout, never authored as text) become declarative `layout.yaml` intent:
                      NO net / NO placement (so the ZonePlacement source_type/source
                      SEGFAULT footgun is structurally unreachable here).
   * F8 (F-silk)    — `board.silk`     → a gr_text on a silk layer.
+  * board outline  — `board.outline`  → the Edge.Cuts boundary (a declared
+                     outline is the edge AUTHORITY: replace, never accrete).
 
 Idempotent across rebuilds: managed pour/keepout zones carry a name prefix
 (`fbrk_pour_` / `fbrk_keepout_`) and are removed before re-emit (the rule_area.py
@@ -63,6 +65,41 @@ def generate_board_features(
         return {"pours": 0, "keepouts": 0, "silk": 0}
 
     signal_nets: dict[str, str] = ir.get("signal_nets", {})
+
+    # --- board outline (Edge.Cuts) -------------------------------------------
+    # `board.outline` was previously validated but NEVER DRAWN — the board went
+    # out with no Edge.Cuts, DRC said "malformed outline", and the fab boundary
+    # existed only in yaml (the exact silent disaster the schema docstring
+    # warns about). A declared outline is the Edge.Cuts AUTHORITY: existing
+    # edge lines are replaced, never accreted. No declared outline ⇒ untouched
+    # (a reuse board keeps its own edges).
+    outline_drawn = 0
+    if board.outline is not None:
+        if board.outline.polygon is not None:
+            pts = [tuple(p) for p in board.outline.polygon]
+        else:
+            (ox, oy), (w, h) = board.outline.origin, board.outline.size
+            pts = [(ox, oy), (ox + w, oy), (ox + w, oy + h), (ox, oy + h)]
+        kicad.filter(
+            pcb, "gr_lines", pcb.gr_lines,
+            lambda line: getattr(line, "layer", None) != "Edge.Cuts",
+        )
+        for a, b in zip(pts, pts[1:] + pts[:1]):
+            kicad.insert(
+                pcb, "gr_lines", pcb.gr_lines,
+                _P.Line(
+                    start=_P.Xy(x=a[0], y=a[1]),
+                    end=_P.Xy(x=b[0], y=b[1]),
+                    solder_mask_margin=None,
+                    stroke=_P.Stroke(width=0.1, type="solid"),
+                    fill=None,
+                    layer="Edge.Cuts",
+                    layers=["Edge.Cuts"],
+                    locked=False,
+                    uuid=kicad.gen_uuid(),
+                ),
+            )
+            outline_drawn += 1
 
     # idempotency: drop previously-managed pour/keepout zones before re-emitting.
     kicad.filter(
@@ -169,4 +206,5 @@ def generate_board_features(
         "pours": len(board.pours),
         "keepouts": len(board.keepouts),
         "silk": len(board.silk),
+        "outline_edges": outline_drawn,
     }
