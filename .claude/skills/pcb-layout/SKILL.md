@@ -126,7 +126,20 @@ rooms:
     size: [30, 20]               # optional
     rotation: 0.0
     # polygon: [[..],[..]]       # non-rectangular room (overrides origin/size)
+    # source: component_class    # default sheetname; see below
 ```
+`source: component_class` (D5) keys the rule area to a KiCad component class
+instead of the sheetname. Membership rides two channels with different
+authority: the build stamps `(component_classes (class "<module>"))` statically
+on every member footprint — that is the **headless authority** (kicad-cli DRC
+resolves it, so `.kicad_dru` rules conditioned on
+`A.hasComponentClass('<module>')` bite) — and mirrors one SHEET_NAME assignment
+into `.kicad_pro` `component_class_settings` for the GUI (kicad-cli never runs
+the GUI's class synchronization, so the project-file channel alone is inert
+headlessly — empirically pinned by
+`test_rule_area_contract.py::test_kicad_drc_enforces_component_class_headlessly`).
+Both channels GC on rename/revert (ownership = structural fingerprint /
+address-ancestor). Class name == `room.module`; there is no second name field.
 
 ### 2.2 placements — per-component pose  (`Placement`, layout_plan.py + placement.py)
 ```yaml
@@ -442,11 +455,15 @@ If the net *routes* but the geometry is ugly/wrong, tune the stage `config`
 | `power_nets`, `power_nets_widths` | single | wide power routing |
 | `diff_pair_gap`, `diff_pair_intra_match`, `fix_polarity`, `gnd_via_enabled` | diff | diff-pair geometry |
 
-A knob valid only for the other mode is loud at parse (wrong-mode guard). If a
-construct is genuinely unsupported (teardrops, length-tuned serpentine, some via
-padstack sub-keys), the build emits a **loud S5a warning** rather than silently
-mis-emitting — treat that as "not authorable yet" (BACKLOG §P1+), not a bug to
-route around.
+A knob valid only for the other mode is loud at parse (wrong-mode guard).
+GUI-authored constructs — teardrops (pad/via/zone), via & pad padstacks +
+hole treatments, and length-tuned serpentine `generated` patterns — are in the
+**fidelity set** (2026-07-03): they survive managed rewrites losslessly, room
+clean/pull keeps tuning patterns coherent (all-members-or-loud-drop), and
+`semantic_view` sees them. They are still not *authorable* from `layout.yaml`
+(author length targets via `length_match_groups`; fine-tune in the GUI — the
+edit survives rebuilds). A genuinely unknown key still emits the **loud S5a
+warning** rather than silently mis-emitting.
 
 ### 5.5 What `layout.yaml` CANNOT fix (route these elsewhere)
 Be honest with the user instead of thrashing the sidecar:
@@ -544,7 +561,14 @@ overwrite it.
 - `src/faebryk/exporters/pcb/layout/bundle_geometry.py` — the pinned cross-section
   convention (edge gap, pair envelope); `test_bundle_contract.py` oracles.
 - `src/faebryk/exporters/pcb/layout/board_rules.py` — rules → `.kicad_pro` Default
-  class + `generate_dru_rules` (`.kicad_dru`); `test_design_rules_contract.py`.
+  class + `generate_dru_rules` (`.kicad_dru`) + D5 component-class membership
+  (static footprint stamp = headless authority, `.kicad_pro` mirror);
+  `test_design_rules_contract.py`, `test_rule_area_contract.py` (D5.*),
+  `test_board_rules_contract.py`.
+- GUI-construct fidelity oracles — `src/faebryk/libs/kicad/semantic_view.py` (v3:
+  teardrops/padstacks/treatments/generateds/placement-source/pts chains) +
+  `test/libs/kicad/test_{padstack,generated}_dialect.py`, `test_pts_interleave.py`,
+  `test_construct_corruption.py`, `test/layout_server/test_gui_edit_roundtrip.py`.
 - `src/faebryk/exporters/pcb/layout/placement.py` — pose authority + placed-room
   copper invalidation; `test_placement_apply_contract.py`.
 - `src/atopile/cli/snapshot.py` — the headless eyes (render + DRC + marks);
