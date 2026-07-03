@@ -1,0 +1,64 @@
+{
+ "arcs": [],
+ "footprints": [
+  {
+   "at": [
+    139.95,
+    102.769,
+    180.0
+   ],
+   "layer": "B.Cu",
+   "name": "EK-Conn:FFC_Pads_01x30_P0.5mm_PADS_ONLY",
+   "pads": [
+    {
+     "at": [
+      3.5,
+      1.95,
+      90.0
+     ],
+     "layers": [
+      "B.Cu"
+     ],
+     "name": "7",
+     "net": "/CAN2L"
+    }
+   ],
+   "reference": "J1"
+  }
+ ],
+ "groups": [],
+ "nets": [
+  "/CAN2L"
+ ],
+ "segments": [
+  {
+   "end": [
+    136.45,
+    99.16
+   ],
+   "layer": "B.Cu",
+   "net": "/CAN2L",
+   "start": [
+    135.205,
+    97.915
+   ],
+   "width": 0.1
+  },
+  {
+   "end": [
+    136.45,
+    100.819
+   ],
+   "layer": "B.Cu",
+   "net": "/CAN2L",
+   "start": [
+    136.45,
+    99.16
+   ],
+   "width": 0.1
+  }
+ ],
+ "semantic_view_version": 1,
+ "vias": [],
+ "zones": []
+}

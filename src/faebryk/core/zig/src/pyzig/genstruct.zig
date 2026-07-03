@@ -372,12 +372,25 @@ pub fn genStructInit(comptime WrapperType: type, comptime T: type) type {
                                         }
                                     },
                                     .@"struct" => {
-                                        // Handle optional struct fields
-                                        const nested_wrapper = expectStructWrapper(opt.child, value) orelse {
-                                            cleanupOwned(wrapper_obj);
-                                            return -1;
-                                        };
-                                        @field(wrapper_obj.data.*, field.name) = nested_wrapper.data.*;
+                                        if (comptime linked_list.isLinkedList(opt.child)) {
+                                            // optional linked list: a Python
+                                            // sequence is a present (possibly
+                                            // empty) list; None was handled
+                                            // above
+                                            const ChildT = @TypeOf(@as(opt.child.Node, undefined).data);
+                                            const ll = getset.buildLinkedListFromSequence(ChildT, value) orelse {
+                                                cleanupOwned(wrapper_obj);
+                                                return -1;
+                                            };
+                                            @field(wrapper_obj.data.*, field.name) = ll;
+                                        } else {
+                                            // Handle optional struct fields
+                                            const nested_wrapper = expectStructWrapper(opt.child, value) orelse {
+                                                cleanupOwned(wrapper_obj);
+                                                return -1;
+                                            };
+                                            @field(wrapper_obj.data.*, field.name) = nested_wrapper.data.*;
+                                        }
                                     },
                                     .@"enum" => {
                                         // Handle optional enum as string

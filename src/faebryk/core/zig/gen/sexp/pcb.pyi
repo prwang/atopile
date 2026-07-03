@@ -101,11 +101,11 @@ class E_pad_property(str, Enum):
     PAD_PROP_MECHANICAL = "pad_prop_mechanical"
     NONE = "none"
 
-class E_pad_chamfer(str, Enum):
-    CHAMFER_TOP_LEFT = "chamfer_top_left"
-    CHAMFER_TOP_RIGHT = "chamfer_top_right"
-    CHAMFER_BOTTOM_LEFT = "chamfer_bottom_left"
-    CHAMFER_BOTTOM_RIGHT = "chamfer_bottom_right"
+class E_pad_chamfer_corner(str, Enum):
+    TOP_LEFT = "top_left"
+    TOP_RIGHT = "top_right"
+    BOTTOM_LEFT = "bottom_left"
+    BOTTOM_RIGHT = "bottom_right"
 
 class E_pad_drill_shape(str, Enum):
     CIRCLE = "circle"
@@ -208,6 +208,16 @@ class E_Attr(str, Enum):
     EXCLUDE_FROM_POS_FILES = "exclude_from_pos_files"
     EXCLUDE_FROM_BOM = "exclude_from_bom"
     ALLOW_MISSING_COURTYARD = "allow_missing_courtyard"
+    ALLOW_SOLDERMASK_BRIDGES = "allow_soldermask_bridges"
+
+class E_via_type(str, Enum):
+    BLIND = "blind"
+    BURIED = "buried"
+    MICRO = "micro"
+
+class E_post_machining_mode(str, Enum):
+    COUNTERBORE = "counterbore"
+    COUNTERSINK = "countersink"
 
 class E_zone_fill_enable(str, Enum):
     YES = "yes"
@@ -320,11 +330,13 @@ class TextLayer:
     def __zig_address__(self) -> int: ...
 
 class Tenting:
-    front: bool
-    back: bool
+    front: bool | None
+    back: bool | None
     none: bool
 
-    def __init__(self, *, front: bool, back: bool, none: bool) -> None: ...
+    def __init__(
+        self, *, front: bool | None, back: bool | None, none: bool
+    ) -> None: ...
     def __repr__(self) -> str: ...
     @staticmethod
     def __field_names__() -> list[str]: ...
@@ -448,10 +460,22 @@ class Rect:
     def __field_names__() -> list[str]: ...
     def __zig_address__(self) -> int: ...
 
+class PtsArc:
+    start: Xy
+    mid: Xy
+    end: Xy
+
+    def __init__(self, *, start: Xy, mid: Xy, end: Xy) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
 class Pts:
     xys: list[Xy]
+    arcs: list[PtsArc]
 
-    def __init__(self, *, xys: list[Xy]) -> None: ...
+    def __init__(self, *, xys: list[Xy], arcs: list[PtsArc]) -> None: ...
     def __repr__(self) -> str: ...
     @staticmethod
     def __field_names__() -> list[str]: ...
@@ -557,10 +581,128 @@ class FpText:
     def __field_names__() -> list[str]: ...
     def __zig_address__(self) -> int: ...
 
-class PadPrimitives:
-    gr_polys: list[Polygon]
+class PrimitiveLine:
+    start: Xy
+    end: Xy
+    width: float
 
-    def __init__(self, *, gr_polys: list[Polygon]) -> None: ...
+    def __init__(self, *, start: Xy, end: Xy, width: float) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
+class PrimitiveVector:
+    start: Xy
+    end: Xy
+
+    def __init__(self, *, start: Xy, end: Xy) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
+class PrimitiveRect:
+    start: Xy
+    end: Xy
+    radius: float | None
+    width: float
+    fill: bool | None
+
+    def __init__(
+        self,
+        *,
+        start: Xy,
+        end: Xy,
+        radius: float | None,
+        width: float,
+        fill: bool | None,
+    ) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
+class PrimitiveBbox:
+    start: Xy
+    end: Xy
+    fill: bool | None
+
+    def __init__(self, *, start: Xy, end: Xy, fill: bool | None) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
+class PrimitiveArc:
+    start: Xy
+    mid: Xy
+    end: Xy
+    width: float
+
+    def __init__(self, *, start: Xy, mid: Xy, end: Xy, width: float) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
+class PrimitiveCircle:
+    center: Xy
+    end: Xy
+    width: float
+    fill: bool | None
+
+    def __init__(
+        self, *, center: Xy, end: Xy, width: float, fill: bool | None
+    ) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
+class PrimitiveCurve:
+    pts: Pts
+    width: float
+
+    def __init__(self, *, pts: Pts, width: float) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
+class PrimitivePoly:
+    pts: Pts
+    width: float
+    fill: bool | None
+
+    def __init__(self, *, pts: Pts, width: float, fill: bool | None) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
+class PadPrimitives:
+    gr_lines: list[PrimitiveLine]
+    gr_vectors: list[PrimitiveVector]
+    gr_rects: list[PrimitiveRect]
+    gr_bboxes: list[PrimitiveBbox]
+    gr_arcs: list[PrimitiveArc]
+    gr_circles: list[PrimitiveCircle]
+    gr_curves: list[PrimitiveCurve]
+    gr_polys: list[PrimitivePoly]
+
+    def __init__(
+        self,
+        *,
+        gr_lines: list[PrimitiveLine],
+        gr_vectors: list[PrimitiveVector],
+        gr_rects: list[PrimitiveRect],
+        gr_bboxes: list[PrimitiveBbox],
+        gr_arcs: list[PrimitiveArc],
+        gr_circles: list[PrimitiveCircle],
+        gr_curves: list[PrimitiveCurve],
+        gr_polys: list[PrimitivePoly],
+    ) -> None: ...
     def __repr__(self) -> str: ...
     @staticmethod
     def __field_names__() -> list[str]: ...
@@ -595,33 +737,94 @@ class PadOptions:
     def __field_names__() -> list[str]: ...
     def __zig_address__(self) -> int: ...
 
+class PadstackLayer:
+    name: str
+    shape: str | None
+    size: Wh | None
+    rect_delta: Xy | None
+    offset: Xy | None
+    roundrect_rratio: float | None
+    chamfer_ratio: float | None
+    chamfer: list[str]
+    options: PadOptions | None
+    primitives: PadPrimitives | None
+    thermal_bridge_angle: float | None
+    thermal_gap: float | None
+    thermal_bridge_width: float | None
+    clearance: float | None
+    zone_connect: int | None
+    tenting: Tenting | None
+
+    def __init__(
+        self,
+        *,
+        name: str,
+        shape: str | None,
+        size: Wh | None,
+        rect_delta: Xy | None,
+        offset: Xy | None,
+        roundrect_rratio: float | None,
+        chamfer_ratio: float | None,
+        chamfer: list[str],
+        options: PadOptions | None,
+        primitives: PadPrimitives | None,
+        thermal_bridge_angle: float | None,
+        thermal_gap: float | None,
+        thermal_bridge_width: float | None,
+        clearance: float | None,
+        zone_connect: int | None,
+        tenting: Tenting | None,
+    ) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
+class PadPadstack:
+    mode: str
+    layers: list[PadstackLayer]
+
+    def __init__(self, *, mode: str, layers: list[PadstackLayer]) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
 class Pad:
     name: str
     type: str
     shape: str
     at: Xyr
     size: Wh
+    rect_delta: Xy | None
     drill: PadDrill | None
     layers: list[str]
     remove_unused_layers: bool | None
+    keep_end_layers: bool | None
+    zone_layer_connections: list[str] | None
+    roundrect_rratio: float | None
+    chamfer_ratio: float | None
+    chamfer: list[str]
     net: Net | None
+    pinfunction: str | None
+    pintype: str | None
+    die_length: float | None
+    die_delay: float | None
     solder_mask_margin: float | None
     solder_paste_margin: float | None
     solder_paste_margin_ratio: float | None
     clearance: float | None
     zone_connect: int | None
     thermal_bridge_width: float | None
+    thermal_bridge_angle: float | None
     thermal_gap: float | None
-    roundrect_rratio: float | None
-    chamfer_ratio: float | None
-    chamfer: str | None
     properties: str | None
-    pinfunction: str | None
-    pintype: str | None
     options: PadOptions | None
+    primitives: PadPrimitives | None
+    teardrops: Teardrop | None
     tenting: Tenting | None
     uuid: str | None
-    primitives: PadPrimitives | None
+    padstack: PadPadstack | None
 
     def __init__(
         self,
@@ -631,27 +834,35 @@ class Pad:
         shape: str,
         at: Xyr,
         size: Wh,
+        rect_delta: Xy | None,
         drill: PadDrill | None,
         layers: list[str],
         remove_unused_layers: bool | None,
+        keep_end_layers: bool | None,
+        zone_layer_connections: list[str] | None,
+        roundrect_rratio: float | None,
+        chamfer_ratio: float | None,
+        chamfer: list[str],
         net: Net | None,
+        pinfunction: str | None,
+        pintype: str | None,
+        die_length: float | None,
+        die_delay: float | None,
         solder_mask_margin: float | None,
         solder_paste_margin: float | None,
         solder_paste_margin_ratio: float | None,
         clearance: float | None,
         zone_connect: int | None,
         thermal_bridge_width: float | None,
+        thermal_bridge_angle: float | None,
         thermal_gap: float | None,
-        roundrect_rratio: float | None,
-        chamfer_ratio: float | None,
-        chamfer: str | None,
         properties: str | None,
-        pinfunction: str | None,
-        pintype: str | None,
         options: PadOptions | None,
+        primitives: PadPrimitives | None,
+        teardrops: Teardrop | None,
         tenting: Tenting | None,
         uuid: str | None,
-        primitives: PadPrimitives | None,
+        padstack: PadPadstack | None,
     ) -> None: ...
     def __repr__(self) -> str: ...
     @staticmethod
@@ -752,6 +963,7 @@ class Footprint:
     propertys: list[Property]
     attr: list[str]
     duplicate_pad_numbers_are_jumpers: bool | None
+    net_tie_pad_groups: list[str]
     fp_lines: list[Line]
     fp_arcs: list[Arc]
     fp_circles: list[Circle]
@@ -779,6 +991,7 @@ class Footprint:
         propertys: list[Property],
         attr: list[str],
         duplicate_pad_numbers_are_jumpers: bool | None,
+        net_tie_pad_groups: list[str],
         fp_lines: list[Line],
         fp_arcs: list[Arc],
         fp_circles: list[Circle],
@@ -796,22 +1009,9 @@ class Footprint:
 
 class ViaLayer:
     name: str
-    size: Xy | None
-    thermal_gap: float | None
-    thermal_bridge_width: float | None
-    thermal_bridge_angle: float | None
-    zone_connect: int | None
+    size: float | None
 
-    def __init__(
-        self,
-        *,
-        name: str,
-        size: Xy | None,
-        thermal_gap: float | None,
-        thermal_bridge_width: float | None,
-        thermal_bridge_angle: float | None,
-        zone_connect: int | None,
-    ) -> None: ...
+    def __init__(self, *, name: str, size: float | None) -> None: ...
     def __repr__(self) -> str: ...
     @staticmethod
     def __field_names__() -> list[str]: ...
@@ -827,38 +1027,82 @@ class ViaPadstack:
     def __field_names__() -> list[str]: ...
     def __zig_address__(self) -> int: ...
 
+class Backdrill:
+    size: float | None
+    layers: list[str]
+
+    def __init__(self, *, size: float | None, layers: list[str]) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
+class PostMachining:
+    mode: str
+    size: float | None
+    depth: float | None
+    angle: float | None
+
+    def __init__(
+        self, *, mode: str, size: float | None, depth: float | None, angle: float | None
+    ) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
 class Via:
+    type: str | None
     at: Xy
     size: float
     drill: float
+    backdrill: Backdrill | None
+    tertiary_drill: Backdrill | None
+    front_post_machining: PostMachining | None
+    back_post_machining: PostMachining | None
     layers: list[str]
-    net: int
     remove_unused_layers: bool | None
     keep_end_layers: bool | None
-    zone_layer_connections: list[str]
+    start_end_only: bool | None
+    locked: bool | None
+    free: bool | None
+    zone_layer_connections: list[str] | None
+    tenting: Tenting | None
+    capping: bool | None
+    covering: Tenting | None
+    plugging: Tenting | None
+    filling: bool | None
     padstack: ViaPadstack | None
     teardrops: Teardrop | None
-    tenting: Tenting | None
-    free: bool | None
-    locked: bool | None
+    net: int
     uuid: str | None
 
     def __init__(
         self,
         *,
+        type: str | None,
         at: Xy,
         size: float,
         drill: float,
+        backdrill: Backdrill | None,
+        tertiary_drill: Backdrill | None,
+        front_post_machining: PostMachining | None,
+        back_post_machining: PostMachining | None,
         layers: list[str],
-        net: int,
         remove_unused_layers: bool | None,
         keep_end_layers: bool | None,
-        zone_layer_connections: list[str],
+        start_end_only: bool | None,
+        locked: bool | None,
+        free: bool | None,
+        zone_layer_connections: list[str] | None,
+        tenting: Tenting | None,
+        capping: bool | None,
+        covering: Tenting | None,
+        plugging: Tenting | None,
+        filling: bool | None,
         padstack: ViaPadstack | None,
         teardrops: Teardrop | None,
-        tenting: Tenting | None,
-        free: bool | None,
-        locked: bool | None,
+        net: int,
         uuid: str | None,
     ) -> None: ...
     def __repr__(self) -> str: ...
@@ -931,9 +1175,29 @@ class ZoneFill:
 
 class FilledPolygon:
     layer: str
+    island: bool | None
     pts: Pts
 
-    def __init__(self, *, layer: str, pts: Pts) -> None: ...
+    def __init__(self, *, layer: str, island: bool | None, pts: Pts) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
+class HatchPosition:
+    xy: Xy
+
+    def __init__(self, *, xy: Xy) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
+class ZoneLayerProperty:
+    layer: str
+    hatch_position: HatchPosition | None
+
+    def __init__(self, *, layer: str, hatch_position: HatchPosition | None) -> None: ...
     def __repr__(self) -> str: ...
     @staticmethod
     def __field_names__() -> list[str]: ...
@@ -994,6 +1258,7 @@ class ZoneAttr:
 class Zone:
     net: int
     net_name: str | None
+    locked: bool | None
     layer: str | None
     layers: list[str]
     uuid: str | None
@@ -1007,6 +1272,7 @@ class Zone:
     keepout: ZoneKeepout | None
     placement: ZonePlacement | None
     fill: ZoneFill | None
+    propertys: list[ZoneLayerProperty]
     polygon: Polygon
     filled_polygon: list[FilledPolygon]
 
@@ -1015,6 +1281,7 @@ class Zone:
         *,
         net: int,
         net_name: str | None,
+        locked: bool | None,
         layer: str | None,
         layers: list[str],
         uuid: str | None,
@@ -1028,6 +1295,7 @@ class Zone:
         keepout: ZoneKeepout | None,
         placement: ZonePlacement | None,
         fill: ZoneFill | None,
+        propertys: list[ZoneLayerProperty],
         polygon: Polygon,
         filled_polygon: list[FilledPolygon],
     ) -> None: ...
@@ -1354,7 +1622,7 @@ class PcbPlotParams:
 
 class Setup:
     stackup: Stackup | None
-    pad_to_mask_clearance: int
+    pad_to_mask_clearance: float
     allow_soldermask_bridges_in_footprints: bool
     tenting: Tenting | None
     covering: Tenting | None
@@ -1362,6 +1630,7 @@ class Setup:
     capping: bool | None
     filling: bool | None
     aux_axis_origin: Xy | None
+    grid_origin: Xy | None
     pcbplotparams: PcbPlotParams
     rules: Rules | None
 
@@ -1369,7 +1638,7 @@ class Setup:
         self,
         *,
         stackup: Stackup | None,
-        pad_to_mask_clearance: int,
+        pad_to_mask_clearance: float,
         allow_soldermask_bridges_in_footprints: bool,
         tenting: Tenting | None,
         covering: Tenting | None,
@@ -1377,6 +1646,7 @@ class Setup:
         capping: bool | None,
         filling: bool | None,
         aux_axis_origin: Xy | None,
+        grid_origin: Xy | None,
         pcbplotparams: PcbPlotParams,
         rules: Rules | None,
     ) -> None: ...
@@ -1394,6 +1664,7 @@ class KicadPcb:
     title_block: TitleBlock | None
     layers: list[Layer]
     setup: Setup
+    propertys: list[Property]
     nets: list[Net]
     footprints: list[Footprint]
     vias: list[Via]
@@ -1428,6 +1699,7 @@ class KicadPcb:
         title_block: TitleBlock | None,
         layers: list[Layer],
         setup: Setup,
+        propertys: list[Property],
         nets: list[Net],
         footprints: list[Footprint],
         vias: list[Via],
@@ -1483,11 +1755,19 @@ class Image:
     at: Xy
     layer: str
     scale: float
+    locked: bool | None
     data: list[str]
     uuid: str | None
 
     def __init__(
-        self, *, at: Xy, layer: str, scale: float, data: list[str], uuid: str | None
+        self,
+        *,
+        at: Xy,
+        layer: str,
+        scale: float,
+        locked: bool | None,
+        data: list[str],
+        uuid: str | None,
     ) -> None: ...
     def __repr__(self) -> str: ...
     @staticmethod
@@ -1518,28 +1798,28 @@ class EmbeddedFiles:
     def __zig_address__(self) -> int: ...
 
 class Teardrop:
-    enabled: bool
-    allow_two_segments: bool
-    prefer_zone_connections: bool
     best_length_ratio: float
     max_length: float
     best_width_ratio: float
     max_width: float
     curved_edges: bool
     filter_ratio: float
+    enabled: bool
+    allow_two_segments: bool
+    prefer_zone_connections: bool
 
     def __init__(
         self,
         *,
-        enabled: bool,
-        allow_two_segments: bool,
-        prefer_zone_connections: bool,
         best_length_ratio: float,
         max_length: float,
         best_width_ratio: float,
         max_width: float,
         curved_edges: bool,
         filter_ratio: float,
+        enabled: bool,
+        allow_two_segments: bool,
+        prefer_zone_connections: bool,
     ) -> None: ...
     def __repr__(self) -> str: ...
     @staticmethod
@@ -1783,12 +2063,12 @@ class Dimension:
     layer: str
     uuid: str | None
     pts: DimensionPts
-    height: float
+    height: float | None
     orientation: float | None
     leader_length: float | None
     format: DimensionFormat | None
     style: DimensionStyle | None
-    gr_text: Text
+    gr_text: Text | None
 
     def __init__(
         self,
@@ -1797,12 +2077,12 @@ class Dimension:
         layer: str,
         uuid: str | None,
         pts: DimensionPts,
-        height: float,
+        height: float | None,
         orientation: float | None,
         leader_length: float | None,
         format: DimensionFormat | None,
         style: DimensionStyle | None,
-        gr_text: Text,
+        gr_text: Text | None,
     ) -> None: ...
     def __repr__(self) -> str: ...
     @staticmethod

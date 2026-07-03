@@ -9,6 +9,16 @@ yes))``. Reading accepts both shapes everywhere (setup, pad, via). Since the
 P0.2 S7 flag day (Option B) writing is always v10, so a v9 board's bare tokens
 are upgraded to the nested form on write and the v9-only pad ``none`` is dropped.
 
+front/back are TRI-STATE (matching KiCad's FormatOptBool exactly, §G padstack
+work 2026-07-03): yes | no | none, where the ``none`` token means
+"unspecified / inherit from board" and maps to Python ``None``. A side that
+was never mentioned is also ``None`` (KiCad 10.0.3 itself re-emits an
+upgraded v9 ``(tenting front)`` as ``(tenting (front yes) (back none))``),
+and a block whose sides are all unspecified is not written at all — the
+has_value() gate. The old pinned behavior (absent == False, upgrade writes
+``(back no)``) conflated "not tented" with "unspecified" and disagreed with
+the KiCad 10.0.3 formatter.
+
 No corpus switch flips here, so this file brings its own inline coverage per
 the S0 discipline.
 """
@@ -61,10 +71,11 @@ def test_read_v9_single_token_and_none():
         kicad.pcb.PcbFile,
         _board(V9, "\t\t(tenting front)", "\t\t\t(tenting none)"),
     ).kicad_pcb
-    assert (pcb.setup.tenting.front, pcb.setup.tenting.back) == (True, False)
+    # unmentioned side = unspecified (None), not False
+    assert (pcb.setup.tenting.front, pcb.setup.tenting.back) == (True, None)
     pad = pcb.footprints[0].pads[0]
     assert pad.tenting.none is True
-    assert (pad.tenting.front, pad.tenting.back) == (False, False)
+    assert (pad.tenting.front, pad.tenting.back) == (None, None)
 
 
 def test_read_v10_nested_shape():
@@ -82,7 +93,7 @@ def test_read_v10_nested_shape():
     pad = pcb.footprints[0].pads[0]
     assert (pad.tenting.front, pad.tenting.back, pad.tenting.none) == (
         True,
-        False,
+        None,
         False,
     )
 
@@ -110,16 +121,21 @@ def test_write_v10_nests_and_drops_none():
     pcb_file.kicad_pcb.version = V10
     out = kicad.dumps(pcb_file)
 
-    # setup: nested, both keys explicit (KiCad 10 writes false as "no")
-    assert re.search(r"\(tenting\s*\(front yes\)\s*\(back no\)\s*\)", out), out
-    # pad: the v9-only "none" token must not leak into v10 output
-    assert "none" not in re.sub(r"hatch|not_allowed", "", out)
+    # setup: nested, both keys explicit; the unmentioned back side is
+    # "none" (unspecified) — exactly what KiCad 10.0.3 writes for this
+    # upgrade (FormatOptBool on a nullopt side)
+    assert re.search(r"\(tenting\s*\(front yes\)\s*\(back none\)\s*\)", out), out
+    # pad: the v9-only "none" opt-out token means both sides unspecified —
+    # the whole pad tenting block is dropped (KiCad's has_value() gate),
+    # and in particular "(tenting none)" must not leak into v10 output
+    pad_block = out[out.index("(pad ") :]
+    assert "tenting" not in pad_block, out
     # round-trip: our own v10 shape must parse back to the same flags
     reread = kicad.loads(kicad.pcb.PcbFile, out.replace(f"(version {V10})", f"(version {V9})"))
     assert (
         reread.kicad_pcb.setup.tenting.front,
         reread.kicad_pcb.setup.tenting.back,
-    ) == (True, False)
+    ) == (True, None)
 
 
 def test_v9_roundtrip_byte_stable_with_tenting():

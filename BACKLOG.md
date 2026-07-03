@@ -663,9 +663,20 @@ No hard dependency on §E/§F, can be done when convenient; each keeps its origi
   ❌ KiCad-native design block library; ❌ calling GUI Repeat Layout.
 - ⏸ clean-checkout reproducibility (incremental steady-state is enough, fact 6); ⏸ submitting a DRC JSON enhancement patch to KiCad upstream;
   ⏸ changing `.ato` syntax (layout goes through sidecar).
-- ⏸ **§P1+ GUI advanced routing-construct fidelity**: teardrop / generated serpentine length-matching / via padstack's v10 subkey
-  shape-morph completion (the schema has the KiCad 9 shape model, lacks v10 validation); currently backstopped by S5a loud warning, the demo script avoids it.
-  Acceptance = moving from the "warning set" into the "fidelity set".
+- **§P1+ GUI advanced routing-construct fidelity** — padstack + teardrop parts ✅ SHIPPED 2026-07-03; generated serpentine remains ⏸:
+  - ✅ **padstack + teardrop + via treatments** are schema-complete against the KiCad 10.0.3 formatter and lossless (parse / idempotence /
+    no-data-loss / kicad-cli-DRC-readable-after-rewrite): via padstack (keyed `(mode ...)`, positional layer name, single-scalar size),
+    pad padstack (per-layer shape/size/offset/rect_delta/roundrect/chamfer/thermal/clearance/zone_connect/options/primitives),
+    pad + via teardrops (KiCad emission order), via blind/buried/micro tokens, start_end_only, backdrill/tertiary_drill,
+    front/back_post_machining, capping/covering/plugging/filling, tri-state FormatOptBool (`yes|no|none`, none = unspecified ≠ no),
+    present-but-empty `(zone_layer_connections)`. Tests: `test_padstack_dialect.py`; corpus fixtures `padstacks_complex` /
+    `teardrop_elongated_pad` / `two_segment_teardrop` / `via_treatments` (v10/README.md). Once got burned: a real v10 via padstack was a
+    **hard board-blocking MissingField parse error** (the old schema modeled KiCad's in-memory PADSTACK — Xy size + thermal_* — instead of
+    the file grammar, the ZonePlacement.source_type category error again), not the S5a warning this entry used to claim.
+    The pre-v9 legacy teardrop `(curve_points N)` token stays S5a-loud by decision (outside the v9/v10 read scope).
+    semantic_view / GUI-edit fidelity-set promotion of these constructs is owned by a follow-up (semantic_view still omits them).
+  - ⏸ **generated serpentine length-matching**: `Generated` still drops the ~19 tuning-pattern properties (S5a-loud, warning set);
+    kicad-cli DRC cannot detect that loss (KiCad's parser treats them as an open property map) — needs its own schema pass.
 
 ## Outstanding issues (unfinished / hardening items)
 1. **net name drift** (auto-numbered `unnamed[N]`, fact 8): under v10 the name = unique key, drift = geometry-ownership drift.

@@ -417,6 +417,146 @@ fn optional_prop(comptime struct_type: type, comptime field_name: [*:0]const u8,
 }
 
 // Property for linked_list fields
+// Shared sequence -> DoublyLinkedList conversion for linked-list setters
+// (also used by genstruct __init__). Returns null with a Python error set
+// on failure.
+pub fn buildLinkedListFromSequence(comptime ChildType: type, value: ?*py.PyObject) ?compat.DoublyLinkedList(ChildType) {
+    const LL = compat.DoublyLinkedList(ChildType);
+    const NodeType = LL.Node;
+    var ll = LL{};
+
+    const seq_len = py.PySequence_Size(value);
+    if (seq_len < 0) {
+        py.PyErr_SetString(py.PyExc_TypeError, "Expected a sequence for linked list field");
+        return null;
+    }
+
+    var i: isize = 0;
+    while (i < seq_len) : (i += 1) {
+        const item = py.PySequence_GetItem(value, i);
+        if (item == null) return null;
+        defer py.Py_DECREF(item.?);
+
+        const node = std.heap.c_allocator.create(NodeType) catch return null;
+        const child_ti = @typeInfo(ChildType);
+        switch (child_ti) {
+            .@"struct" => {
+                const nested = @as(*pyzig.PyObjectWrapper(ChildType), @ptrCast(@alignCast(item)));
+                node.* = NodeType{ .data = nested.data.* };
+            },
+            .@"enum" => {
+                const s = py.PyUnicode_AsUTF8(item);
+                if (s == null) {
+                    std.heap.c_allocator.destroy(node);
+                    return null;
+                }
+                const enum_str = std.mem.span(s.?);
+                const ev = std.meta.stringToEnum(ChildType, enum_str) orelse {
+                    std.heap.c_allocator.destroy(node);
+                    return null;
+                };
+                node.* = NodeType{ .data = ev };
+            },
+            .int => {
+                const v = py.PyLong_AsLong(item);
+                if (v == -1 and py.PyErr_Occurred() != null) {
+                    std.heap.c_allocator.destroy(node);
+                    return null;
+                }
+                node.* = NodeType{ .data = @intCast(v) };
+            },
+            .float => {
+                const v = py.PyFloat_AsDouble(item);
+                if (v == -1.0 and py.PyErr_Occurred() != null) {
+                    std.heap.c_allocator.destroy(node);
+                    return null;
+                }
+                node.* = NodeType{ .data = @floatCast(v) };
+            },
+            .bool => {
+                const v = py.PyObject_IsTrue(item);
+                if (v == -1) {
+                    std.heap.c_allocator.destroy(node);
+                    return null;
+                }
+                node.* = NodeType{ .data = (v == 1) };
+            },
+            .pointer => |p| {
+                if (p.size == .slice and p.child == u8) {
+                    const s = py.PyUnicode_AsUTF8(item);
+                    if (s == null) {
+                        std.heap.c_allocator.destroy(node);
+                        return null;
+                    }
+                    const slice = std.mem.span(s.?);
+                    const dup = std.heap.c_allocator.dupe(u8, slice) catch {
+                        std.heap.c_allocator.destroy(node);
+                        return null;
+                    };
+                    node.* = NodeType{ .data = dup };
+                } else {
+                    std.heap.c_allocator.destroy(node);
+                    return null;
+                }
+            },
+            else => {
+                std.heap.c_allocator.destroy(node);
+                return null;
+            },
+        }
+
+        ll.append(node);
+    }
+
+    return ll;
+}
+
+// Property for optional linked-list fields (?DoublyLinkedList(T)): None
+// means the field is absent; an empty Python list is a present-but-empty
+// list (a meaningful distinction, e.g. a via's (zone_layer_connections)).
+fn optional_linked_list_prop(comptime struct_type: type, comptime field_name: [*:0]const u8, comptime ChildType: type) py.PyGetSetDef {
+    const field_name_slice = comptime sentinelToSlice(field_name);
+    const child_info = @typeInfo(ChildType);
+    const FieldType = ?compat.DoublyLinkedList(ChildType);
+    const type_name_for_registry = if (child_info == .@"struct")
+        @typeName(ChildType) ++ "\x00"
+    else
+        "";
+
+    const getter = struct {
+        fn impl(self: ?*py.PyObject, _: ?*anyopaque) callconv(.c) ?*py.PyObject {
+            const obj = castSelf(struct_type, self);
+            const field_ptr = wrapperFieldPtr(struct_type, FieldType, field_name_slice, obj);
+            if (field_ptr.* == null) {
+                const none = py.Py_None();
+                py.Py_INCREF(none);
+                return none;
+            }
+            const element_type_obj = if (child_info == .@"struct")
+                pyzig.ensureTypeObject(ChildType, type_name_for_registry, "Failed to initialize linked_list nested type")
+            else
+                null;
+            return linked_list.createMutableList(ChildType, &field_ptr.*.?, element_type_obj, self);
+        }
+    }.impl;
+
+    const setter = struct {
+        fn impl(self: ?*py.PyObject, value: ?*py.PyObject, _: ?*anyopaque) callconv(.c) c_int {
+            const obj = castSelf(struct_type, self);
+            const field_ptr = wrapperFieldPtr(struct_type, FieldType, field_name_slice, obj);
+            if (value == null or value == py.Py_None()) {
+                field_ptr.* = null;
+                return 0;
+            }
+            const ll = buildLinkedListFromSequence(ChildType, value) orelse return -1;
+            field_ptr.* = ll;
+            return 0;
+        }
+    }.impl;
+
+    return .{ .name = field_name, .get = getter, .set = setter };
+}
+
 fn linked_list_prop(comptime struct_type: type, comptime field_name: [*:0]const u8, comptime ChildType: type) py.PyGetSetDef {
     const field_name_slice = comptime sentinelToSlice(field_name);
     const child_info = @typeInfo(ChildType);
@@ -444,94 +584,7 @@ fn linked_list_prop(comptime struct_type: type, comptime field_name: [*:0]const 
             if (value == null) return -1;
 
             // Generic: accept any Python sequence and build a DoublyLinkedList
-            const LL = compat.DoublyLinkedList(ChildType);
-            const NodeType = LL.Node;
-            var ll = LL{};
-
-            const seq_len = py.PySequence_Size(value);
-            if (seq_len < 0) {
-                py.PyErr_SetString(py.PyExc_TypeError, "Expected a sequence for linked list field");
-                return -1;
-            }
-
-            var i: isize = 0;
-            while (i < seq_len) : (i += 1) {
-                const item = py.PySequence_GetItem(value, i);
-                if (item == null) return -1;
-                defer py.Py_DECREF(item.?);
-
-                const node = std.heap.c_allocator.create(NodeType) catch return -1;
-                // convert
-                const child_ti = @typeInfo(ChildType);
-                switch (child_ti) {
-                    .@"struct" => {
-                        const nested = @as(*pyzig.PyObjectWrapper(ChildType), @ptrCast(@alignCast(item)));
-                        node.* = NodeType{ .data = nested.data.* };
-                    },
-                    .@"enum" => {
-                        const s = py.PyUnicode_AsUTF8(item);
-                        if (s == null) {
-                            std.heap.c_allocator.destroy(node);
-                            return -1;
-                        }
-                        const enum_str = std.mem.span(s.?);
-                        const ev = std.meta.stringToEnum(ChildType, enum_str) orelse {
-                            std.heap.c_allocator.destroy(node);
-                            return -1;
-                        };
-                        node.* = NodeType{ .data = ev };
-                    },
-                    .int => {
-                        const v = py.PyLong_AsLong(item);
-                        if (v == -1 and py.PyErr_Occurred() != null) {
-                            std.heap.c_allocator.destroy(node);
-                            return -1;
-                        }
-                        node.* = NodeType{ .data = @intCast(v) };
-                    },
-                    .float => {
-                        const v = py.PyFloat_AsDouble(item);
-                        if (v == -1.0 and py.PyErr_Occurred() != null) {
-                            std.heap.c_allocator.destroy(node);
-                            return -1;
-                        }
-                        node.* = NodeType{ .data = @floatCast(v) };
-                    },
-                    .bool => {
-                        const v = py.PyObject_IsTrue(item);
-                        if (v == -1) {
-                            std.heap.c_allocator.destroy(node);
-                            return -1;
-                        }
-                        node.* = NodeType{ .data = (v == 1) };
-                    },
-                    .pointer => |p| {
-                        if (p.size == .slice and p.child == u8) {
-                            const s = py.PyUnicode_AsUTF8(item);
-                            if (s == null) {
-                                std.heap.c_allocator.destroy(node);
-                                return -1;
-                            }
-                            const slice = std.mem.span(s.?);
-                            const dup = std.heap.c_allocator.dupe(u8, slice) catch {
-                                std.heap.c_allocator.destroy(node);
-                                return -1;
-                            };
-                            node.* = NodeType{ .data = dup };
-                        } else {
-                            std.heap.c_allocator.destroy(node);
-                            return -1;
-                        }
-                    },
-                    else => {
-                        std.heap.c_allocator.destroy(node);
-                        return -1;
-                    },
-                }
-
-                ll.append(node);
-            }
-
+            const ll = buildLinkedListFromSequence(ChildType, value) orelse return -1;
             const list_ptr = wrapperFieldPtr(struct_type, FieldType, field_name_slice, obj);
             list_ptr.* = ll;
             return 0;
@@ -605,7 +658,14 @@ pub fn genProp(comptime WrapperType: type, comptime FieldType: type, comptime fi
             // Temporary: expose unsupported pointer fields as non-accessible properties
             return .{ .name = field_name, .get = null, .set = null };
         },
-        .optional => |opt| return optional_prop(WrapperType, field_name, opt.child),
+        .optional => |opt| {
+            if (@typeInfo(opt.child) == .@"struct" and linked_list.isLinkedList(opt.child)) {
+                const NodeType = opt.child.Node;
+                const child_t = @FieldType(NodeType, "data");
+                return optional_linked_list_prop(WrapperType, field_name, child_t);
+            }
+            return optional_prop(WrapperType, field_name, opt.child);
+        },
         .@"struct" => if (linked_list.isLinkedList(FieldType)) {
             const NodeType = FieldType.Node;
             const child_t = @FieldType(NodeType, "data");

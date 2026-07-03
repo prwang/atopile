@@ -1,0 +1,111 @@
+{
+ "arcs": [],
+ "footprints": [
+  {
+   "at": [
+    141.9606,
+    108.3691,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "3",
+     "net": ""
+    }
+   ],
+   "reference": ""
+  },
+  {
+   "at": [
+    142.5956,
+    101.6381,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": ""
+    }
+   ],
+   "reference": ""
+  },
+  {
+   "at": [
+    151.1046,
+    108.6231,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "4",
+     "net": ""
+    }
+   ],
+   "reference": ""
+  },
+  {
+   "at": [
+    152.6286,
+    101.8921,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "2",
+     "net": ""
+    }
+   ],
+   "reference": ""
+  }
+ ],
+ "groups": [],
+ "nets": [],
+ "segments": [],
+ "semantic_view_version": 1,
+ "vias": [],
+ "zones": []
+}

@@ -1,0 +1,517 @@
+{
+ "arcs": [],
+ "footprints": [
+  {
+   "at": [
+    121.0,
+    89.0,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "TestPoint:TestPoint_Pad_D2.0mm",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "1",
+     "net": ""
+    }
+   ],
+   "reference": "P1"
+  },
+  {
+   "at": [
+    125.0,
+    89.0,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "TestPoint:TestPoint_Pad_D2.0mm",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "1",
+     "net": ""
+    }
+   ],
+   "reference": "P2"
+  },
+  {
+   "at": [
+    129.0,
+    89.0,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "TestPoint:TestPoint_Pad_D2.0mm",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "Pad",
+     "net": ""
+    }
+   ],
+   "reference": "P3"
+  },
+  {
+   "at": [
+    133.0,
+    89.0,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "TestPoint:TestPoint_Pad_D2.0mm",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      45.0
+     ],
+     "layers": [
+      "F.Adhes",
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "name": "Pad",
+     "net": ""
+    }
+   ],
+   "reference": "P4"
+  },
+  {
+   "at": [
+    137.0,
+    89.0,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "TestPoint:TestPoint_Pad_D2.0mm",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      315.0
+     ],
+     "layers": [
+      "F.Cu"
+     ],
+     "name": "2",
+     "net": ""
+    }
+   ],
+   "reference": "P5"
+  },
+  {
+   "at": [
+    129.6,
+    97.05,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "TestPoint:TestPoint_Pad_D2.0mm",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      90.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "1",
+     "net": ""
+    }
+   ],
+   "reference": "P6"
+  },
+  {
+   "at": [
+    121.0,
+    93.6,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "Jumper:SolderJumper-2_P1.3mm_Open_TrianglePad1.0x1.5mm",
+   "pads": [
+    {
+     "at": [
+      -0.725,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "1",
+     "net": ""
+    },
+    {
+     "at": [
+      0.725,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask"
+     ],
+     "name": "2",
+     "net": ""
+    }
+   ],
+   "reference": "SB1"
+  }
+ ],
+ "groups": [],
+ "nets": [
+  "A",
+  "B"
+ ],
+ "segments": [],
+ "semantic_view_version": 1,
+ "vias": [
+  {
+   "at": [
+    128.0,
+    80.0
+   ],
+   "drill": 0.3,
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "net": "",
+   "size": 0.6
+  },
+  {
+   "at": [
+    128.0,
+    81.0
+   ],
+   "drill": 0.3,
+   "layers": [
+    "In1.Cu",
+    "In4.Cu"
+   ],
+   "net": "",
+   "size": 0.6
+  },
+  {
+   "at": [
+    128.0,
+    82.0
+   ],
+   "drill": 0.3,
+   "layers": [
+    "In2.Cu",
+    "In3.Cu"
+   ],
+   "net": "",
+   "size": 0.6
+  },
+  {
+   "at": [
+    128.0,
+    83.0
+   ],
+   "drill": 0.3,
+   "layers": [
+    "In2.Cu",
+    "In3.Cu"
+   ],
+   "net": "",
+   "size": 0.6
+  },
+  {
+   "at": [
+    120.0,
+    80.0
+   ],
+   "drill": 0.3,
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "net": "A",
+   "size": 0.6
+  },
+  {
+   "at": [
+    124.0,
+    80.0
+   ],
+   "drill": 0.3,
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "net": "A",
+   "size": 0.6
+  },
+  {
+   "at": [
+    126.0,
+    80.0
+   ],
+   "drill": 0.3,
+   "layers": [
+    "In1.Cu",
+    "In4.Cu"
+   ],
+   "net": "A",
+   "size": 0.6
+  },
+  {
+   "at": [
+    126.0,
+    81.0
+   ],
+   "drill": 0.2,
+   "layers": [
+    "F.Cu",
+    "In1.Cu"
+   ],
+   "net": "A",
+   "size": 0.4
+  },
+  {
+   "at": [
+    126.0,
+    84.0
+   ],
+   "drill": 0.4,
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "net": "A",
+   "size": 0.8
+  },
+  {
+   "at": [
+    126.0,
+    85.0
+   ],
+   "drill": 0.4,
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "net": "A",
+   "size": 0.8
+  },
+  {
+   "at": [
+    126.0,
+    86.0
+   ],
+   "drill": 0.4,
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "net": "A",
+   "size": 0.8
+  },
+  {
+   "at": [
+    126.0,
+    87.0
+   ],
+   "drill": 0.4,
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "net": "A",
+   "size": 0.8
+  },
+  {
+   "at": [
+    122.0,
+    79.1
+   ],
+   "drill": 0.3,
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "net": "B",
+   "size": 0.6
+  },
+  {
+   "at": [
+    122.0,
+    80.0
+   ],
+   "drill": 0.3,
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "net": "B",
+   "size": 0.6
+  },
+  {
+   "at": [
+    122.0,
+    81.0
+   ],
+   "drill": 0.35,
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "net": "B",
+   "size": 0.7
+  },
+  {
+   "at": [
+    122.0,
+    82.0
+   ],
+   "drill": 0.35,
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "net": "B",
+   "size": 0.7
+  },
+  {
+   "at": [
+    122.0,
+    83.0
+   ],
+   "drill": 0.35,
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "net": "B",
+   "size": 0.7
+  },
+  {
+   "at": [
+    123.0,
+    83.0
+   ],
+   "drill": 0.35,
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "net": "B",
+   "size": 0.7
+  },
+  {
+   "at": [
+    126.0,
+    80.0
+   ],
+   "drill": 0.1,
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "net": "B",
+   "size": 0.2
+  },
+  {
+   "at": [
+    126.0,
+    81.0
+   ],
+   "drill": 0.1,
+   "layers": [
+    "F.Cu",
+    "In4.Cu"
+   ],
+   "net": "B",
+   "size": 0.2
+  },
+  {
+   "at": [
+    126.0,
+    82.0
+   ],
+   "drill": 0.4,
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "net": "B",
+   "size": 0.8
+  },
+  {
+   "at": [
+    126.0,
+    82.0
+   ],
+   "drill": 0.1,
+   "layers": [
+    "B.Cu",
+    "In4.Cu"
+   ],
+   "net": "B",
+   "size": 0.2
+  },
+  {
+   "at": [
+    126.0,
+    83.0
+   ],
+   "drill": 0.4,
+   "layers": [
+    "B.Cu",
+    "F.Cu"
+   ],
+   "net": "B",
+   "size": 0.8
+  },
+  {
+   "at": [
+    126.0,
+    83.0
+   ],
+   "drill": 0.1,
+   "layers": [
+    "B.Cu",
+    "In3.Cu"
+   ],
+   "net": "B",
+   "size": 0.3
+  }
+ ],
+ "zones": []
+}

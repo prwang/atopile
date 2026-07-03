@@ -12,6 +12,10 @@ fn isLinkedList(comptime T: type) bool {
     return @typeInfo(T) == .@"struct" and @hasField(T, "first") and @hasField(T, "last") and @hasDecl(T, "Node");
 }
 
+fn isOptionalLinkedList(comptime T: type) bool {
+    return @typeInfo(T) == .optional and isLinkedList(@typeInfo(T).optional.child);
+}
+
 fn isSimpleType(comptime T: type) bool {
     return switch (@typeInfo(T)) {
         .int, .float, .bool, .@"enum" => true,
@@ -48,6 +52,11 @@ pub const SexpField = struct {
     // read_net_names, writing emits the resolved name (clause omitted for
     // net 0, the implicit no-net).
     net_ref: bool = false,
+    // net_ref_explicit_empty: KiCad's track writer (segment/arc/via) always
+    // emits the net clause, as (net "") for the no-net case, while pads and
+    // zones omit it for net 0. Set on track-like net_ref fields so our v10
+    // output matches the KiCad 10.0.3 formatter exactly.
+    net_ref_explicit_empty: bool = false,
 };
 
 // Write dialect for the streamed encoder. Set by the file-level dumps()
@@ -279,11 +288,13 @@ fn setErrorContext(base_ctx: ErrorContext, sexp: SExp) void {
     current_error_context = ctx;
 }
 
-// Lightweight helpers to cut boilerplate when setting error context
+// Lightweight helpers to cut boilerplate when setting error context.
+// The path is always the type currently being decoded: contexts set during
+// earlier (successful) decodes are stale, and reusing their path made hard
+// errors name an unrelated struct (e.g. a via-padstack MissingField was once
+// reported as "kicad.pcb.Font field 'y'"). Loud errors must name the real
+// struct/field.
 inline fn _baseCtx(comptime T: type, field_name: ?[]const u8) ErrorContext {
-    if (getErrorContext()) |c| {
-        return .{ .path = c.path, .field_name = field_name orelse c.field_name };
-    }
     return .{ .path = @typeName(T), .field_name = field_name };
 }
 
@@ -380,6 +391,7 @@ fn getSexpMetadata(comptime T: type, comptime field_name: []const u8) SexpField 
             if (@hasField(@TypeOf(meta), "v9_only")) result.v9_only = meta.v9_only;
             if (@hasField(@TypeOf(meta), "dual_bool")) result.dual_bool = meta.dual_bool;
             if (@hasField(@TypeOf(meta), "net_ref")) result.net_ref = meta.net_ref;
+            if (@hasField(@TypeOf(meta), "net_ref_explicit_empty")) result.net_ref_explicit_empty = meta.net_ref_explicit_empty;
             return result;
         }
     }
@@ -702,6 +714,17 @@ fn finalizeUnsetFields(comptime T: type, allocator: std.mem.Allocator, items: []
                 if (nested_items.len == 0) continue;
                 const sym = ast.getSymbol(nested_items[0]) orelse continue;
                 if (!std.mem.eql(u8, sym, fname)) continue;
+                if (nested_items.len == 1 and comptime isOptionalLinkedList(field.type)) {
+                    // A key-only entry for an optional list field means
+                    // "present but empty" — semantically distinct from absent
+                    // (e.g. a via's (zone_layer_connections) forces
+                    // no-zone-connection on every layer; its absence leaves
+                    // the defaults). Absent stays null.
+                    @field(result.*, field.name) = @typeInfo(field.type).optional.child{};
+                    fields_set.set(field_idx);
+                    found_nested = true;
+                    break;
+                }
                 if (nested_items.len == 1 and field.default_value_ptr != null) {
                     // Apply the default value when we have a key-only entry like "(stroke)"
                     const default_ptr = field.default_value_ptr.?;
@@ -793,6 +816,14 @@ fn decodeOptional(comptime T: type, allocator: std.mem.Allocator, sexp: SExp, me
     if (ast.isList(sexp)) {
         const items = ast.getList(sexp).?;
         if (items.len == 0) return null;
+    }
+    // KiCad tri-state opt-bool (FormatOptBool): (front none) / (capping none)
+    // means "unspecified / inherit from board" — distinct from no. Only ?bool
+    // fields accept the token; it maps to null.
+    if (comptime @typeInfo(T) == .bool) {
+        if (ast.getSymbol(sexp)) |sym| {
+            if (std.mem.eql(u8, sym, "none")) return null;
+        }
     }
     return try decodeWithMetadata(T, allocator, sexp, metadata);
 }
@@ -1341,9 +1372,11 @@ fn listWouldWriteAnyItems(value: anytype, metadata: SexpField, name: []const u8)
 fn keyValueWouldWrite(value: anytype, metadata: SexpField, name: []const u8) bool {
     if (metadata.v9_only and write_dialect == .v10) return false;
     if (comptime @typeInfo(@TypeOf(value)) == .int) {
-        // v10 omits the net clause entirely for net 0 (implicit no-net),
-        // e.g. keepout zones carry no (net ...) at all
-        if (metadata.net_ref and write_dialect == .v10 and value == 0) return false;
+        // v10 omits the net clause for net 0 (implicit no-net) on pads and
+        // zones, e.g. keepout zones carry no (net ...) at all; track-like
+        // items (net_ref_explicit_empty) always write it, as (net "").
+        if (metadata.net_ref and write_dialect == .v10 and value == 0 and
+            !metadata.net_ref_explicit_empty) return false;
     }
     if (valueEncodesAsList(value, metadata, name)) {
         return listWouldWriteAnyItems(value, metadata, name);
@@ -1366,6 +1399,18 @@ fn structBodyWouldWriteAnyItems(value: anytype) bool {
         if (comptime fm.dual_bool) {
             if (@TypeOf(fv) == bool) {
                 if (!skip_v9_only and (write_dialect == .v10 or fv)) return true;
+                continue;
+            }
+            if (comptime isOptional(f.type) and @typeInfo(@typeInfo(f.type).optional.child) == .bool) {
+                // tri-state opt-bool: mirrors KiCad's has_value() gate — an
+                // all-null tenting/covering/plugging block is not written
+                if (!skip_v9_only) {
+                    if (write_dialect == .v9) {
+                        if (fv orelse false) return true;
+                    } else if (fv != null) {
+                        return true;
+                    }
+                }
                 continue;
             }
         }
@@ -1543,6 +1588,12 @@ fn writeEncodedValueToWriter(
                         return;
                     }
                 }
+                // net 0 is the implicit no-net and is "" by definition, even
+                // when the board carries no net table entry for it
+                if (value == 0) {
+                    try ast.writeEscapedString("", writer);
+                    return;
+                }
                 // a net handle with no table entry cannot be serialized
                 return error.InvalidType;
             }
@@ -1663,6 +1714,27 @@ fn writeStructBodyStreamed(allocator: std.mem.Allocator, writer: anytype, value:
                 }
                 continue;
             }
+            if (comptime isOptional(f.type) and @typeInfo(@typeInfo(f.type).optional.child) == .bool) {
+                // tri-state opt-bool (KiCad FormatOptBool): v9 writes the bare
+                // symbol only for true; v10 always writes (name yes|no|none),
+                // null being the "none" (unspecified/inherit) token
+                if (write_dialect == .v9) {
+                    if (fv orelse false) {
+                        if (wrote_any or emit_leading_space) try writer.writeByte(' ');
+                        try writer.writeAll(fname);
+                        wrote_any = true;
+                    }
+                } else {
+                    if (wrote_any or emit_leading_space) try writer.writeByte(' ');
+                    try writer.writeByte('(');
+                    try writer.writeAll(fname);
+                    try writer.writeByte(' ');
+                    try writer.writeAll(if (fv) |b| (if (b) "yes" else "no") else "none");
+                    try writer.writeByte(')');
+                    wrote_any = true;
+                }
+                continue;
+            }
         }
 
         if (fm.multidict) {
@@ -1700,7 +1772,17 @@ fn writeStructBodyStreamed(allocator: std.mem.Allocator, writer: anytype, value:
 
         if (comptime isOptional(@TypeOf(fv))) {
             if (fv) |vv| {
-                if (try writeEncodedKeyValueToWriter(
+                if (comptime isLinkedList(@TypeOf(vv))) {
+                    // optional list: present-but-empty is meaningful (see the
+                    // matching read rule in finalizeUnsetFields) — emit the
+                    // bare key, e.g. "(zone_layer_connections)"
+                    if (wrote_any or emit_leading_space) try writer.writeByte(' ');
+                    try writer.writeByte('(');
+                    try writer.writeAll(fname);
+                    _ = try writeEncodedListItemsToWriter(allocator, writer, vv, fm, f.name, true);
+                    try writer.writeByte(')');
+                    wrote_any = true;
+                } else if (try writeEncodedKeyValueToWriter(
                     allocator,
                     writer,
                     fname,

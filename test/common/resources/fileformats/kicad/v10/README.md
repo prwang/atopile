@@ -9,6 +9,10 @@ tests. Generated 2026-06-12 with kicad-cli 10.0.3:
 | `pcb/layout_reuse_top.kicad_pcb` | upgrade of an atopile-built `examples/layout_reuse` top board (contains atopile groups, placement rule area, manual segments) | yes |
 | `pcb/interf_u_unrouted.kicad_pcb` | upgrade of KiCadRoutingTools `kicad_files/interf_u_unrouted.kicad_pcb` (real-world KiCad-authored board, many nets) | yes |
 | `pcb/lvds_converter_dualclk.kicad_pcb` | copied verbatim from KiCadRoutingTools — **natively saved by KiCad 10**, not an upgrade artifact | no (no v9 original exists) |
+| `pcb/padstacks_complex.kicad_pcb` | `kicad-cli pcb upgrade --force` of the KiCad QA board `qa/data/pcbnew/padstacks_complex.kicad_pcb` — pad-level `(padstack (mode front_inner_back\|custom) ...)` with per-layer shape/size/roundrect/chamfer overrides | no |
+| `pcb/teardrop_elongated_pad.kicad_pcb` | upgrade of the KiCad QA board `teardrop_elongated_pad` — pad-level `(teardrops ...)`, board-level `(property ...)` text variables | no |
+| `pcb/two_segment_teardrop.kicad_pcb` | upgrade of the KiCad QA board `two_segment_teardrop` — via-level `(teardrops ...)`, teardrop zones `(attr (teardrop (type padvia)))`, via + setup IPC-4761 treatments | no |
+| `pcb/via_treatments.kicad_pcb` | KiCad QA board `padstacks` + hand-added vias (buried/micro, backdrill, tertiary_drill, front/back_post_machining, start_end_only, via padstack front_inner_back + custom, via teardrops), then normalized by `kicad-cli pcb upgrade --force` 10.0.3 so every byte is KiCad-authored; also exhibits blind vias, tri-state `(tenting (front none) ...)`, empty `(zone_layer_connections)`, flat pad chamfer, custom-pad primitives (gr_line/rect/bbox/arc/circle/poly) | no |
 
 Key v10 dialect properties these files exhibit (vs v9):
 

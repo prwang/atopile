@@ -219,12 +219,15 @@ pub const E_pad_property = enum {
     none,
 };
 
-// Pad chamfer enum
-pub const E_pad_chamfer = enum {
-    chamfer_top_left,
-    chamfer_top_right,
-    chamfer_bottom_left,
-    chamfer_bottom_right,
+// Pad chamfer corner tokens. KiCad writes (chamfer top_left [top_right ...])
+// — a list of bare corner symbols (pcb_io_kicad_sexpr 10.0.3
+// formatCornerProperties); the same shape appears per-layer inside a pad
+// padstack.
+pub const E_pad_chamfer_corner = enum {
+    top_left,
+    top_right,
+    bottom_left,
+    bottom_right,
 };
 
 // Pad drill shape enum
@@ -240,13 +243,16 @@ pub const E_pad_drill_shape = enum {
 
 // Tenting (and friends) for setup/pad/via. Two serialized shapes:
 //   v9:  (tenting front back)            — bare presence symbols
-//   v10: (tenting (front yes) (back yes)) — nested key-values
+//   v10: (tenting (front yes) (back none)) — nested tri-state key-values
 // Reading accepts both; writing follows structure.write_dialect (dual_bool).
-// "none" is the v9 pad-level explicit opt-out token and is never written in
-// the v10 dialect (v9_only).
+// front/back are tri-state (KiCad FormatOptBool: yes | no | none, where
+// "none" = unspecified/inherit ≠ "no"); null maps to the none token and the
+// whole block is omitted when both sides are null, exactly like KiCad's
+// has_value() gate. The bare "none" field is the v9 pad-level explicit
+// opt-out token and is never written in the v10 dialect (v9_only).
 pub const Tenting = struct {
-    front: bool = false,
-    back: bool = false,
+    front: ?bool = null,
+    back: ?bool = null,
     none: bool = false,
 
     pub const fields_meta = .{
@@ -461,11 +467,22 @@ pub const Rect = struct {
     };
 };
 
+// An arc entry inside (pts ...): KiCad writes curved outline segments of a
+// SHAPE_LINE_CHAIN as (arc (start ..) (mid ..) (end ..)) interleaved with
+// the (xy ..) points (formatPolyPts).
+pub const PtsArc = struct {
+    start: Xy,
+    mid: Xy,
+    end: Xy,
+};
+
 pub const Pts = struct {
     xys: list(Xy) = .{},
+    arcs: list(PtsArc) = .{},
 
     pub const fields_meta = .{
         .xys = structure.SexpField{ .multidict = true, .sexp_name = "xy" },
+        .arcs = structure.SexpField{ .multidict = true, .sexp_name = "arc" },
     };
 };
 
@@ -536,10 +553,79 @@ pub const FpText = struct {
 // Pad structures
 pub const Drill = f64;
 
+// Pad custom-shape primitives (KiCad 10.0.3 formatPrimitives :1941-2040 and
+// the padstack-layer T_primitives parser): bare geometry with the legacy
+// (width d) token and (fill yes|no) — no stroke/layer/uuid. gr_vector and
+// gr_bbox are proxy items: no width; gr_bbox (a rectangle) still carries
+// fill.
+pub const PrimitiveLine = struct {
+    start: Xy,
+    end: Xy,
+    width: f64,
+};
+
+pub const PrimitiveVector = struct {
+    start: Xy,
+    end: Xy,
+};
+
+pub const PrimitiveRect = struct {
+    start: Xy,
+    end: Xy,
+    radius: ?f64 = null,
+    width: f64,
+    fill: ?bool = null,
+};
+
+pub const PrimitiveBbox = struct {
+    start: Xy,
+    end: Xy,
+    fill: ?bool = null,
+};
+
+pub const PrimitiveArc = struct {
+    start: Xy,
+    mid: Xy,
+    end: Xy,
+    width: f64,
+};
+
+pub const PrimitiveCircle = struct {
+    center: Xy,
+    end: Xy,
+    width: f64,
+    fill: ?bool = null,
+};
+
+pub const PrimitiveCurve = struct {
+    pts: Pts,
+    width: f64,
+};
+
+pub const PrimitivePoly = struct {
+    pts: Pts,
+    width: f64,
+    fill: ?bool = null,
+};
+
 pub const PadPrimitives = struct {
-    gr_polys: list(Polygon) = .{},
+    gr_lines: list(PrimitiveLine) = .{},
+    gr_vectors: list(PrimitiveVector) = .{},
+    gr_rects: list(PrimitiveRect) = .{},
+    gr_bboxes: list(PrimitiveBbox) = .{},
+    gr_arcs: list(PrimitiveArc) = .{},
+    gr_circles: list(PrimitiveCircle) = .{},
+    gr_curves: list(PrimitiveCurve) = .{},
+    gr_polys: list(PrimitivePoly) = .{},
 
     pub const fields_meta = .{
+        .gr_lines = structure.SexpField{ .multidict = true, .sexp_name = "gr_line" },
+        .gr_vectors = structure.SexpField{ .multidict = true, .sexp_name = "gr_vector" },
+        .gr_rects = structure.SexpField{ .multidict = true, .sexp_name = "gr_rect" },
+        .gr_bboxes = structure.SexpField{ .multidict = true, .sexp_name = "gr_bbox" },
+        .gr_arcs = structure.SexpField{ .multidict = true, .sexp_name = "gr_arc" },
+        .gr_circles = structure.SexpField{ .multidict = true, .sexp_name = "gr_circle" },
+        .gr_curves = structure.SexpField{ .multidict = true, .sexp_name = "gr_curve" },
         .gr_polys = structure.SexpField{ .multidict = true, .sexp_name = "gr_poly" },
     };
 };
@@ -564,38 +650,95 @@ pub const PadOptions = struct {
     anchor: ?E_pad_anchor = null,
 };
 
+// Per-layer pad padstack entry: (layer "Inner"|"B.Cu"|"<Cu name>" ...).
+// Grammar = KiCad 10.0.3 parsePadstack (pcb_io_kicad_sexpr_parser
+// :6567-6905); field order = the formatPadLayer emission order
+// (pcb_io_kicad_sexpr :2078-2150). The layer name is positional: "Inner"
+// (front_inner_back mode) or a copper layer name (custom mode).
+// tenting is parse-accepted by KiCad per layer but never emitted by the
+// 10.0.3 formatter; it is modeled read-side for completeness.
+pub const PadstackLayer = struct {
+    name: str,
+    shape: ?E_pad_shape = null,
+    size: ?Wh = null,
+    rect_delta: ?Xy = null,
+    offset: ?Xy = null,
+    roundrect_rratio: ?f64 = null,
+    chamfer_ratio: ?f64 = null,
+    chamfer: list(E_pad_chamfer_corner) = .{},
+    options: ?PadOptions = null,
+    primitives: ?PadPrimitives = null,
+    thermal_bridge_angle: ?f64 = null,
+    thermal_gap: ?f64 = null,
+    thermal_bridge_width: ?f64 = null,
+    clearance: ?f64 = null,
+    zone_connect: ?E_zone_connection = null,
+    tenting: ?Tenting = null,
+
+    pub const fields_meta = .{
+        .name = structure.SexpField{ .positional = true },
+        .primitives = structure.SexpField{ .sexp_name = "primitives" },
+    };
+};
+
+// Pad-level (padstack (mode front_inner_back|custom) (layer ...)...).
+// mode is a KEYED sub-list — KiCad's parser rejects a bare mode token.
+pub const PadPadstack = struct {
+    mode: E_padstack_mode,
+    layers: list(PadstackLayer) = .{},
+
+    pub const fields_meta = .{
+        .layers = structure.SexpField{ .multidict = true, .sexp_name = "layer" },
+    };
+};
+
+// Field order = the KiCad 10.0.3 pad emission order (pcb_io_kicad_sexpr
+// format(PAD) :1698-2185): ... options, primitives, teardrops, tenting,
+// uuid, padstack.
 pub const Pad = struct {
     name: str,
     type: E_pad_type,
     shape: E_pad_shape,
     at: Xyr,
     size: Wh,
+    rect_delta: ?Xy = null,
     drill: ?PadDrill = null,
     layers: list(str) = .{},
     remove_unused_layers: ?bool = null,
+    keep_end_layers: ?bool = null,
+    // present-but-empty is meaningful (forces no-zone-connection on every
+    // layer); KiCad writes the clause, possibly bare, whenever the
+    // unconnected-layer mode removes copper — hence optional list
+    zone_layer_connections: ?list(str) = null,
+    roundrect_rratio: ?f64 = null,
+    chamfer_ratio: ?f64 = null,
+    chamfer: list(E_pad_chamfer_corner) = .{},
     net: ?Net = null,
+    pinfunction: ?str = null,
+    pintype: ?str = null,
+    die_length: ?f64 = null,
+    die_delay: ?f64 = null,
     solder_mask_margin: ?f64 = null,
     solder_paste_margin: ?f64 = null,
     solder_paste_margin_ratio: ?f64 = null,
     clearance: ?f64 = null,
     zone_connect: ?E_zone_connection = null,
     thermal_bridge_width: ?f64 = null,
+    thermal_bridge_angle: ?f64 = null,
     thermal_gap: ?f64 = null,
-    roundrect_rratio: ?f64 = null,
-    chamfer_ratio: ?f64 = null,
-    chamfer: ?E_pad_chamfer = null,
     properties: ?E_pad_property = null,
-    pinfunction: ?str = null,
-    pintype: ?str = null,
     options: ?PadOptions = null,
+    primitives: ?PadPrimitives = null,
+    teardrops: ?Teardrop = null,
     tenting: ?Tenting = null,
     uuid: ?str = null,
-    primitives: ?PadPrimitives = null,
+    padstack: ?PadPadstack = null,
 
     pub const fields_meta = .{
         .name = structure.SexpField{ .positional = true },
         .type = structure.SexpField{ .positional = true },
         .shape = structure.SexpField{ .positional = true },
+        .properties = structure.SexpField{ .sexp_name = "property" },
         .primitives = structure.SexpField{ .sexp_name = "primitives" },
     };
 };
@@ -656,6 +799,7 @@ pub const E_Attr = enum {
     exclude_from_pos_files,
     exclude_from_bom,
     allow_missing_courtyard,
+    allow_soldermask_bridges,
 };
 
 // Multi-unit symbol mapping, new in the v10 dialect:
@@ -694,6 +838,10 @@ pub const Footprint = struct {
     propertys: list(Property) = .{},
     attr: list(E_Attr) = .{},
     duplicate_pad_numbers_are_jumpers: ?bool = null,
+    // net-tie groups: (net_tie_pad_groups "1,2" "3,4"). The sibling
+    // jumper_pad_groups construct nests headless lists — ("1" "2") — which
+    // the schema engine cannot represent; it stays S5a-loud by decision.
+    net_tie_pad_groups: list(str) = .{},
     fp_lines: list(Line) = .{},
     fp_arcs: list(Arc) = .{},
     fp_circles: list(Circle) = .{},
@@ -718,45 +866,107 @@ pub const Footprint = struct {
     };
 };
 
-// Via layer structure
+// Via padstack per-layer entry. The v10 file grammar (KiCad 10.0.3
+// parseViastack, pcb_io_kicad_sexpr_parser :7726-7789; writer :2776-2812) is
+// exactly: layer name positional ("Inner" | copper layer name) + a single
+// scalar (size <diameter>) — nothing else is legal. The former
+// thermal_*/zone_connect fields here (and the two-value Xy size) mirrored
+// KiCad's in-memory per-layer PADSTACK model, not the file syntax — the same
+// file-vs-memory category error as ZonePlacement.source_type (see CLAUDE.md);
+// they made a real v10 via padstack a hard MissingField parse error.
 pub const ViaLayer = struct {
     name: str,
-    size: ?Xy = null,
-    thermal_gap: ?f64 = null,
-    thermal_bridge_width: ?f64 = null,
-    thermal_bridge_angle: ?f64 = null,
-    zone_connect: ?E_zone_connection = null,
+    size: ?f64 = null,
+
+    pub const fields_meta = .{
+        .name = structure.SexpField{ .positional = true },
+    };
 };
 
-// Via structure
+// (padstack (mode front_inner_back|custom) (layer "..." (size d)) ...).
+// mode is a KEYED sub-list — KiCad's parser (and ours, before this fix,
+// wrongly wrote it positionally) rejects a bare mode token.
 pub const ViaPadstack = struct {
     mode: E_padstack_mode,
     layers: list(ViaLayer) = .{},
 
     pub const fields_meta = .{
-        .mode = structure.SexpField{ .positional = true },
         .layers = structure.SexpField{ .multidict = true, .sexp_name = "layer" },
     };
 };
 
+// Via type token: (via blind ...) etc.; a through via carries no token.
+pub const E_via_type = enum {
+    blind,
+    buried,
+    micro,
+};
+
+// (backdrill (size d) (layers "start" "end")) — also used for
+// tertiary_drill. size is a single scalar diameter.
+pub const Backdrill = struct {
+    size: ?f64 = null,
+    layers: list(str) = .{},
+};
+
+pub const E_post_machining_mode = enum {
+    counterbore,
+    countersink,
+};
+
+// (front_post_machining counterbore (size d) (depth d) (angle a)) — mode is
+// positional. angle is stored in the file in degrees; KiCad keeps tenths
+// internally and divides by 10 on write (parse multiplies by 10) — we carry
+// the file value verbatim.
+pub const PostMachining = struct {
+    mode: E_post_machining_mode,
+    size: ?f64 = null,
+    depth: ?f64 = null,
+    angle: ?f64 = null,
+
+    pub const fields_meta = .{
+        .mode = structure.SexpField{ .positional = true },
+    };
+};
+
+// Field order = the KiCad 10.0.3 via emission order (pcb_io_kicad_sexpr
+// format(PCB_TRACK) :2605-2816): type token, at/size/drill, backdrill,
+// tertiary_drill, post machining, layers, unconnected-layer mode, locked,
+// free, zone_layer_connections, tenting/capping/covering/plugging/filling,
+// padstack, teardrops, net, uuid.
 pub const Via = struct {
+    type: ?E_via_type = null,
     at: Xy,
     size: f64,
     drill: f64,
+    backdrill: ?Backdrill = null,
+    tertiary_drill: ?Backdrill = null,
+    front_post_machining: ?PostMachining = null,
+    back_post_machining: ?PostMachining = null,
     layers: list(str) = .{},
-    net: i32 = 0,
     remove_unused_layers: ?bool = null,
     keep_end_layers: ?bool = null,
-    zone_layer_connections: list(str) = .{},
+    start_end_only: ?bool = null,
+    locked: ?bool = null,
+    free: ?bool = null,
+    // present-but-empty is meaningful — see Pad.zone_layer_connections
+    zone_layer_connections: ?list(str) = null,
+    // IPC-4761 protection family (v10, format 20250228): covering/plugging
+    // share the nested front/back shape with tenting; capping/filling are
+    // plain opt-bools.
+    tenting: ?Tenting = null,
+    capping: ?bool = null,
+    covering: ?Tenting = null,
+    plugging: ?Tenting = null,
+    filling: ?bool = null,
     padstack: ?ViaPadstack = null,
     teardrops: ?Teardrop = null,
-    tenting: ?Tenting = null,
-    free: ?bool = null,
-    locked: ?bool = null,
+    net: i32 = 0,
     uuid: ?str = null,
 
     pub const fields_meta = .{
-        .net = structure.SexpField{ .net_ref = true },
+        .type = structure.SexpField{ .positional = true },
+        .net = structure.SexpField{ .net_ref = true, .net_ref_explicit_empty = true },
     };
 };
 
@@ -810,7 +1020,20 @@ pub const ZoneFill = struct {
 
 pub const FilledPolygon = struct {
     layer: str,
+    // (island yes): the filled polygon is an island (KiCad writer :3081)
+    island: ?bool = null,
     pts: Pts,
+};
+
+// Zone per-layer properties: (property (layer "B.Cu") (hatch_position (xy ..)))
+// — only written when a hatching offset is set (KiCad writer :3094-3110).
+pub const HatchPosition = struct {
+    xy: Xy,
+};
+
+pub const ZoneLayerProperty = struct {
+    layer: str,
+    hatch_position: ?HatchPosition = null,
 };
 
 pub const ZoneKeepout = struct {
@@ -839,6 +1062,7 @@ pub const ZoneAttr = struct {
 pub const Zone = struct {
     net: i32 = 0,
     net_name: ?str = null,
+    locked: ?bool = null,
     layer: ?str = null,
     layers: list(str) = .{},
     uuid: ?str = null,
@@ -852,12 +1076,14 @@ pub const Zone = struct {
     keepout: ?ZoneKeepout = null,
     placement: ?ZonePlacement = null,
     fill: ?ZoneFill = null,
+    propertys: list(ZoneLayerProperty) = .{},
     polygon: Polygon,
     filled_polygon: list(FilledPolygon) = .{},
 
     pub const fields_meta = .{
         .net = structure.SexpField{ .net_ref = true },
         .net_name = structure.SexpField{ .v9_only = true },
+        .propertys = structure.SexpField{ .multidict = true, .sexp_name = "property" },
         .filled_polygon = structure.SexpField{ .multidict = true },
     };
 };
@@ -875,7 +1101,7 @@ pub const Segment = struct {
         .start = structure.SexpField{ .order = -3 },
         .end = structure.SexpField{ .order = -2 },
         .width = structure.SexpField{ .order = -1 },
-        .net = structure.SexpField{ .net_ref = true },
+        .net = structure.SexpField{ .net_ref = true, .net_ref_explicit_empty = true },
     };
 };
 
@@ -889,7 +1115,7 @@ pub const ArcSegment = struct {
     uuid: ?str = null,
 
     pub const fields_meta = .{
-        .net = structure.SexpField{ .net_ref = true },
+        .net = structure.SexpField{ .net_ref = true, .net_ref_explicit_empty = true },
     };
 };
 
@@ -1059,7 +1285,8 @@ pub const PcbPlotParams = struct {
 };
 pub const Setup = struct {
     stackup: ?Stackup = null,
-    pad_to_mask_clearance: i32 = 0,
+    // millimetres: KiCad writes formatInternalUnits (e.g. 0.1016), not an int
+    pad_to_mask_clearance: f64 = 0,
     allow_soldermask_bridges_in_footprints: bool = false,
     tenting: ?Tenting = null,
     // v10 mask/via-treatment family; covering/plugging share the nested
@@ -1069,6 +1296,7 @@ pub const Setup = struct {
     capping: ?bool = null,
     filling: ?bool = null,
     aux_axis_origin: ?Xy = null,
+    grid_origin: ?Xy = null,
     pcbplotparams: PcbPlotParams = .{},
     rules: ?Rules = null,
 };
@@ -1083,6 +1311,9 @@ pub const KicadPcb = struct {
     title_block: ?TitleBlock = null,
     layers: list(Layer) = .{},
     setup: Setup = .{},
+    // board-level text variables: (property "NAME" "value"), written by
+    // KiCad right after setup (formatProperties, 10.0.3 writer :710-757)
+    propertys: list(Property) = .{},
     nets: list(Net) = .{},
     footprints: list(Footprint) = .{},
     vias: list(Via) = .{},
@@ -1109,6 +1340,7 @@ pub const KicadPcb = struct {
     pub const fields_meta = .{
         // Note: layers is NOT multidict - it's a single (layers ...) entry containing multiple Layer items
         // nets: the v10 dialect has no top-level net table at all
+        .propertys = structure.SexpField{ .multidict = true, .sexp_name = "property" },
         .nets = structure.SexpField{ .multidict = true, .sexp_name = "net", .v9_only = true },
         .footprints = structure.SexpField{ .multidict = true, .sexp_name = "footprint" },
         .vias = structure.SexpField{ .multidict = true, .sexp_name = "via" },
@@ -1146,6 +1378,7 @@ pub const Image = struct {
     at: Xy,
     layer: str,
     scale: f64 = 1.0,
+    locked: ?bool = null,
     data: list(str) = .{},
     uuid: ?str = null,
 };
@@ -1165,16 +1398,22 @@ pub const EmbeddedFiles = struct {
     };
 };
 
+// Teardrop parameters on pads and vias. Field order = the KiCad 10.0.3
+// emission order (formatTeardropParameters, pcb_io_kicad_sexpr :780-799).
+// The pre-v9 legacy (curve_points N) read alias is deliberately NOT modeled:
+// only pre-v9 files carry it, outside the declared v9/v10 read scope, and it
+// surfaces loudly via the S5a unknown-key report instead of being silently
+// coerced.
 pub const Teardrop = struct {
-    enabled: bool = false,
-    allow_two_segments: bool = false,
-    prefer_zone_connections: bool = true,
     best_length_ratio: f64,
     max_length: f64,
     best_width_ratio: f64,
     max_width: f64,
     curved_edges: bool,
     filter_ratio: f64,
+    enabled: bool = false,
+    allow_two_segments: bool = false,
+    prefer_zone_connections: bool = true,
 };
 
 pub const RenderCache = struct {
@@ -1321,12 +1560,15 @@ pub const Dimension = struct {
     layer: str,
     uuid: ?str = null,
     pts: DimensionPts,
-    height: f64,
+    // only aligned/orthogonal dimensions carry height; leader/radial/center
+    // do not (KiCad 10.0.3 writer :913-914)
+    height: ?f64 = null,
     orientation: ?f64 = null,
     leader_length: ?f64 = null,
     format: ?DimensionFormat = null,
     style: ?DimensionStyle = null,
-    gr_text: Text,
+    // center dimensions carry no text (KiCad 10.0.3 writer :983-984)
+    gr_text: ?Text = null,
 };
 
 pub const Group = struct {
