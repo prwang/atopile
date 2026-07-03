@@ -27,6 +27,7 @@ from faebryk.core.solver.symbolic import (
     structural,
 )
 from faebryk.core.solver.utils import (
+    ALLOW_PARTIAL_STATE,
     MAX_ITERATIONS_HEURISTIC,
     PRINT_START,
     S_LOG,
@@ -198,6 +199,27 @@ class Solver:
         with timings.measure("symbolic solving"):
             for iterno in count():
                 if iterno > MAX_ITERATIONS_HEURISTIC:
+                    # Convergence backstop. The per-algorithm `dirty` flag is
+                    # bookkeeping-derived, not a diff of the graph, so it can
+                    # stay True while the solve is only churning equivalent
+                    # forms (constant |V|/|E|/|ops| but drifting content) with
+                    # no further tightening -- e.g. estimation stages re-emitting
+                    # congruent IsSubset predicates. Rather than crash the whole
+                    # build, accept the current best-effort state: the estimates
+                    # are supersets, so the partial solution still bounds every
+                    # parameter and downstream picking can proceed (an unpickable
+                    # range surfaces as a normal PickError, not a solver crash).
+                    # Strict mode (SPARTIAL=false) keeps the hard failure so
+                    # tests/CI still surface genuine non-termination.
+                    if ALLOW_PARTIAL_STATE:
+                        logger.warning(
+                            f"Solver hit the iteration limit "
+                            f"({MAX_ITERATIONS_HEURISTIC}) without a clean "
+                            f"fixpoint; accepting the current best-effort "
+                            f"(partial) state and continuing. Set SPARTIAL=false "
+                            f"to fail hard instead."
+                        )
+                        break
                     raise TimeoutError(
                         "Solver Bug: Too many iterations, likely stuck in a loop"
                     )

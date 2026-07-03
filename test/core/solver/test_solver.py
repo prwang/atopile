@@ -326,6 +326,49 @@ def test_shortcircuit_logic_or():
     assert _extract_and_check(A, solver, True)
 
 
+def test_iteration_limit_degrades_to_partial_state(monkeypatch):
+    """Convergence backstop (solver.py `simplify` loop).
+
+    A sub-solve that cannot reach a clean fixpoint within the iteration budget
+    must degrade to the current best-effort (partial) state rather than raising,
+    so a single non-converging solve can no longer crash a whole `ato build`
+    with "Solver Bug: Too many iterations". In strict mode
+    (``ALLOW_PARTIAL_STATE`` off, i.e. ``FBRK_SPARTIAL=n``) it must still raise,
+    so tests/CI keep surfacing genuine non-termination.
+
+    A never-clearing ``dirty`` flag is simulated by stubbing ``_run_iteration``
+    to always report dirty, with a small budget, so the guard is reached
+    deterministically without depending on a genuinely non-terminating graph.
+    """
+    import faebryk.core.solver.solver as solver_mod
+
+    def _build() -> BoundExpressions:
+        E = BoundExpressions()
+        p0, p1 = (E.parameter_op(units=E.U.dl) for _ in range(2))
+        E.is_(p0, p1, assert_=True)
+        return E
+
+    # simulate a solve whose dirty flag never clears (the real bug's signature)
+    monkeypatch.setattr(
+        solver_mod.Solver,
+        "_run_iteration",
+        staticmethod(lambda **_: solver_mod.Solver.IterationState(dirty=True)),
+    )
+    monkeypatch.setattr(solver_mod, "MAX_ITERATIONS_HEURISTIC", 3)
+
+    # default: partial state allowed => graceful, no TimeoutError, usable result
+    monkeypatch.setattr(solver_mod, "ALLOW_PARTIAL_STATE", True)
+    E = _build()
+    res = Solver().simplify(E.g, E.tg)  # must not raise
+    assert res.data.mutation_map is not None
+
+    # strict: the stuck-loop guard must still raise
+    monkeypatch.setattr(solver_mod, "ALLOW_PARTIAL_STATE", False)
+    E2 = _build()
+    with pytest.raises(TimeoutError):
+        Solver().simplify(E2.g, E2.tg)
+
+
 def test_inequality_to_set():
     E = BoundExpressions()
     p0 = E.parameter_op(units=E.U.dl)
