@@ -321,12 +321,24 @@ class BuildTargetPaths(BaseConfigModel):
     the .kicad_pcb). Opt-in: None when the build declares no layout.yaml. The
     layout-plan build step (§D) reads it via `config.build.paths.layout_config`."""
 
+    parts_config: Path | None = None
+    """Build-target parts.yaml (the out-of-source picker overlay, H3): pin/pick a
+    subset of components and add picking constraints WITHOUT editing the `.ato`.
+    Opt-in; read in `pick_parts` via `config.build.paths.parts_config`. When unset,
+    `ato bom --pick` writes/reads the default `<output_base>.parts.yaml`."""
+
     def __init__(self, name: str, project_paths: ProjectPaths, **data: Any):
         if layout_config_data := data.get("layout_config"):
             layout_config = Path(layout_config_data)
             if not layout_config.is_absolute():
                 layout_config = project_paths.root / layout_config
             data["layout_config"] = layout_config.resolve().absolute()
+
+        if parts_config_data := data.get("parts_config"):
+            parts_config = Path(parts_config_data)
+            if not parts_config.is_absolute():
+                parts_config = project_paths.root / parts_config
+            data["parts_config"] = parts_config.resolve().absolute()
 
         if layout_data := data.get("layout"):
             data["layout"] = BuildTargetPaths.find_layout(Path(layout_data))

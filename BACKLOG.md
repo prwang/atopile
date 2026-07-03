@@ -526,11 +526,20 @@ and H3 (sidecar constraints) properly address.
   footprints and the shared net bound (`R1 R_0402 ~ R2 R_0603` on `unnamed[0]-1`). **Limits**: chip R/C/L only
   (2-terminal); polarized/multi-pad and non-chip packages are a loud skip. Optional `footprint="Lib:Name"` ato pin
   not yet added.
-- [ ] **H3 — part-picker sidecar (incremental subset picking + extra constraints, `.ato` unchanged)**: an
-  out-of-source overlay (e.g. `<build>.picks.yaml` in the build dir) that records picked parts + additional
-  per-component picking constraints, layered over the instance graph before/instead of the solver. Lets a BOM be
-  finalized incrementally (pick a subset now, add constraints, resolve the rest later) without editing the `.ato`.
-  Ties H1 (`ato bom` reads/writes it) and H4 (its own file, separate from the board).
+- [x] **H3 — part-picker sidecar (incremental subset picking + extra constraints, `.ato` unchanged)**
+  [✅ 2026-07-03]: `libs/app/parts_sidecar.py` — an out-of-source `parts.yaml` keyed by ato address (same address
+  as `layout.yaml`/`atopile_address` = `get_full_name(include_uuid=False)`, e.g. `r1`). Per entry: `lcsc:` /
+  `mpn:`+`manufacturer:` (pin a part) and/or `package:` (add/narrow a picker constraint). `apply_parts_sidecar`
+  injects the SAME traits the compiler attaches for an in-source pin (`is_pickable_by_supplier_id` /
+  `is_pickable_by_part_number` / `has_package_requirements`), so a conflict surfaces via the solver and an `.ato`
+  pin (`has_part_picked`) always wins (skipped). Unknown address = loud (`UserException`). Wired in `pick_parts`
+  before picking; path = declared `BuildTargetPaths.parts_config` (config.py, opt-in in ato.yaml) else the default
+  `<output_base>.parts.yaml`. `ato bom --pick <addr>=<lcsc>` records pins into that sidecar (atomic write, sorted)
+  then resolves the BOM — `.ato` untouched. Tests: `test_parts_sidecar.py` (10: schema validators + apply for
+  lcsc/mpn/package + loud-unknown + ato-pin-wins), two load-bearing guards mutation-verified. e2e: a `--no-pick`
+  build with `r1` pinned in parts.yaml → r1 gets the real LCSC footprint (solver-free explicit path) while r2
+  falls back to the H2 package footprint. **Follow-on**: arbitrary-parameter `constrain: {resistance: '10k ±1%'}`
+  (needs the ato value/unit parser at the libs layer) and a `has_sidecar_source` provenance trait are not yet in.
 - **H4 — concurrency safety (parallel place/route ‖ BOM finalize)**: prove/enforce that the artifact set is
   safe for two agents to write concurrently.
   - [x] **H4 foundation** [✅ 2026-07-03]: atomic writes + lock correctness. `util.py` `atomic_write_bytes`/

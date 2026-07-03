@@ -644,6 +644,19 @@ def pick_parts(ctx: BuildStepContext) -> None:
     if config.build.keep_picked_parts:
         pcb = ctx.require_pcb()
         load_part_info_from_pcb(pcb.transformer.pcb, app.tg)
+
+    # Out-of-source picker overlay (H3): pin/constrain a subset of parts without
+    # editing the .ato. Applied before picking; an `.ato` pin wins (it is skipped).
+    # Path = the declared `parts_config`, else the default `<output_base>.parts.yaml`
+    # that `ato bom --pick` writes to.
+    from faebryk.libs.app.parts_sidecar import default_parts_path, load_and_apply
+
+    parts_path = config.build.paths.parts_config or default_parts_path()
+    if parts_path.exists():
+        n = load_and_apply(app, parts_path)
+        if n:
+            logger.info(f"Applied {n} parts.yaml override(s)")
+
     try:
         pick_parts_recursively(
             app, solver, progress=None, no_solve=config.build.no_pick
