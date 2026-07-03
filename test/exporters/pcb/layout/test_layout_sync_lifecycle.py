@@ -110,12 +110,17 @@ def _zone(uuid: str, net: int, net_name: str, attr: str = "") -> str:
 TEARDROP_ATTR = "        (attr (teardrop (type padvia)))\n"
 
 
-def _generated(uuid: str, name: str, members: list[str]) -> str:
+def _generated(
+    uuid: str,
+    name: str,
+    members: list[str],
+    base_line: str = "(pts (xy 1 1) (xy 3 3))",
+) -> str:
     member_text = " ".join(f'"{m}"' for m in members)
     return (
         f'    (generated (uuid "{uuid}") (type tuning_pattern)'
         f' (name "{name}") (layer "F.Cu")\n'
-        "        (base_line (pts (xy 1 1) (xy 3 3)))\n"
+        f"        (base_line {base_line})\n"
         "        (end (xy 3 3)) (origin (xy 1 1))\n"
         '        (initial_side "right") (last_netname "SUB_VCC")\n'
         "        (max_amplitude 1) (min_amplitude 0.1) (min_spacing 0.6)\n"
@@ -285,6 +290,91 @@ def test_pull_keeps_genuinely_net0_zone(pulled_zones):
         100.0,
         50.0,
     )
+
+
+# ---------------------------------------------------------------------------
+# arc-bearing pulls: pts arcs must translate WITH the xys (no shear)
+# ---------------------------------------------------------------------------
+
+GEN_ARC = "eeeeeeee-0005-4000-8000-000000000005"
+ZONE_ARC_UUID = "bbbbbbbb-0009-4000-8000-000000000009"
+
+# base_line/outline chains with a MID-chain (arc ...) entry — the KiCad file
+# shape of a rounded-corner SHAPE_LINE_CHAIN (pcb.zig Pts/PtsArc). Pre-fix,
+# _move_generated and move_object translated only pts.xys, tearing the arc
+# off its chain by the full room offset.
+ARC_BASE_LINE = (
+    "(pts (xy 1 1) (arc (start 1 1) (mid 2 0.6) (end 3 1)) (xy 3 3))"
+)
+
+ARC_PULL_TRACKS = "\n".join(
+    [
+        _segment(SEG_A, 1, 1),
+        _segment(SEG_B, 1, 3),
+        _generated(GEN_ARC, "ArcTuned", [SEG_A, SEG_B], base_line=ARC_BASE_LINE),
+        f'    (zone (net 1) (net_name "SUB_VCC") (layer "F.Cu")\n'
+        f'        (uuid "{ZONE_ARC_UUID}")\n'
+        "        (hatch edge 0.5)\n"
+        "        (polygon (pts (xy 0 0) (arc (start 5 0) (mid 6 2.5) (end 5 5))"
+        " (xy 0 5)))\n"
+        "    )",
+    ]
+)
+
+
+@pytest.fixture
+def pulled_arcs(sync, caplog):
+    sub_file = _load(
+        _board({0: "", 1: "SUB_VCC"}, [], tracks=ARC_PULL_TRACKS)
+    )
+    offset = kicad.pcb.Xy(x=100.0, y=50.0)
+    with caplog.at_level(logging.WARNING):
+        new = sync._sync_routes(
+            sub_file.kicad_pcb, sync.pcb, {"SUB_VCC": "TOP_VCC"}, offset
+        )
+    return new, sub_file
+
+
+def test_pulled_baseline_arc_moves_with_xys(pulled_arcs):
+    """Pulling a room with an arc-bearing tuning baseline translates the arc
+    start/mid/end by the same offset as the xy points — a sheared baseline
+    would make the next GUI re-tune regenerate copper at the source-room
+    location."""
+    new, sub_file = pulled_arcs
+    (gen,) = [t for t in new if isinstance(t, kicad.pcb.Generated)]
+
+    assert [(p.x, p.y) for p in gen.base_line.pts.xys] == [
+        (101.0, 51.0),
+        (103.0, 53.0),
+    ]
+    (arc,) = gen.base_line.pts.arcs
+    assert (arc.start.x, arc.start.y) == (101.0, 51.0)
+    assert (arc.mid.x, arc.mid.y) == (102.0, 50.6)
+    assert (arc.end.x, arc.end.y) == (103.0, 51.0)
+    # chain position survives the pull: the arc is still after the first xy
+    assert arc.xys_before == 1
+
+    # source untouched
+    (src_arc,) = sub_file.kicad_pcb.generateds[0].base_line.pts.arcs
+    assert (src_arc.start.x, src_arc.start.y) == (1.0, 1.0)
+
+
+def test_pulled_zone_outline_arc_moves_with_xys(pulled_arcs):
+    """Same contract for zone outlines through PCB_Transformer.move_object:
+    translating only the xy corners leaves the arc at source coordinates — a
+    self-intersecting outline spanning the room offset, written silently."""
+    new, _ = pulled_arcs
+    (zone,) = [t for t in new if isinstance(t, kicad.pcb.Zone)]
+
+    assert [(p.x, p.y) for p in zone.polygon.pts.xys] == [
+        (100.0, 50.0),
+        (100.0, 55.0),
+    ]
+    (arc,) = zone.polygon.pts.arcs
+    assert (arc.start.x, arc.start.y) == (105.0, 50.0)
+    assert (arc.mid.x, arc.mid.y) == (106.0, 52.5)
+    assert (arc.end.x, arc.end.y) == (105.0, 55.0)
+    assert arc.xys_before == 1
 
 
 # ---------------------------------------------------------------------------

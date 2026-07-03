@@ -447,6 +447,15 @@ pub fn decodeWithMetadata(comptime T: type, allocator: std.mem.Allocator, sexp: 
     }
 }
 
+// Generic struct decode, exposed for types that define a custom `decode`
+// wrapping the generic pass (e.g. kicad.pcb.Pts, which records the file-order
+// interleaving of its (xy)/(arc) children after the field-wise decode).
+// Calling decode()/decodeWithMetadata() from such a custom decode would
+// recurse into the custom hook; this entry point skips the hook dispatch.
+pub fn decodeStructGeneric(comptime T: type, allocator: std.mem.Allocator, sexp: SExp, metadata: SexpField) DecodeError!T {
+    return decodeStruct(T, allocator, sexp, metadata);
+}
+
 fn decodeStruct(comptime T: type, allocator: std.mem.Allocator, sexp: SExp, metadata: SexpField) DecodeError!T {
     _ = metadata;
     @setEvalBranchQuota(15000);
@@ -1622,7 +1631,10 @@ fn writeEncodedValueToWriter(
     }
 }
 
-fn writeEncodedKeyValueToWriter(
+// pub: custom struct-body writers (see the `writeBodyStreamed` hook in
+// writeStructBodyStreamed) emit their children through this so key omission
+// rules and value formatting stay identical to the generic encoder.
+pub fn writeEncodedKeyValueToWriter(
     allocator: std.mem.Allocator,
     writer: anytype,
     key: []const u8,
@@ -1648,6 +1660,17 @@ fn writeEncodedKeyValueToWriter(
 
 fn writeStructBodyStreamed(allocator: std.mem.Allocator, writer: anytype, value: anytype, emit_leading_space: bool) !bool {
     const T = @TypeOf(value);
+
+    // Custom body-writer hook (write-side dual of the custom `decode` hook in
+    // decodeWithMetadata): a struct whose children are ORDER-BEARING across
+    // fields (kicad.pcb.Pts, where the (xy)/(arc) interleaving is the outline
+    // geometry) cannot be emitted field-group by field-group; it serializes
+    // itself. Must mirror the generic emptiness rules used by
+    // structBodyWouldWriteAnyItems (return whether anything was written).
+    if (comptime @hasDecl(T, "writeBodyStreamed")) {
+        return try value.writeBodyStreamed(allocator, writer, emit_leading_space);
+    }
+
     const fields = std.meta.fields(T);
     const sorted_indices = comptime sortFieldIndices(T);
 

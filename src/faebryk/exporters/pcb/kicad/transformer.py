@@ -1068,6 +1068,26 @@ class PCB_Transformer:
         fp.at = coord
 
     @staticmethod
+    def _pts_points(pts: kicad.pcb.Pts):
+        """Every coordinate-bearing point of a (pts ...) chain: the xy entries
+        plus each interleaved arc's start/mid/end (pcb.zig PtsArc). Any
+        geometric transform must go through this — transforming only pts.xys
+        shears an arc-bearing outline (the arcs stay at source coordinates)."""
+        yield from pts.xys
+        for arc in pts.arcs:
+            yield arc.start
+            yield arc.mid
+            yield arc.end
+
+    @staticmethod
+    def _move_pts(pts: kicad.pcb.Pts, vector: kicad.pcb.Xy) -> None:
+        """Translate a pts chain in place, arcs included; preserves the
+        xy/arc interleaving (PtsArc.xys_before) by never rebuilding lists."""
+        for pt in PCB_Transformer._pts_points(pts):
+            pt.x += vector.x
+            pt.y += vector.y
+
+    @staticmethod
     def move_object(obj: Any, vector: kicad.pcb.Xy):
         match obj:
             case kicad.pcb.Footprint():
@@ -1088,11 +1108,9 @@ class PCB_Transformer:
             case kicad.pcb.Via():
                 obj.at = kicad.geo.add(obj.at, vector)
             case kicad.pcb.Zone():
-                obj.polygon.pts.xys = [
-                    kicad.geo.add(pt, vector) for pt in obj.polygon.pts.xys
-                ]
+                PCB_Transformer._move_pts(obj.polygon.pts, vector)
                 for p in obj.filled_polygon:
-                    p.pts.xys = [kicad.geo.add(pt, vector) for pt in p.pts.xys]
+                    PCB_Transformer._move_pts(p.pts, vector)
             case kicad.pcb.Line():
                 obj.start = kicad.geo.add(obj.start, vector)
                 obj.end = kicad.geo.add(obj.end, vector)
@@ -1107,9 +1125,9 @@ class PCB_Transformer:
                 obj.start = kicad.geo.add(obj.start, vector)
                 obj.end = kicad.geo.add(obj.end, vector)
             case kicad.pcb.Polygon():
-                obj.pts.xys = [kicad.geo.add(pt, vector) for pt in obj.pts.xys]
+                PCB_Transformer._move_pts(obj.pts, vector)
             case kicad.pcb.Curve():
-                obj.pts.xys = [kicad.geo.add(pt, vector) for pt in obj.pts.xys]
+                PCB_Transformer._move_pts(obj.pts, vector)
             case kicad.pcb.Text():
                 obj.at = kicad.geo.add(obj.at, vector)
             case kicad.pcb.TextBox():
@@ -1118,9 +1136,8 @@ class PCB_Transformer:
                 if obj.end:
                     obj.end = kicad.geo.add(obj.end, vector)
                 if obj.pts:
-                    obj.pts = kicad.pcb.Pts(
-                        xys=[kicad.geo.add(pt, vector) for pt in obj.pts.xys]
-                    )
+                    # in-place: rebuilding Pts(xys=...) would drop the arcs
+                    PCB_Transformer._move_pts(obj.pts, vector)
             case kicad.pcb.Image():
                 obj.at = kicad.geo.add(obj.at, vector)
             case kicad.pcb.Table():
@@ -1130,9 +1147,8 @@ class PCB_Transformer:
                     if cell.end:
                         cell.end = kicad.geo.add(cell.end, vector)
                     if cell.pts:
-                        cell.pts = kicad.pcb.Pts(
-                            xys=[kicad.geo.add(pt, vector) for pt in cell.pts.xys]
-                        )
+                        # in-place: rebuilding Pts(xys=...) would drop the arcs
+                        PCB_Transformer._move_pts(cell.pts, vector)
             case _:
                 raise TypeError(f"Unsupported object type: {type(obj)}")
 
@@ -1608,10 +1624,10 @@ class PCB_Transformer:
             case kicad.pcb.Via():
                 obj.at.x = _fx(obj.at.x)
             case kicad.pcb.Zone():
-                for pt in obj.polygon.pts.xys:
+                for pt in PCB_Transformer._pts_points(obj.polygon.pts):
                     pt.x = _fx(pt.x)
                 for filled in obj.filled_polygon:
-                    for pt in filled.pts.xys:
+                    for pt in PCB_Transformer._pts_points(filled.pts):
                         pt.x = _fx(pt.x)
             case kicad.pcb.Line():
                 obj.start.x = _fx(obj.start.x)
@@ -1627,7 +1643,7 @@ class PCB_Transformer:
                 obj.start.x = _fx(obj.start.x)
                 obj.end.x = _fx(obj.end.x)
             case kicad.pcb.Polygon() | kicad.pcb.Curve():
-                for pt in obj.pts.xys:
+                for pt in PCB_Transformer._pts_points(obj.pts):
                     pt.x = _fx(pt.x)
             case kicad.pcb.Text():
                 obj.at.x = _fx(obj.at.x)
@@ -1681,10 +1697,10 @@ class PCB_Transformer:
             case kicad.pcb.Via():
                 obj.at.x, obj.at.y = _rot(obj.at.x, obj.at.y)
             case kicad.pcb.Zone():
-                for pt in obj.polygon.pts.xys:
+                for pt in PCB_Transformer._pts_points(obj.polygon.pts):
                     pt.x, pt.y = _rot(pt.x, pt.y)
                 for filled in obj.filled_polygon:
-                    for pt in filled.pts.xys:
+                    for pt in PCB_Transformer._pts_points(filled.pts):
                         pt.x, pt.y = _rot(pt.x, pt.y)
             case kicad.pcb.Line():
                 obj.start.x, obj.start.y = _rot(obj.start.x, obj.start.y)
@@ -1700,7 +1716,7 @@ class PCB_Transformer:
                 obj.start.x, obj.start.y = _rot(obj.start.x, obj.start.y)
                 obj.end.x, obj.end.y = _rot(obj.end.x, obj.end.y)
             case kicad.pcb.Polygon() | kicad.pcb.Curve():
-                for pt in obj.pts.xys:
+                for pt in PCB_Transformer._pts_points(obj.pts):
                     pt.x, pt.y = _rot(pt.x, pt.y)
             case kicad.pcb.Text():
                 obj.at.x, obj.at.y = _rot(obj.at.x, obj.at.y)
@@ -1751,7 +1767,7 @@ class PCB_Transformer:
                 obj.start.y = -obj.start.y
                 obj.end.y = -obj.end.y
             case kicad.pcb.Polygon() | kicad.pcb.Curve():
-                for pt in obj.pts.xys:
+                for pt in PCB_Transformer._pts_points(obj.pts):
                     pt.y = -pt.y
             case kicad.pcb.TextBox():
                 # TODO
@@ -1803,9 +1819,13 @@ class PCB_Transformer:
             case kicad.pcb.Rect():
                 return _round(obj.start.x, obj.start.y, obj.end.x, obj.end.y)
             case kicad.pcb.Polygon():
-                return tuple(_round(pt.x, pt.y) for pt in obj.pts.xys)
+                return tuple(
+                    _round(pt.x, pt.y) for pt in PCB_Transformer._pts_points(obj.pts)
+                )
             case kicad.pcb.Curve():
-                return tuple(_round(pt.x, pt.y) for pt in obj.pts.xys)
+                return tuple(
+                    _round(pt.x, pt.y) for pt in PCB_Transformer._pts_points(obj.pts)
+                )
             case kicad.pcb.Text() | kicad.pcb.FpText():
                 return _round(obj.at.x, obj.at.y)
             case kicad.pcb.TextBox():

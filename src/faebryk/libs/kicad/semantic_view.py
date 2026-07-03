@@ -29,7 +29,7 @@ from typing import Any
 
 from faebryk.libs.kicad.fileformats import Property, kicad
 
-SEMANTIC_VIEW_VERSION = 2
+SEMANTIC_VIEW_VERSION = 3
 
 
 class NetResolutionError(ValueError):
@@ -144,8 +144,42 @@ def _generated_xy(g) -> list[float] | None:
     return _xy(g.xy) if g is not None else None
 
 
-def _generated_pts(g) -> list[list[float]] | None:
-    return [_xy(p) for p in g.pts.xys] if g is not None else None
+def _pts_chain(pts) -> list[Any]:
+    """A (pts ...) chain in file order: [x, y] per xy entry and
+    {"arc": [start, mid, end]} per interleaved arc entry.
+
+    The interleaving IS the outline geometry (KiCad rebuilds the
+    SHAPE_LINE_CHAIN in file order), so arcs are projected at their chain
+    position — arc deletion, coordinate mutation, and xy/arc reorder must all
+    move the view. The merge mirrors the writer (pcb.zig Pts.writeBodyStreamed):
+    an arc goes before the (xys_before+1)-th xy; arcs without a recorded
+    position sit after the last xy. A pure-xy chain projects exactly as before
+    (a flat list of [x, y]) — the shape upgrade is arc-only."""
+    xys = [_xy(p) for p in pts.xys]
+    arcs = list(pts.arcs)
+    if not arcs:
+        return xys
+
+    def _arc_entry(a) -> dict[str, Any]:
+        return {"arc": [_xy(a.start), _xy(a.mid), _xy(a.end)]}
+
+    entries: list[Any] = []
+    ai = 0
+    for i, xy in enumerate(xys):
+        while (
+            ai < len(arcs)
+            and arcs[ai].xys_before is not None
+            and arcs[ai].xys_before <= i
+        ):
+            entries.append(_arc_entry(arcs[ai]))
+            ai += 1
+        entries.append(xy)
+    entries.extend(_arc_entry(a) for a in arcs[ai:])
+    return entries
+
+
+def _generated_pts(g) -> list[Any] | None:
+    return _pts_chain(g.pts) if g is not None else None
 
 
 class _NetTable:
@@ -278,7 +312,7 @@ def semantic_view(pcb: kicad.pcb.KicadPcb) -> dict[str, Any]:
                     else None
                 ),
                 "layers": sorted([z.layer] if z.layer is not None else z.layers),
-                "polygon": [_xy(p) for p in z.polygon.pts.xys],
+                "polygon": _pts_chain(z.polygon.pts),
                 "keepout": (
                     {
                         "tracks": z.keepout.tracks,
@@ -306,7 +340,9 @@ def semantic_view(pcb: kicad.pcb.KicadPcb) -> dict[str, Any]:
             z["name"] or "",
             z["net"],
             z["layers"],
-            z["polygon"][:1],
+            # json: a polygon chain may start with an [x, y] or an
+            # {"arc": ...} entry — raw comparison across those would TypeError
+            json.dumps(z["polygon"][:1]),
         ),
     )
 

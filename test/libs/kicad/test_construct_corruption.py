@@ -45,6 +45,7 @@ CONSTRUCT_BOARDS = [
     "teardrop_elongated_pad",
     "two_segment_teardrop",
     "tuning_generators_load_save",
+    "zone_arc_tuning",
 ]
 
 
@@ -154,6 +155,102 @@ def test_teardrops_enabled_flip_moves_view(stem: str):
     enabled[0][1] = "no"
 
     _assert_view_moves(root, baseline, "flipping teardrops enabled")
+
+
+def _zone_pts(root: Node) -> Node:
+    pts = [
+        p
+        for z in children(root, "zone")
+        for poly in children(z, "polygon")
+        for p in children(poly, "pts")
+    ]
+    assert pts, "fixture lost its zone polygon"
+    return pts[0]
+
+
+def _base_line_pts(root: Node) -> Node:
+    pts = [
+        p
+        for g in children(root, "generated")
+        for bl in children(g, "base_line")
+        for p in children(bl, "pts")
+    ]
+    assert pts, "fixture lost its tuning base_line"
+    return pts[0]
+
+
+def _pop_arc(pts: Node) -> Node:
+    arcs = [i for i, n in enumerate(pts[1:], start=1) if head(n) == "arc"]
+    assert arcs, "pts chain lost its (arc ...) entry"
+    # precondition: the arc is MID-chain (xy entries on both sides), else the
+    # reorder corruption below could be a no-op
+    assert arcs[0] != 1 and arcs[0] != len(pts) - 1, "fixture arc not mid-chain"
+    return pts.pop(arcs[0])
+
+
+def test_pts_arc_reorder_moves_view():
+    """The xy/arc interleaving of a (pts ...) chain IS the outline geometry
+    (KiCad rebuilds the SHAPE_LINE_CHAIN in file order) — moving the arc from
+    mid-chain to the end is a DIFFERENT polygon and the view must see it.
+    This is exactly the corruption the pre-fix two-list Pts encoder produced
+    on every dumps()."""
+    raw = _raw("zone_arc_tuning")
+    baseline = _view(raw)
+    root = sexp_tree.parse(raw)[0]
+
+    pts = _zone_pts(root)
+    pts.append(_pop_arc(pts))
+
+    _assert_view_moves(root, baseline, "reordering the zone outline arc")
+
+
+def test_pts_arc_deletion_moves_view():
+    """Deleting the arc entirely straightens the outline corner — copper
+    geometry, not formatting."""
+    raw = _raw("zone_arc_tuning")
+    baseline = _view(raw)
+    root = sexp_tree.parse(raw)[0]
+
+    _pop_arc(_zone_pts(root))
+
+    _assert_view_moves(root, baseline, "deleting the zone outline arc")
+
+
+def test_base_line_arc_mutation_moves_view():
+    """A base_line arc's mid point bends the baseline the next re-tune meanders
+    along; kicad-cli cannot catch its corruption (any 3 points parse), so the
+    semantic view is the ONLY oracle for it."""
+    raw = _raw("zone_arc_tuning")
+    baseline = _view(raw)
+    root = sexp_tree.parse(raw)[0]
+
+    mids = [
+        m
+        for arc in children(_base_line_pts(root), "arc")
+        for m in children(arc, "mid")
+    ]
+    assert mids and mids[0][1] == "43.535534", "fixture lost its base_line arc"
+    mids[0][1] = "41.5"
+
+    _assert_view_moves(root, baseline, "mutating the base_line arc mid point")
+
+
+def test_pts_arc_key_reorder_is_view_neutral():
+    """Reversing the keyed (start)(mid)(end) INSIDE an arc entry is pure
+    formatting — both KiCad's arc parser and ours are token-driven. The view
+    must not move (control for the reorder/deletion tests above)."""
+    raw = _raw("zone_arc_tuning")
+    baseline = _view(raw)
+    root = sexp_tree.parse(raw)[0]
+    pristine = sexp_tree.dumps(root)
+
+    arcs = [a for a in walk(root) if head(a) == "arc" and children(a, "mid")]
+    assert arcs, "fixture lost its pts arcs"
+    for arc in arcs:
+        arc[1:] = list(reversed(arc[1:]))
+
+    assert sexp_tree.dumps(root) != pristine, "reorder corruption was a no-op"
+    assert _view_of_tree(root) == baseline
 
 
 def test_generated_target_length_change_moves_view():

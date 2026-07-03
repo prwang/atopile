@@ -1,5 +1,6 @@
 const std = @import("std");
 const compat = @import("compat");
+const ast = @import("../ast.zig");
 const structure = @import("../structure.zig");
 
 const str = []const u8;
@@ -475,6 +476,23 @@ pub const PtsArc = struct {
     start: Xy,
     mid: Xy,
     end: Xy,
+    // Chain position: the number of (xy ..) entries that precede this arc in
+    // the (pts ...) chain. The interleaving IS the outline geometry (KiCad's
+    // parseOutlinePoints appends entries in file order), but xys/arcs live in
+    // two separate lists here, so the position must be carried explicitly.
+    // Recorded by Pts.decode; consumed (never serialized as a token) by
+    // Pts.writeBodyStreamed, which merge-emits arcs among the xys by it.
+    // null = "no recorded position" (an arc freshly created from Python):
+    // such arcs are appended after the last xy, in list order.
+    xys_before: ?i64 = null,
+};
+
+// Emission view of PtsArc: the (arc ...) token body as KiCad writes it.
+// xys_before is engine metadata and must never appear in the file.
+const PtsArcBody = struct {
+    start: Xy,
+    mid: Xy,
+    end: Xy,
 };
 
 pub const Pts = struct {
@@ -485,6 +503,68 @@ pub const Pts = struct {
         .xys = structure.SexpField{ .multidict = true, .sexp_name = "xy" },
         .arcs = structure.SexpField{ .multidict = true, .sexp_name = "arc" },
     };
+
+    // KiCad's (pts ...) is a serialized SHAPE_LINE_CHAIN: the relative file
+    // order of (xy)/(arc) entries is geometry-bearing (parseOutlinePoints
+    // consumes them in file order; formatPolyPts interleaves them in chain
+    // order). Two multidict lists cannot carry that interleaving, so the
+    // generic field-wise decode is wrapped to additionally record each arc's
+    // chain position (PtsArc.xys_before), and the writer below merge-emits
+    // by it. A pure-xy chain round-trips byte-identically to the generic
+    // encoder's output.
+    pub fn decode(allocator: std.mem.Allocator, sexp: structure.SExp) structure.DecodeError!Pts {
+        const self = try structure.decodeStructGeneric(Pts, allocator, sexp, structure.SexpField{});
+        const items = ast.getList(sexp) orelse return self;
+        var xy_count: i64 = 0;
+        var arc_node = self.arcs.first;
+        for (items) |item| {
+            const kv = ast.getList(item) orelse continue;
+            if (kv.len == 0) continue;
+            const key = ast.getSymbol(kv[0]) orelse continue;
+            if (std.mem.eql(u8, key, "xy")) {
+                xy_count += 1;
+            } else if (std.mem.eql(u8, key, "arc")) {
+                // multidict decode appended arcs in file order, so the k-th
+                // (arc ...) item pairs with the k-th list node
+                if (arc_node) |node| {
+                    node.data.xys_before = xy_count;
+                    arc_node = node.next;
+                }
+            }
+        }
+        return self;
+    }
+
+    // Write-side dual of decode (dispatched by the writeBodyStreamed hook in
+    // structure.writeStructBodyStreamed): emit the chain in stored order —
+    // each arc goes before the (xys_before+1)-th xy; arcs without a recorded
+    // position (fresh from Python) append after the last xy in list order.
+    pub fn writeBodyStreamed(self: Pts, allocator: std.mem.Allocator, writer: anytype, emit_leading_space: bool) !bool {
+        var wrote_any = false;
+        var arc_node = self.arcs.first;
+        var xy_index: i64 = 0;
+        var xy_node = self.xys.first;
+        while (xy_node) |xn| : (xy_node = xn.next) {
+            while (arc_node) |an| {
+                const pos = an.data.xys_before orelse break;
+                if (pos > xy_index) break;
+                if (try writeArcEntry(allocator, writer, an.data, wrote_any or emit_leading_space)) wrote_any = true;
+                arc_node = an.next;
+            }
+            if (try structure.writeEncodedKeyValueToWriter(allocator, writer, "xy", xn.data, structure.SexpField{}, "xys", wrote_any or emit_leading_space)) wrote_any = true;
+            xy_index += 1;
+        }
+        // arcs positioned past the last xy, plus all position-less arcs
+        while (arc_node) |an| : (arc_node = an.next) {
+            if (try writeArcEntry(allocator, writer, an.data, wrote_any or emit_leading_space)) wrote_any = true;
+        }
+        return wrote_any;
+    }
+
+    fn writeArcEntry(allocator: std.mem.Allocator, writer: anytype, arc: PtsArc, prepend_space: bool) !bool {
+        const body = PtsArcBody{ .start = arc.start, .mid = arc.mid, .end = arc.end };
+        return try structure.writeEncodedKeyValueToWriter(allocator, writer, "arc", body, structure.SexpField{}, "arcs", prepend_space);
+    }
 };
 
 pub const Polygon = struct {
@@ -1708,7 +1788,6 @@ fn sniffVersion(content: []const u8) i32 {
 }
 
 fn collectNetNames(sexp: structure.SExp, out: *std.array_list.Managed([]const u8)) !void {
-    const ast = @import("../ast.zig");
     const items = ast.getList(sexp) orelse return;
     // a v10 net reference is exactly (net "<name>"); the v9 table entry
     // (net <number> "<name>") has 3 items and the number is not a string
@@ -1754,7 +1833,6 @@ pub const PcbFile = struct {
             return PcbFile{ .kicad_pcb = pcb };
         }
 
-        const ast = @import("../ast.zig");
         const tokenizer = @import("../tokenizer.zig");
 
         // pre-scan: collect every referenced net name (pads, tracks, vias,

@@ -372,7 +372,10 @@ class LayoutSync:
         for pts_field in ("base_line", "base_line_coupled"):
             wrapper = getattr(gen, pts_field)
             if wrapper is not None:
-                wrapper.pts.xys = [kicad.geo.add(pt, offset) for pt in wrapper.pts.xys]
+                # arcs included: a baseline chain interleaves (xy) and (arc)
+                # entries (pcb.zig Pts), and translating only the xys would
+                # tear the arcs off by the full room offset
+                PCB_Transformer._move_pts(wrapper.pts, offset)
 
     def _sync_other(self, sub_pcb: PCB, top_pcb: PCB, offset: kicad.pcb.Xy):
         new_graphics = []
