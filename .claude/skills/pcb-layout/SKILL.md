@@ -1,6 +1,6 @@
 ---
 name: pcb-layout
-description: "Authoritative skill for the text-first PCB layout layer: authoring the layout.yaml sidecar (rooms, placements, board outline/stackup, net classes, pours, keepouts, silk, route_stages), running the build→route→diagnose loop, reading diagnostics.json, and a finding→remedy playbook (forced waypoints, stage ordering, router tuning). Use when a board's PLACEMENT / ROUTING / BOARD RULES need authoring or a DRC / unrouted-net / router-misbehavior needs fixing. The PCB-level parallel to the `ato` (schematic) skill."
+description: "Authoritative skill for the text-first PCB layout layer: authoring the layout.yaml sidecar (rules header, rooms, placements, board outline/stackup, net classes, pours, keepouts, silk, route_stages), running the build→route→snapshot→diagnose loop (ato snapshot = headless board PNG + DRC, the eyes), impedance geometry from the vendored 2D field solver, reading diagnostics.json, and a finding→remedy playbook (forced waypoints, stage ordering, pad-facing fanout, router tuning). Use when a board's PLACEMENT / ROUTING / BOARD RULES need authoring or a DRC / unrouted-net / router-misbehavior needs fixing. The PCB-level parallel to the `ato` (schematic) skill."
 ---
 
 # PCB Layout (the `layout.yaml` sidecar)
@@ -23,18 +23,26 @@ or when `ato route` / `ato diagnose` surfaced a failure to fix.
 ## 1. Mental model (why the feedback lives outside the file)
 
 ```
-   .ato  (circuit truth)   +   layout.yaml  (layout truth)
-                    │  ato build         → stamps board, emits layout IR / plan / .kicad_pro
+   .ato  (circuit truth)   +   layout.yaml  (layout truth: rules header + geometry intent)
+                    │  ato build         → stamps board (outline, rule areas, placements),
+                    │                      emits layout IR / plan / .kicad_pro / .kicad_dru
                     ▼
    layout/<target>/<target>.kicad_pcb            ← the AUTHORED board (open in pcbnew)
                     │  ato route          → drives the router over route_stages
                     ▼
    build/builds/<target>/<target>.route/<laststage>.kicad_pcb   ← the ROUTED board
+                    │  ato snapshot       → headless PNG + DRC, violations marked (the EYES)
                     │  ato diagnose       → route report + KiCad DRC, attributed to ato addresses
                     ▼
-   build/builds/<target>/<target>.diagnostics.json   ← imperative feedback
+   *.snapshot.*.png / *.drc.json / *.diagnostics.json   ← imperative feedback
                     └──────────  YOU edit layout.yaml, rebuild  ◄──────────┘
 ```
+
+**Acceptance = zero DRC errors that you have LOOKED at, never "routed N/N, 0
+failed".** A route report can be fully green while every pair on the board is a
+short (empirically: the pre-rules SATA board routed 4/4 with the pair's copper
+edges touching). Do not claim a board is done without an `ato snapshot` run whose
+error count is zero and whose PNG you have actually viewed.
 
 **The core discipline (BACKLOG / `layout_plan.py` docstring):** `layout.yaml` holds
 only *declarative intent*. The imperative feedback — "this net didn't route, space
@@ -72,7 +80,41 @@ builds:
     layout_config: ./layout.yaml
 ```
 
-Top-level `layout.yaml` keys: `rooms`, `board`, `route_stages`. All optional.
+Top-level `layout.yaml` keys: `rules`, `rooms`, `placements`, `board`,
+`route_stages`. All optional — EXCEPT `rules`, which is **required the moment
+`route_stages` is non-empty** (parse-time loud: "the router cannot start with no
+rules").
+
+### 2.0 rules — the board-wide design-rules header  (`DesignRules`, layout_plan.py)
+Write this FIRST, before any stage. It plays three roles at once:
+1. **Defaults** — a stage/lane that omits a geometry knob inherits it
+   (`track_width`, `clearance`, `diff_pair_width`, `diff_pair_gap`), so every
+   stage reaches the router with concrete geometry.
+2. **Minimums, enforced at parse** — an explicit value below the board minimum
+   (stage clearance < `clearance`; intra-pair gap < `clearance` — P/N are
+   different nets, that is a short *by construction*; trunk spacing <
+   `inter_pair_clearance`) is a `LayoutPlanError` before any copper exists.
+3. **DRC authority** — the build writes the same numbers into the
+   `.kicad_pro` Default net class and a generated `.kicad_dru`
+   (clearance floor, `courtyard_clearance` = component spacing,
+   `diff_pair_uncoupled` max). kicad-cli DRC honors all three — empirically
+   including uncoupled-length on atopile's net names.
+```yaml
+rules:
+  clearance: 5mil            # copper-copper minimum (the short-circuit rule)
+  track_width: 0.15          # single-ended default (mm when unitless)
+  diff_pair_width: 0.2       # pair geometry — from the field solver, see §2.6
+  diff_pair_gap: 0.15        # intra-pair copper EDGE gap (not center-to-center)
+  inter_pair_clearance: 20mil
+  component_spacing: 20mil   # courtyard-to-courtyard (DRC courtyard_clearance)
+  uncoupled_max_length: 200mil   # see §5.6 for how to pick this honestly
+```
+Lengths accept mm numbers or `"<n>mil"` / `"<n>mm"` strings. `extra='forbid'`.
+**Change-propagation rule:** `ato route` re-parses `layout.yaml`, so a rules edit
+reaches the *copper* with route alone — but the `.kicad_pro`/`.kicad_dru` DRC
+files are written by `ato build`. After any rules edit run
+`ato build && ato route && ato snapshot`, or DRC judges the new copper against
+the old numbers (the exact silent mismatch this header exists to kill).
 
 ### 2.1 rooms — module regions → KiCad rule areas  (`Room`, layout_plan.py)
 A room = a module's footprints, stamped as a **rule area** (room = footprint
@@ -86,7 +128,7 @@ rooms:
     # polygon: [[..],[..]]       # non-rectangular room (overrides origin/size)
 ```
 
-### 2.2 placements — per-component pose  (`Placement`, layout_plan.py)
+### 2.2 placements — per-component pose  (`Placement`, layout_plan.py + placement.py)
 ```yaml
 placements:
   - component: host.u1           # ato address
@@ -95,11 +137,34 @@ placements:
     side: F                      # F | B
     absolute: false              # true ⇒ board-absolute, skip room composition
 ```
+**Text placement is the pose AUTHORITY**, and that has a copper consequence: a
+placement moving any footprint of a room **invalidates that room's pulled
+intra-room copper** (`apply_placements` → `LayoutSync.clean_room_copper`). Reuse
+tracks are anchored to the OLD poses — after a move they can only dangle or
+short, and worse, they make their net *unroutable* (the router must reach ALL of
+a net's copper; an orphaned island reads as `no rippable blockers`). A placed
+room's copper is derived-only: the route stages re-lay it.
+
+**Placement conventions that make fanouts route clean (all empirically pinned on
+`examples/sata_bundle` — violating any one produced shorts/crossings):**
+- **Pad 1 (the connected pad) must FACE the routing target.** The breakout fanout
+  is a straight segment trunk-end → pad-1 center; if pad 1 is on the far side,
+  the segment plows through pad 2 (`shorting_items` + `solder_mask_bridge` on the
+  SAME footprint's two pads is the signature). For a 2-pad 0402: rotation 90 vs
+  270 flips which side pad 1 faces — check with a snapshot zoom, don't guess.
+- **Match the pad row order to the trunk lane order.** Bundle lane offsets:
+  `+offset == WEST of southbound travel` (a north→south trunk reads
+  right-to-left in lane order). Pads in a different left-right order X-cross the
+  fanout (`tracks_crossing` + clearance at the row). Both ends of a straight
+  trunk read the SAME left-to-right order.
+- **Pitch**: components in a breakout row need
+  pitch ≥ courtyard width + `component_spacing`; tighter pitch also shortens the
+  uncoupled fanout (§5.6). 1.6mm works for 0402 at 20mil spacing.
 
 ### 2.3 board — outline, stackup, and board-authoring  (`Board`, layout_plan.py)
 ```yaml
 board:
-  outline:                       # drawn on Edge.Cuts
+  outline:                       # STAMPED on Edge.Cuts as a closed loop (board_features.py)
     origin: [0, 0]
     size: [60, 70]               # or: polygon: [[..],[..],..]
   stackup:                       # REQUIRED when any stage routes (layers come from here)
@@ -108,9 +173,14 @@ board:
       - {name: d1,    type: dielectric, thickness: 0.2, material: FR4, epsilon_r: 4.5}
       - {name: B.Cu,  type: copper, thickness: 0.035}
 ```
+A declared `outline` is the Edge.Cuts **authority**: the build replaces existing
+edge lines (never accretes); with no `outline` key the board's own edges are left
+untouched (the reuse case). Always declare one on an authored board — a missing
+outline is `DRC-invalid_outline` AND an unbounded router space.
 Invariants: a stage asking for `impedance` **requires** a stackup (hard-checked);
 the router's layer list is derived from the stackup alone (single authority —
-never set `config.layers` per stage, it is loud).
+never set `config.layers` per stage, it is loud). A 4-layer board is just 4
+copper entries with dielectrics between (see `examples/sata_bundle/layout.yaml`).
 
 #### net_classes — F-drc-rules (§F5): make DRC judge *intent*  (`NetClass`)
 Emitted into `<target>.kicad_pro`; KiCad DRC honors them (proven: a wide clearance
@@ -179,33 +249,84 @@ route_stages:
     name: sata_link
     lanes:
       - diff: [host.tx.p.line, host.tx.n.line]
-        gap: 0.2
-        width: 0.2
-        impedance: 100
+        impedance: 100           # width/gap omitted ⇒ inherited from rules (§2.0)
     trunk:
       centerline:                # the bus path — this is how you STEER a bundle (no corridor)
-        - {at: [40, 8],  spacing: 0.5}
-        - {at: [22, 58], spacing: 0.3}
+        - {at: [30, 14], spacing: 0.6}
+        - {at: [30, 56], spacing: 0.508}
     breakouts:
       - {at: host}
       - {at: device}
-    config: { track_width: 0.2, clearance: 0.15, impedance: 100 }
+    config: { impedance: 100 }
 ```
+Geometry semantics (bundle_geometry.py, pinned): a diff lane's `gap` is the
+copper **EDGE-to-EDGE** gap (center pitch = gap + width; the pair envelope =
+2·width + gap). `spacing` is the edge gap between lane slots, checked against
+`rules.inter_pair_clearance`. *(Historical bug, fixed: gap was once applied
+center-to-center, so gap == width meant the pair's edges touched — if you see a
+pair rendered as one fat trace, you are on a stale build of this code.)*
+
+### 2.6 impedance geometry — the vendored 2D field solver  (vendor/2d_fields)
+`rules.diff_pair_width/gap` for a controlled-impedance pair come from the
+headless field solver, not from guessing:
+```bash
+# stackup facts: h = dielectric to the reference plane (mm), er, t = copper (mm)
+node vendor/2d_fields/cli.js --h 0.176 --er 4.6 --t 0.017 --w 0.20 --s 0.15 --tol 0.002
+# → JSON with Z_odd / Z_even / Z_diff; comma lists in --w/--s do cartesian sweeps
+```
+Workflow: sweep `--w/--s` to the target Z_diff (100Ω SATA on 0.176mm 7628 er 4.6
+⇒ W=0.20 S=0.15, Z_diff 99.44Ω), write the pair into `rules:`, then
+`ato build && ato route && ato snapshot` (§2.0 change-propagation rule).
+Reference results + a 50Ω sanity check live in `vendor/2d_fields/RESULTS.md`.
 
 ---
 
 ## 3. Running the loop
 
 ```bash
-ato build                 # stamps board + rule areas + .kicad_pro + pours/keepouts/silk
+ato build                 # stamps board (outline, placements, rule areas) + .kicad_pro/.kicad_dru
 ato route                 # router runs under SYSTEM python3 (rust ext); writes route_report.json
 ato route --up-to power   # optional: route only through stage `power` (breakpoint) to inspect
+ato snapshot              # headless PNG + DRC of the routed board, violations marked  ← the EYES
 ato diagnose              # aggregates route report + KiCad DRC → diagnostics.json
 ```
 Artifacts under `build/builds/<target>/`: `*.layout_ir.json`, `*.layout_plan.json`,
-`*.route_report.json`, `*.diagnostics.json`. Open boards in pcbnew:
-authored = `layout/<target>/<target>.kicad_pcb`; routed =
-`build/builds/<target>/<target>.route/<laststage>.kicad_pcb`.
+`*.route_report.json`, `*.snapshot.*.png` + `*.snapshot.*.drc.json`,
+`*.diagnostics.json`. Boards: authored = `layout/<target>/<target>.kicad_pcb`;
+routed = `build/builds/<target>/<target>.route/<laststage>.kicad_pcb`.
+
+### 3.1 `ato snapshot` — look before you conclude  (cli/snapshot.py)
+No GUI, no user input: renders the board (kicad-cli SVG → rsvg-convert → PNG,
+content-cropped) and runs `kicad-cli pcb drc --severity-all`, drawing a
+**numbered yellow circle at every violation** — the numbers match the printed
+finding list, so a mark on the image is findable in the text and vice versa.
+```bash
+ato snapshot                    # the routed board (falls back to built if never routed)
+ato snapshot --built            # the pre-route board (isolate placement vs routing issues)
+ato snapshot --board any.kicad_pcb   # raw mode, any board file
+ato snapshot --ppmm 40          # higher resolution
+```
+It stages the built board's `.kicad_pro` / `.kicad_dru` / `fp-lib-table` next to
+the routed board first — kicad-cli DRC only honors rule files **sitting beside
+the board**; without staging it silently judges KiCad defaults.
+
+**The diagnosis discipline that saves time: never theorize past one hypothesis —
+zoom instead.** Violation positions are absolute board mm; render high-res and
+crop the region before proposing a second fix:
+```bash
+kicad-cli pcb export svg --mode-single --page-size-mode 1 --exclude-drawing-sheet \
+  --layers F.Cu,Edge.Cuts -o /tmp/z.svg <board>.kicad_pcb
+rsvg-convert --dpi-x 2032 --dpi-y 2032 --background-color '#001023' -o /tmp/z.png /tmp/z.svg
+python3 -c "
+from PIL import Image; Image.MAX_IMAGE_PIXELS=None
+im=Image.open('/tmp/z.png'); ppmm=im.size[0]/297.0022   # page-size-mode 1 = A4, origin (0,0)
+x0,y0,x1,y1 = 26,10,34,20                               # ← the violation's neighborhood, mm
+im.crop((int(x0*ppmm),int(y0*ppmm),int(x1*ppmm),int(y1*ppmm))).save('/tmp/zoom.png')"
+```
+(Empirically this ended a wrong-theory loop in one look: the "shorted pads"
+turned out to be the fanout entering from the wrong side of the footprint —
+invisible in the DRC text, obvious in the crop.) Do NOT rasterize KiCad SVGs
+with ImageMagick: its builtin renderer silently drops track segments.
 
 ---
 
@@ -270,7 +391,17 @@ Diagnose from `blocking_nets` / `reason` / `room`, then, in rough order of prefe
    clearer path, and/or fix `breakouts.order`.
 
 ### 5.2 `DRC-clearance` / `DRC-track_width` / `DRC-shorting_items` / `DRC-tracks_crossing`
-Copper too close / too thin / touching. Check `is_new` first:
+Copper too close / too thin / touching. Two breakout-row signatures first — both
+diagnosed by zooming the row (§3.1), both fixed in `placements`, NOT in router
+knobs:
+- **shorting_items / solder_mask_bridge naming the SAME footprint's two pads**
+  ⇒ pad 1 faces away from the routing target and the fanout segment crosses
+  pad 2 to reach it. Flip the placement `rotation` by 180° (§2.2).
+- **tracks_crossing + clearance clustered at a breakout row** ⇒ the pad
+  left-right order doesn't match the trunk lane order; the fanout X-crosses.
+  Reorder the row's placements (§2.2 lane-order convention).
+
+Otherwise check `is_new` first:
 - `is_new: true` (routing caused it): the routed geometry violates a rule.
   - **clearance/shorting/crossing**: author or widen a **`net_class`** clearance for
     the involved nets so the router respects it next run; or add a **`keepout`** to
@@ -319,11 +450,37 @@ route around.
 
 ### 5.5 What `layout.yaml` CANNOT fix (route these elsewhere)
 Be honest with the user instead of thrashing the sidecar:
-- **`DRC-lib_footprint_issues`, most `DRC-silk_overlap`, `DRC-solder_mask_bridge`**
-  → footprint/library problems. Fix the footprint or the part selection in `.ato`.
-- **`DRC-invalid_outline`** → fix `board.outline` (self-intersecting / open).
+- **`DRC-lib_footprint_issues`, most `DRC-silk_overlap`** → footprint/library
+  problems (0402 refdes silk is bigger than the part — warning-class noise).
+  Fix the footprint or the part selection in `.ato`.
+  (`solder_mask_bridge` naming one footprint's two pads is the §5.2 fanout
+  signature — that one IS a placement fix.)
 - **`is_new: false` DRC** → generally placement/footprint, not routing.
 These are not sidecar failures; surface them as schematic/footprint work.
+(`DRC-invalid_outline` used to be on this list — it is now authorable: declare
+`board.outline`, §2.3.)
+
+### 5.6 `diff_pair_uncoupled_length_too_long` (the rules-header uncoupled budget)
+The dru rule fires per pair; "actual" in the description is the TOTAL uncoupled
+length (both breakout ends). Remedies, in order:
+1. **Shorten the fanout**: move the trunk's end vertices closer to the pad rows
+   (leave ≥ ~1mm to the courtyards) and/or tighten the breakout pitch (§2.2).
+2. **Set an honest budget**: the geometric floor for a discrete breakout is
+   roughly `hypot(row-to-trunk distance, max lateral pad-to-lane offset)` per
+   end — for 0402 rows at 1.6mm pitch that is ~2.3mm/end, so **50mil is
+   unattainable**; `200mil` is a met-with-margin budget for that shape. Pick the
+   tightest value your geometry actually meets — the rule must keep biting on
+   regressions, so do not just crank it up until green.
+
+### 5.7 Relic / dead copper (`copper_edge_clearance` off-board + `track_dangling` + `no rippable blockers` together)
+That trio = orphaned copper from a stale build: reuse-pulled tracks whose
+footprints later moved (they dangle at the OLD poses, often off-board, and make
+their nets unroutable — the router must reach ALL of a net's copper). Current
+code prevents new occurrences (placements invalidate the placed room's copper;
+unmappable-net pulls are dropped loudly — placement.py / layout_sync.py). On a
+board built before that: the authored `.kicad_pcb` is a DERIVED artifact —
+delete `layout/<target>/<target>.kicad_pcb` (never `layout/<sub>/` reuse
+sources), rebuild, reroute.
 
 ---
 
@@ -381,8 +538,18 @@ overwrite it.
 
 ## SSOT pointers (verify claims here, don't trust prose)
 - `src/faebryk/exporters/pcb/layout/layout_plan.py` — all `layout.yaml` models +
-  invariants (`Room`, `Placement`, `Board`, `NetClass`, `Pour`, `Keepout`,
-  `SilkText`, `RouteStage`, `BundleStage`, `GridRouteOverride`).
+  invariants (`DesignRules` incl. the rules gate + defaults fill, `Room`,
+  `Placement`, `Board`, `NetClass`, `Pour`, `Keepout`, `SilkText`, `RouteStage`,
+  `BundleStage`, `GridRouteOverride`).
+- `src/faebryk/exporters/pcb/layout/bundle_geometry.py` — the pinned cross-section
+  convention (edge gap, pair envelope); `test_bundle_contract.py` oracles.
+- `src/faebryk/exporters/pcb/layout/board_rules.py` — rules → `.kicad_pro` Default
+  class + `generate_dru_rules` (`.kicad_dru`); `test_design_rules_contract.py`.
+- `src/faebryk/exporters/pcb/layout/placement.py` — pose authority + placed-room
+  copper invalidation; `test_placement_apply_contract.py`.
+- `src/atopile/cli/snapshot.py` — the headless eyes (render + DRC + marks);
+  `test/cli/test_snapshot_contract.py`.
+- `vendor/2d_fields/` — the field solver (`cli.js`, `RESULTS.md`, `VENDOR.md`).
 - `src/faebryk/exporters/pcb/layout/layout_plan_runner.py` — how stages dispatch to
   the router (`build_invocations`, `run_route_stages`).
 - `src/faebryk/exporters/pcb/layout/diagnostics.py` — `diagnostics.json` schema +
