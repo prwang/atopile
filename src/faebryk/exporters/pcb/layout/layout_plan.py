@@ -284,10 +284,13 @@ class Room(BaseModel):
 
     `source` selects the KiCad placement-source token for the room's rule area
     (D5): `sheetname` (default, the §C3 channel) emits `(sheetname <module>)`;
-    `component_class` emits `(component_class <module>)` and declares the class
-    itself in the .kicad_pro (board_rules.generate_component_classes) with a
-    SHEET_NAME condition on that same `module` — membership always derives from
-    the one room identity, so no second name field exists."""
+    `component_class` emits `(component_class <module>)`, stamps the static
+    `(component_classes (class <module>))` token on the room's footprints
+    (board_rules.generate_component_class_membership — the channel kicad-cli
+    honors headlessly) and mirrors the class into the .kicad_pro
+    (board_rules.generate_component_classes, a SHEET_NAME assignment the GUI
+    resolves) — membership always derives from the one room identity, so no
+    second name field exists."""
 
     model_config = ConfigDict(extra="forbid")
 

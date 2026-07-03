@@ -971,6 +971,16 @@ def generate_layout_plan(ctx: BuildStepContext) -> None:
     ir = layout_ir(kicad_pcb, app)
 
     generate_rule_areas(kicad_pcb, plan, ir)
+    # D5: static membership stamping — the token kicad-cli honors headlessly;
+    # the .kicad_pro assignments authored further down are the GUI mirror only
+    # (kicad-cli 10.0.3 never synchronizes them on headless load).
+    from faebryk.exporters.pcb.layout.board_rules import (
+        generate_component_class_membership,
+    )
+
+    stamped = generate_component_class_membership(kicad_pcb, plan)
+    if stamped:
+        logger.info(f"Stamped component-class membership on {stamped} footprint(s)")
     # Tier0: draw each single stage's corridor polyline onto User.1 and flip its
     # guide_corridor_enabled (mutates `plan` so the artifact below records it).
     draw_corridors(kicad_pcb, plan)

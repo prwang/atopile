@@ -30,19 +30,34 @@ class names / a net in two classes are rejected earlier, at parse (Board model).
 The honest non-error case is "no net_classes AND no rules authored" → returns
 None (write nothing; KiCad defaults stand, visibly, not silently swallowed).
 
-`generate_component_classes` (D5) is the sibling for rooms with
-`source: component_class`: each such room becomes one `component_class_settings`
-assignment — class name = room.module, one SHEET_NAME condition whose primary is
-that same module (the C3-stamped sheetname is the single membership authority).
-Merge-preserving at TWO levels: only the component_class_settings section is
-authored, and within it user-authored assignments for OTHER classes survive;
-only the atopile-owned class names (= the plan's component_class rooms) are
-replaced. kicad-cli resolves the assignments headlessly on board load.
+D5 component-class membership is authored on TWO channels with distinct
+authority (empirically pinned 2026-07-03,
+test_rule_area_contract.py::test_kicad_drc_enforces_component_class_headlessly):
+
+* **Headless authority = the board file**: `generate_component_class_membership`
+  stamps the static `(component_classes (class "<module>"))` token onto every
+  footprint of a `source: component_class` room. kicad-cli 10.0.3 does NOT run
+  `BOARD::SynchronizeComponentClasses` on headless board load (only the GUI's
+  `PCB_EDIT_FRAME::OpenProjectFiles` does; the CLI-path sync exists only in
+  KiCad master's board_loader.cpp) — so a DRC rule conditioned on
+  `A.hasComponentClass(...)` resolves ONLY through this static token under
+  `kicad-cli pcb drc` / `ato diagnose`.
+* **GUI mirror = the project file**: `generate_component_classes` declares the
+  same class as one `component_class_settings` assignment — class name =
+  room.module, one SHEET_NAME condition whose primary is that same module (the
+  C3-stamped sheetname). The GUI resolves it on project open and its Board
+  Setup UI shows the class; headlessly it is inert. Merge-preserving at TWO
+  levels: only the component_class_settings section is authored, and within it
+  user-authored assignments survive; atopile's own output (recognized by the
+  `_atopile_authored` structural fingerprint) is replaced on re-emit and
+  garbage-collected when its room is renamed or reverted to
+  `source: sheetname`.
 """
 
 from typing import Any
 
 from faebryk.exporters.pcb.layout.layout_plan import LayoutPlan, LayoutPlanError
+from faebryk.libs.kicad.fileformats import Property, kicad
 from faebryk.libs.kicad.other_fileformats import C_kicad_project_file
 
 _NS = C_kicad_project_file.C_net_settings
@@ -120,31 +135,74 @@ def generate_project_rules(
     return project
 
 
+def _atopile_authored(
+    a: "C_kicad_project_file.C_component_class_settings.C_assignment",
+) -> bool:
+    """True iff `a` carries the rigid structural fingerprint of an assignment
+    THIS module emits: operator ALL + exactly one SHEET_NAME condition whose
+    primary equals the class name, no secondary. Emitted assignments carry no
+    other ownership marker, so this fingerprint IS the ownership boundary:
+    stale atopile output (a renamed room, a room reverted to `source:
+    sheetname`) is garbage-collected by it, and a USER assignment written in
+    this exact shape is treated as atopile-owned (documented contract — the
+    shape is atopile's namespace)."""
+    cond = a.conditions.get("SHEET_NAME")
+    return (
+        a.conditions_operator == "ALL"
+        and set(a.conditions) == {"SHEET_NAME"}
+        and cond is not None
+        and cond.primary == a.component_class
+        and not cond.secondary
+    )
+
+
 def generate_component_classes(
     plan: LayoutPlan,
     base_project: C_kicad_project_file | None = None,
 ) -> C_kicad_project_file | None:
     """Author one component-class assignment per `source: component_class` room
-    into the project file's `component_class_settings`, or None when the plan has
-    no such room (write nothing — the honest non-error case).
+    into the project file's `component_class_settings` (the GUI mirror — see the
+    module docstring; the headless authority is
+    `generate_component_class_membership`), or None when there is nothing to
+    write.
 
     Class name == room.module; membership = a single SHEET_NAME condition on
     that module (conditions_operator ALL), i.e. the same C3 sheetname stamped on
     the room's footprints — the rule area's `(component_class <module>)` source
     and this assignment agree by construction. `base_project` is merged:
-    assignments for class names atopile does NOT own are preserved in their
-    original order; atopile-owned ones are (re)emitted after them in plan
-    order (deterministic, idempotent re-emit)."""
+    assignments atopile does not own (per `_atopile_authored`) are preserved in
+    their original order; atopile-owned ones are (re)emitted after them in plan
+    order (deterministic, idempotent re-emit) and STALE ones — a fingerprint
+    match whose class is no longer a plan room — are dropped. A plan with zero
+    component_class rooms still PRUNES stale atopile output from
+    `base_project` (returning the cleaned project); only when there is nothing
+    to author AND nothing stale to remove does it return None."""
     cc_rooms = [r for r in plan.rooms if r.source == "component_class"]
     if not cc_rooms:
-        return None
+        # nothing to author — but a previous build's assignments (room since
+        # reverted to `source: sheetname`) must not leak into .kicad_pro
+        # forever: prune our own stale output, keep user assignments.
+        if base_project is None:
+            return None
+        settings = base_project.component_class_settings
+        kept = [a for a in settings.assignments if not _atopile_authored(a)]
+        if len(kept) == len(settings.assignments):
+            return None
+        settings.assignments = kept
+        return base_project
 
     project = base_project if base_project is not None else C_kicad_project_file()
     _CC = C_kicad_project_file.C_component_class_settings
 
     owned = {room.module for room in cc_rooms}
     settings = project.component_class_settings
-    kept = [a for a in settings.assignments if a.component_class not in owned]
+    # drop what the plan owns NOW (idempotent re-emit) AND any stale
+    # atopile-authored assignment left by an earlier build (renamed room GC).
+    kept = [
+        a
+        for a in settings.assignments
+        if a.component_class not in owned and not _atopile_authored(a)
+    ]
     settings.assignments = kept + [
         _CC.C_assignment(
             component_class=room.module,
@@ -154,6 +212,78 @@ def generate_component_classes(
         for room in cc_rooms
     ]
     return project
+
+
+def generate_component_class_membership(
+    pcb: "kicad.pcb.KicadPcb", plan: LayoutPlan
+) -> int:
+    """Stamp static per-footprint component-class membership onto the board —
+    the ONLY channel kicad-cli 10.0.3 honors headlessly (module docstring).
+
+    Every footprint whose C3-stamped sheetname equals a `source:
+    component_class` room's module gets `(component_classes (class
+    "<module>"))`; footprints of other rooms get their atopile-owned class (if
+    any) removed. Returns the number of footprints modified (0 on an
+    already-converged board — idempotent re-stamp).
+
+    Ownership boundary (union-merge, ours added, user's kept): atopile only
+    ever stamps a class named after a room the footprint belongs to, i.e. the
+    footprint's own sheetname == a dotted ancestor of its `atopile_address`.
+    So a class equal to the current sheetname OR a dotted ancestor of the
+    address is atopile-owned and re-derived every build (this also GCs the
+    ghost left when sync_rooms re-stamps the same footprint under a different
+    room level); every other static class is user-authored and preserved in
+    its original position. Footprints without a sheetname are untouched.
+
+    S5a: a component_class room matching no footprint sheetname is loud (the
+    same real-room condition rule_area enforces — checked here too so this
+    function is safe standalone), raised BEFORE any mutation."""
+    cc_modules = {r.module for r in plan.rooms if r.source == "component_class"}
+
+    sheetnames = {fp.sheetname for fp in pcb.footprints if fp.sheetname}
+    missing = sorted(cc_modules - sheetnames)
+    if missing:
+        raise LayoutPlanError(
+            f"component_class room(s) {missing} match no footprint sheetname on "
+            "the board — a typo or stale reference; stamping would classify "
+            "nothing"
+        )
+
+    def _owned(class_name: str, sheet: str, addr: str | None) -> bool:
+        if class_name == sheet:
+            return True
+        return addr is not None and (
+            addr == class_name or addr.startswith(class_name + ".")
+        )
+
+    changed = 0
+    for fp in pcb.footprints:
+        sheet = fp.sheetname
+        if not sheet:
+            continue
+        addr = Property.try_get_property(fp.propertys, "atopile_address")
+        old_names = (
+            [c.name for c in fp.component_classes.classes]
+            if fp.component_classes is not None
+            else []
+        )
+        new_names = [n for n in old_names if not _owned(n, sheet, addr)]
+        if sheet in cc_modules:
+            new_names.append(sheet)
+        if new_names == old_names:
+            continue
+        changed += 1
+        if new_names:
+            fp.component_classes = kicad.pcb.FootprintComponentClasses(
+                classes=[
+                    kicad.pcb.FootprintComponentClass(name=n) for n in new_names
+                ]
+            )
+        else:
+            # no classes left: drop the whole block, never an empty
+            # (component_classes) token.
+            fp.component_classes = None
+    return changed
 
 
 def generate_dru_rules(plan: LayoutPlan) -> str | None:

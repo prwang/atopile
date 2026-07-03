@@ -8,9 +8,12 @@ keepout zone whose placement source carries the room's ato address. The source
 token is picked by `Room.source` (D5): the default `sheetname` — the §C3
 channel KiCad preserves verbatim (no `group`, no custom S-expression token;
 `ZonePlacement.sheetname` is a native field) — or `component_class`, which
-emits the equally-native `(component_class <module>)` token; the class itself
-is declared in the .kicad_pro by `board_rules.generate_component_classes` with
-a SHEET_NAME condition on the same `module`. Either way C3 has already stamped
+emits the equally-native `(component_class <module>)` token; class MEMBERSHIP
+is stamped statically on the room's footprints by
+`board_rules.generate_component_class_membership` (the channel kicad-cli
+honors headlessly) and mirrored into the .kicad_pro by
+`board_rules.generate_component_classes` (a SHEET_NAME assignment the GUI
+resolves on project open). Either way C3 has already stamped
 that sheetname onto the room's footprints, so the rule area and its members
 agree — which is also why the S5a real-room check below applies to BOTH
 sources. A placement carries exactly ONE source token, never two.

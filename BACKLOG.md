@@ -641,22 +641,35 @@ No hard dependency on §E/§F, can be done when convenient; each keeps its origi
     forever unwritten — regressions `test_generated_placement_has_no_source_type` + the D5 `test_placement_carries_exactly_one_source`).
   - **Shipped shape**: `Room.source: "sheetname" (default) | "component_class"` (layout_plan.py; the default preserves every existing plan). Class name ==
     `room.module` == the C3-stamped sheetname — ONE room identity, no second name field. `rule_area.py` emits exactly one source token per
-    `room.source`; the S5a real-room check applies to both sources. Class membership is DECLARED in the `.kicad_pro`:
-    `board_rules.generate_component_classes` authors one `component_class_settings` assignment per component_class room
-    (`{component_class: <module>, conditions_operator: ALL, conditions: {SHEET_NAME: {primary: <module>}}}`; JSON shape SSOT =
-    KiCad `common/project/component_class_settings.cpp`, model = `other_fileformats.C_component_class_settings`, absent condition keys OMITTED never
-    null — KiCad's loader throws on null), merge-preserving at two levels (only its section authored; foreign assignments inside the section survive).
-    It rides the **live** `.kicad_pro` write channel §F5 opened (`build_steps.generate_layout_plan` → `generate_project_rules` +
-    `generate_component_classes` → one `project.dumps`); the old premise "atopile never writes .kicad_pro" was retired by §F5
-    (`set_kicad_netlist_path_in_project` remains dead code and is NOT the channel). kicad-cli resolves the assignments headlessly on board load
-    (`BOARD::SynchronizeComponentClasses`). F3 reverse-resolution accepts `placement.component_class` as the room key
+    `room.source`; the S5a real-room check applies to both sources. Class membership rides TWO channels with distinct authority
+    (empirically pinned 2026-07-03, `test_kicad_drc_enforces_component_class_headlessly`):
+    - **Headless authority = static board tokens**: `board_rules.generate_component_class_membership` (called by
+      `build_steps.generate_layout_plan` right after `generate_rule_areas`) stamps `(component_classes (class "<module>"))` onto every
+      footprint whose sheetname == a component_class room's module. kicad-cli 10.0.3 **never** runs `BOARD::SynchronizeComponentClasses`
+      on headless board load (only the GUI's `PCB_EDIT_FRAME::OpenProjectFiles` does; the CLI-path sync exists only in KiCad master's
+      board_loader.cpp) — so `A.hasComponentClass(...)` DRC rules resolve ONLY through this token under `kicad-cli pcb drc`/`ato diagnose`.
+      Idempotent + GC'd: ownership = a class equal to the footprint's sheetname or a dotted ancestor of its `atopile_address`
+      (atopile's namespace); user static classes outside it survive union-merge.
+    - **GUI mirror = the `.kicad_pro`**: `board_rules.generate_component_classes` authors one `component_class_settings` assignment per room
+      (`{component_class: <module>, conditions_operator: ALL, conditions: {SHEET_NAME: {primary: <module>}}}`; JSON shape SSOT =
+      KiCad `common/project/component_class_settings.cpp`, model = `other_fileformats.C_component_class_settings`, absent condition keys OMITTED never
+      null — KiCad's loader throws on null), merge-preserving at two levels (only its section authored; user assignments inside the section survive).
+      Atopile's own assignments are recognized by the `_atopile_authored` structural fingerprint (ALL + single SHEET_NAME whose primary == class
+      name, no secondary) and garbage-collected on room rename AND on revert-to-sheetname (the zero-class-rooms path prunes instead of skipping).
+      It rides the **live** `.kicad_pro` write channel §F5 opened (`build_steps.generate_layout_plan` → `generate_project_rules` +
+      `generate_component_classes` → one `project.dumps`); the old premise "atopile never writes .kicad_pro" was retired by §F5
+      (`set_kicad_netlist_path_in_project` remains dead code and is NOT the channel).
+    F3 reverse-resolution accepts `placement.component_class` as the room key
     (`layout_ir_resolve.room_polygons_from_pcb`). The zig schema fields (`ZonePlacement.component_class`, `Footprint.component_classes`) landed as
     D5-prep (see the §P1+ fidelity entry).
   - **Tests (all mutation-verified)**: `test_rule_area_contract.py` D5.x (component_class round-trip, exactly-one-source, S5a for both sources,
-    kicad-cli ingest of board+project with DRC-neutrality), `test_board_rules_contract.py` D5 block (assignment emit + KiCad-exact JSON shape,
-    no-class-rooms→None, merge-not-clobber, composition with F5 net classes),
+    kicad-cli ingest of board+project with DRC-neutrality, and D5.3 positive headless detection: a hasComponentClass-conditioned .kicad_dru
+    clearance rule FIRES on the stamped board and matches NOTHING on a .kicad_pro-only board — the pinned 10.0.3 burn),
+    `test_board_rules_contract.py` D5 block (assignment emit + KiCad-exact JSON shape, no-class-rooms→None-or-prune, merge-not-clobber,
+    rename GC, revert-to-sheetname prune, composition with F5 net classes),
     `test_layout_ir_resolve_contract.py::test_room_polygons_from_pcb_accepts_component_class_source`, and
-    `test_component_class_e2e.py` (layout.yaml → rule area + .kicad_pro on a synthetic board, the unit-level chain proof).
+    `test_component_class_e2e.py` (layout.yaml → rule area + static membership stamp + .kicad_pro on a synthetic board, the unit-level chain
+    proof; stamping idempotence/union-merge/ghost-GC/S5a).
 
 ### G. Won't do / deferred
 - ❌ **hack uuid = absolutely forbidden** (inviolable principle): uuid is a 128-bit opaque id, atopile **neither writes

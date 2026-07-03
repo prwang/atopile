@@ -28,11 +28,14 @@ area is a keepout, it carries no copper. Multi-room boards get one independent
 zone per room (D-spec "multi-room" pin), no cross-contamination.
 
 D5 extends the protocol with `Room.source`: `component_class` swaps the
-placement source token to the equally-native `(component_class <module>)` and
-declares the class in the .kicad_pro (SHEET_NAME assignment, class name ==
-module — see board_rules.generate_component_classes + its contract file). The
-D5.x tests pin: token round-trip, exactly-one-source, S5a for both sources, and
-the kicad-cli ingest of board+project together.
+placement source token to the equally-native `(component_class <module>)`,
+stamps static membership on the room's footprints
+(board_rules.generate_component_class_membership — the channel kicad-cli
+resolves headlessly) and mirrors the class into the .kicad_pro (SHEET_NAME
+assignment, class name == module — GUI-only; see board_rules + its contract
+file). The D5.x tests pin: token round-trip, exactly-one-source, S5a for both
+sources, the kicad-cli ingest of board+project together, and the positive
+headless detection of the class by a hasComponentClass DRC rule (D5.3).
 
 == THE RATCHET (S0 discipline) ============================================
 
@@ -474,9 +477,10 @@ def test_kicad_ingests_generated_rule_area(tmp_path):
 # kicad-cli): rule area with `(component_class "X")` on the board + the class
 # DECLARATION in the sibling .kicad_pro (board_rules.generate_component_classes,
 # SHEET_NAME assignment). `kicad-cli pcb upgrade --force` ingests it rc=0, the
-# token survives VERBATIM, and DRC (which loads the project file, so the class
-# assignment is resolved headlessly) reports the same violation count as the
-# bare baseline board — the D5 constructs are DRC-neutral.
+# token survives VERBATIM, and DRC reports the same violation count as the
+# bare baseline board — the D5 constructs are DRC-neutral. (Neutrality only;
+# whether the class RESOLVES headlessly is pinned by the positive-detection
+# test below — the .kicad_pro assignment alone does NOT.)
 # ===========================================================================
 @needs_d3
 @needs_kicad_cli
@@ -523,3 +527,87 @@ def test_kicad_ingests_component_class_rule_area(tmp_path):
     assert _drc_violation_count(modified, tmp_path / "m.json") == (
         _drc_violation_count(baseline, tmp_path / "b.json")
     ), "the component-class rule area / declaration changed the DRC count"
+
+
+# ===========================================================================
+# D5.3 — positive headless-detection oracle (slow, needs kicad-cli): a
+# .kicad_dru rule conditioned on A.hasComponentClass('<class>') must PRODUCE a
+# violation on the built board under `kicad-cli pcb drc`. kicad-cli 10.0.3
+# never runs BOARD::SynchronizeComponentClasses on headless load (only the GUI
+# does), so the .kicad_pro assignment channel is inert headlessly and the
+# static per-footprint `(component_classes (class ...))` token stamped by
+# generate_component_class_membership is the ONLY channel the rule can resolve
+# through. Two arms:
+#   * stamped board  -> the 10mm-clearance rule fires on 3mm-apart pads (>=1);
+#     this arm dies if the static stamping is removed (mutation bite).
+#   * pro-only board -> 0 clearance violations: pins the empirical burn
+#     (2026-07-03) that the .kicad_pro assignments alone resolve NOTHING under
+#     kicad-cli 10.0.3; if a future kicad-cli starts synchronizing them, this
+#     arm fails and tells us the GUI mirror became a second live channel.
+# ===========================================================================
+@needs_d3
+@needs_kicad_cli
+@pytest.mark.not_in_ci
+@pytest.mark.slow
+def test_kicad_drc_enforces_component_class_headlessly(tmp_path):
+    from faebryk.exporters.pcb.layout.board_rules import (
+        generate_component_class_membership,
+        generate_component_classes,
+    )
+
+    room = "top.analog"
+    # two footprints in the class room, pads 3mm apart on DIFFERENT nets: a
+    # 10mm clearance constraint between them must fire.
+    fps = [
+        (f"{room}.u1", room, [("1", "N1", 5.0, 5.0)], (5.0, 5.0)),
+        (f"{room}.u2", room, [("1", "N2", 8.0, 5.0)], (8.0, 5.0)),
+    ]
+    dru = (
+        "(version 1)\n"
+        '(rule "cc-clearance"\n'
+        f"  (condition \"A.hasComponentClass('{room}')\")\n"
+        "  (constraint clearance (min 10mm)))\n"
+    )
+    plan = _plan_with(
+        [Room(module=room, origin=(0.0, 0.0), size=(20.0, 20.0),
+              source="component_class")]
+    )
+
+    def build(subdir: str, stamp_membership: bool) -> Path:
+        d = tmp_path / subdir
+        d.mkdir()
+        bf = _load(_board(fps))
+        pcb = bf.kicad_pcb
+        generate_rule_areas(pcb, plan, layout_ir(pcb))
+        if stamp_membership:
+            assert generate_component_class_membership(pcb, plan) == 2
+        board = d / "probe.kicad_pcb"
+        board.write_text(kicad.dumps(bf))
+        project = generate_component_classes(plan)
+        assert project is not None
+        project.dumps(d / "probe.kicad_pro")  # sibling, auto-loaded by drc
+        (d / "probe.kicad_dru").write_text(dru)  # sibling, auto-loaded by drc
+        return board
+
+    def clearance_count(board: Path) -> int:
+        report = board.parent / "drc.json"
+        r = subprocess.run(
+            ["kicad-cli", "pcb", "drc", "--format", "json",
+             "-o", str(report), str(board)],
+            capture_output=True, text=True, timeout=180,
+        )
+        assert r.returncode == 0, f"drc failed on {board}:\n{r.stderr}"
+        violations = json.loads(report.read_text()).get("violations", [])
+        return sum(1 for v in violations if v.get("type") == "clearance")
+
+    stamped = clearance_count(build("stamped", stamp_membership=True))
+    assert stamped >= 1, (
+        "hasComponentClass rule matched no footprint on the stamped board — "
+        "the static (component_classes ...) membership channel is broken"
+    )
+    pro_only = clearance_count(build("pro_only", stamp_membership=False))
+    assert pro_only == 0, (
+        "kicad-cli resolved the .kicad_pro class assignment headlessly — the "
+        "pinned 10.0.3 burn no longer holds; revisit which channel is the "
+        "headless authority (board_rules module docstring)"
+    )

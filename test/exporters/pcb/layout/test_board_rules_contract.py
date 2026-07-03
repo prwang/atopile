@@ -311,6 +311,93 @@ def test_component_classes_merge_not_clobber():
 
 
 @needs_d5
+def test_stale_owned_assignment_gc_on_room_rename():
+    """A renamed component_class room leaves NO ghost assignment: atopile's own
+    emissions are recognized by their structural fingerprint (ALL + single
+    SHEET_NAME whose primary == class name, no secondary) and dropped on
+    re-emit, while a user assignment that does NOT match the fingerprint
+    survives — even one for a class name atopile no longer owns."""
+    from faebryk.libs.kicad.other_fileformats import C_kicad_project_file
+
+    _CC = C_kicad_project_file.C_component_class_settings
+    p1 = generate_component_classes(
+        _cc_plan(
+            [
+                {"module": "top.a", "source": "component_class"},
+                {"module": "top.b", "source": "component_class"},
+            ]
+        )
+    )
+    assert p1 is not None
+    # the exact round trip build_steps performs with the on-disk .kicad_pro
+    base = C_kicad_project_file.loads(p1.dumps())
+    # a user assignment for a stale-looking name but with a FOREIGN shape
+    # (ANY + REFERENCE) — not our fingerprint, must survive the GC.
+    base.component_class_settings.assignments.append(
+        _CC.C_assignment(
+            component_class="top.a",
+            conditions_operator="ANY",
+            conditions={"REFERENCE": _CC.C_condition(primary="R1")},
+        )
+    )
+    p2 = generate_component_classes(
+        _cc_plan([{"module": "top.renamed", "source": "component_class"}]),
+        base_project=base,
+    )
+    assert p2 is not None
+    assignments = p2.component_class_settings.assignments
+    assert [a.component_class for a in assignments] == ["top.a", "top.renamed"]
+    # the survivor is the user's REFERENCE one, not our stale fingerprint
+    assert set(assignments[0].conditions) == {"REFERENCE"}
+
+
+@needs_d5
+def test_zero_cc_rooms_prunes_stale_assignments():
+    """A plan whose rooms all reverted to `source: sheetname` still cleans the
+    project: atopile-fingerprint assignments from a previous build are pruned
+    (the function returns the cleaned project so the caller writes it), user
+    assignments survive, and a base with nothing stale still returns None."""
+    from faebryk.libs.kicad.other_fileformats import C_kicad_project_file
+
+    _CC = C_kicad_project_file.C_component_class_settings
+    p1 = generate_component_classes(
+        _cc_plan([{"module": "top.a", "source": "component_class"}])
+    )
+    assert p1 is not None
+    base = C_kicad_project_file.loads(p1.dumps())
+    base.component_class_settings.assignments.append(
+        _CC.C_assignment(
+            component_class="USER_CLASS",
+            conditions_operator="ANY",
+            conditions={"REFERENCE": _CC.C_condition(primary="R1,R2")},
+        )
+    )
+    # same module, but the room is now sheetname-sourced -> prune, keep user
+    pruned = generate_component_classes(
+        _cc_plan([{"module": "top.a"}]), base_project=base
+    )
+    assert pruned is not None
+    assert [
+        a.component_class for a in pruned.component_class_settings.assignments
+    ] == ["USER_CLASS"]
+
+    # nothing stale, nothing owned -> the honest None (no gratuitous write)
+    clean = C_kicad_project_file()
+    clean.component_class_settings.assignments = [
+        _CC.C_assignment(
+            component_class="USER_CLASS",
+            conditions_operator="ANY",
+            conditions={"REFERENCE": _CC.C_condition(primary="R1,R2")},
+        )
+    ]
+    assert generate_component_classes(_cc_plan([]), base_project=clean) is None
+    assert (
+        clean.component_class_settings.assignments[0].component_class
+        == "USER_CLASS"
+    )
+
+
+@needs_d5
 def test_component_classes_compose_with_net_class_rules():
     """The build-step chain (F5 then D5 onto ONE project object) yields a single
     project carrying BOTH sections — net classes and class assignments."""

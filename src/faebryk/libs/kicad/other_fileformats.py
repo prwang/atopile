@@ -596,8 +596,12 @@ class C_kicad_project_file(JSON_File):
         "ALL"|"ANY", "conditions": {<CONDITION_NAME>: {"primary": str,
         "secondary": str}}}]}`. Condition names include SHEET_NAME (the one
         atopile authors: class name == room.module == the C3-stamped
-        sheetname). kicad-cli resolves these headlessly on board load
-        (BOARD::SynchronizeComponentClasses)."""
+        sheetname). GUI-ONLY channel: kicad-cli 10.0.3 does NOT run
+        BOARD::SynchronizeComponentClasses on headless board load (only the
+        GUI's PCB_EDIT_FRAME::OpenProjectFiles does; empirically pinned
+        2026-07-03), so headless DRC membership comes from the static
+        per-footprint `(component_classes ...)` token instead
+        (board_rules.generate_component_class_membership)."""
 
         @dataclass_json(undefined=Undefined.INCLUDE)
         @dataclass
