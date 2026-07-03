@@ -20,10 +20,11 @@ The fidelity set under test = the minimal set decided 2026-06-13: footprints,
 manually-named groups, zones (the base is an input corpus sample with 6
 footprints, 2 zones and a via; the manual user group is created by the test rig,
 not baked into a committed generated board — see the work_board fixture). The
-warning set (teardrop / generated meander / via padstack v10 shape variations) is
-out of the fidelity set; the last test pins that an unmodeled key inside such a
-construct is reported loudly (no silent failure) rather than dropped — the demo
-script avoids these constructs.
+teardrop / via padstack / generated meander constructs have since graduated to
+the fidelity set (schema-complete: test_padstack_dialect.py,
+test_generated_dialect.py); the warning mechanism itself stays load-bearing for
+future/unknown keys — the last test pins that an unmodeled key inside such a
+construct is reported loudly (no silent failure) rather than dropped.
 """
 
 import json

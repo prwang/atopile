@@ -948,6 +948,24 @@ class FootprintUnits:
     def __field_names__() -> list[str]: ...
     def __zig_address__(self) -> int: ...
 
+class FootprintComponentClass:
+    name: str
+
+    def __init__(self, *, name: str) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
+class FootprintComponentClasses:
+    classes: list[FootprintComponentClass]
+
+    def __init__(self, *, classes: list[FootprintComponentClass]) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
 class Footprint:
     name: str
     locked: bool | None
@@ -961,6 +979,7 @@ class Footprint:
     sheetfile: str | None
     units: FootprintUnits | None
     propertys: list[Property]
+    component_classes: FootprintComponentClasses | None
     attr: list[str]
     duplicate_pad_numbers_are_jumpers: bool | None
     net_tie_pad_groups: list[str]
@@ -989,6 +1008,7 @@ class Footprint:
         sheetfile: str | None,
         units: FootprintUnits | None,
         propertys: list[Property],
+        component_classes: FootprintComponentClasses | None,
         attr: list[str],
         duplicate_pad_numbers_are_jumpers: bool | None,
         net_tie_pad_groups: list[str],
@@ -1223,6 +1243,7 @@ class ZonePlacement:
     source: str | None
     enabled: bool
     sheetname: str | None
+    component_class: str | None
 
     def __init__(
         self,
@@ -1231,6 +1252,7 @@ class ZonePlacement:
         source: str | None,
         enabled: bool,
         sheetname: str | None,
+        component_class: str | None,
     ) -> None: ...
     def __repr__(self) -> str: ...
     @staticmethod
@@ -1728,13 +1750,59 @@ class KicadPcb:
     def __field_names__() -> list[str]: ...
     def __zig_address__(self) -> int: ...
 
+class GeneratedXy:
+    xy: Xy
+
+    def __init__(self, *, xy: Xy) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
+class GeneratedPts:
+    pts: Pts
+
+    def __init__(self, *, pts: Pts) -> None: ...
+    def __repr__(self) -> str: ...
+    @staticmethod
+    def __field_names__() -> list[str]: ...
+    def __zig_address__(self) -> int: ...
+
 class Generated:
     uuid: str
     type: str
     name: str
     layer: str
-    members: list[str]
     locked: bool | None
+    base_line: GeneratedPts | None
+    base_line_coupled: GeneratedPts | None
+    corner_radius_percent: float | None
+    end: GeneratedXy | None
+    initial_side: str | None
+    is_time_domain: bool | None
+    last_diff_pair_gap: float | None
+    last_netname: str | None
+    last_status: str | None
+    last_track_width: float | None
+    last_tuning_length: float | None
+    max_amplitude: float | None
+    min_amplitude: float | None
+    min_spacing: float | None
+    origin: GeneratedXy | None
+    override_custom_rules: bool | None
+    rounded: bool | None
+    single_sided: bool | None
+    target_delay: float | None
+    target_delay_max: float | None
+    target_delay_min: float | None
+    target_length: float | None
+    target_length_max: float | None
+    target_length_min: float | None
+    target_skew: float | None
+    target_skew_max: float | None
+    target_skew_min: float | None
+    tuning_mode: str | None
+    members: list[str]
 
     def __init__(
         self,
@@ -1743,8 +1811,36 @@ class Generated:
         type: str,
         name: str,
         layer: str,
-        members: list[str],
         locked: bool | None,
+        base_line: GeneratedPts | None,
+        base_line_coupled: GeneratedPts | None,
+        corner_radius_percent: float | None,
+        end: GeneratedXy | None,
+        initial_side: str | None,
+        is_time_domain: bool | None,
+        last_diff_pair_gap: float | None,
+        last_netname: str | None,
+        last_status: str | None,
+        last_track_width: float | None,
+        last_tuning_length: float | None,
+        max_amplitude: float | None,
+        min_amplitude: float | None,
+        min_spacing: float | None,
+        origin: GeneratedXy | None,
+        override_custom_rules: bool | None,
+        rounded: bool | None,
+        single_sided: bool | None,
+        target_delay: float | None,
+        target_delay_max: float | None,
+        target_delay_min: float | None,
+        target_length: float | None,
+        target_length_max: float | None,
+        target_length_min: float | None,
+        target_skew: float | None,
+        target_skew_max: float | None,
+        target_skew_min: float | None,
+        tuning_mode: str | None,
+        members: list[str],
     ) -> None: ...
     def __repr__(self) -> str: ...
     @staticmethod

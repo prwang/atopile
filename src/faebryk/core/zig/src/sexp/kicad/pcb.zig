@@ -818,6 +818,25 @@ pub const FootprintUnits = struct {
 };
 
 // Footprint structure
+// Static per-footprint component classes: (component_classes (class "X") ...)
+// — GUI-assigned board-file class membership (10.0.3 parser :5597-5620,
+// writer :1248-1259; class names quoted on write, symbol-or-number on read).
+pub const FootprintComponentClass = struct {
+    name: str,
+
+    pub const fields_meta = .{
+        .name = structure.SexpField{ .positional = true },
+    };
+};
+
+pub const FootprintComponentClasses = struct {
+    classes: list(FootprintComponentClass) = .{},
+
+    pub const fields_meta = .{
+        .classes = structure.SexpField{ .multidict = true, .sexp_name = "class" },
+    };
+};
+
 pub const Footprint = struct {
     name: str,
     locked: ?bool = null,
@@ -836,6 +855,9 @@ pub const Footprint = struct {
     sheetfile: ?str = null,
     units: ?FootprintUnits = null,
     propertys: list(Property) = .{},
+    // KiCad emits component_classes right after the property fields
+    // (writer :1248); absent when the footprint has no static classes.
+    component_classes: ?FootprintComponentClasses = null,
     attr: list(E_Attr) = .{},
     duplicate_pad_numbers_are_jumpers: ?bool = null,
     // net-tie groups: (net_tie_pad_groups "1,2" "3,4"). The sibling
@@ -1044,11 +1066,20 @@ pub const ZoneKeepout = struct {
     footprints: E_zone_keepout,
 };
 
+// (placement (enabled yes|no) <one source sub-item>). The file grammar fuses
+// source type + value into a single token whose name IS the type:
+// (sheetname "X") | (component_class "X") | (group "X") (10.0.3 parser
+// :8120-8169, writer :2958-2977). source_type/source model KiCad's in-memory/
+// protobuf shape, NOT the file syntax — writing them SIGSEGVs the kicad-cli
+// loader (CLAUDE.md hazard; regression test_rule_area_contract.py). They must
+// stay null/unwritten. component_class was verified safe through kicad-cli
+// (BACKLOG D5). group placement is not modeled yet and stays S5a-loud.
 pub const ZonePlacement = struct {
     source_type: ?E_zone_placement_source_type = null,
     source: ?str = null,
     enabled: bool = true,
     sheetname: ?str = null,
+    component_class: ?str = null,
 };
 
 pub const ZoneTeardrop = struct {
@@ -1365,13 +1396,76 @@ pub const KicadPcb = struct {
     };
 };
 
+// Generator property value wrappers: KiCad serializes a VECTOR2I property as
+// (key (xy x y)) and a SHAPE_LINE_CHAIN property as (key (pts (xy ...) ...))
+// (10.0.3 writer format(PCB_GENERATOR) :2555-2568).
+pub const GeneratedXy = struct {
+    xy: Xy,
+};
+
+pub const GeneratedPts = struct {
+    pts: Pts,
+};
+
+// KiCad 10 (generated ...) = PCB_GENERATOR; the only release generator type
+// is tuning_pattern (interactive length-tuning meanders). Envelope =
+// uuid/type/name/layer/locked/members; everything else is an open key->value
+// property map (STRING_ANY_MAP) that KiCad writes in ALPHABETICAL key order.
+// Grammar ground truth (10.0.3): parser parseGENERATOR :7023 — uuid MUST be
+// the FIRST subkey; writer :2507-2602 — envelope, then properties (f64 |
+// yes/no | quoted string | (key (xy ...)) | (key (pts ...))), then sorted
+// quoted member uuids LAST. Property set = pcb_tuning_pattern.cpp
+// GetProperties/SetProperties :1691-1810 plus origin from pcb_generator.cpp
+// :160. Field declaration order below IS the emission order (the encoder
+// writes declaration order), so it must stay: envelope, properties sorted
+// alphabetically, members. Not modeled on purpose: update_order (#ifdef
+// GENERATOR_ORDER, never written by release KiCad) and legacy read-only keys
+// (id, side, last_tuning) — those and any future generator property stay on
+// the loud S5a unknown-key sink, the correct residual for an open map. This
+// layer round-trips a generated verbatim even with empty members (KiCad
+// itself drops such ghosts on load/save); lifecycle policy belongs to
+// layout_sync, not here.
 pub const Generated = struct {
     uuid: str,
     type: str,
     name: str,
     layer: str,
-    members: list(str) = .{},
     locked: ?bool = null,
+    base_line: ?GeneratedPts = null,
+    base_line_coupled: ?GeneratedPts = null,
+    corner_radius_percent: ?f64 = null,
+    end: ?GeneratedXy = null,
+    initial_side: ?str = null,
+    is_time_domain: ?bool = null,
+    last_diff_pair_gap: ?f64 = null,
+    last_netname: ?str = null,
+    last_status: ?str = null,
+    last_track_width: ?f64 = null,
+    last_tuning_length: ?f64 = null,
+    max_amplitude: ?f64 = null,
+    min_amplitude: ?f64 = null,
+    min_spacing: ?f64 = null,
+    origin: ?GeneratedXy = null,
+    override_custom_rules: ?bool = null,
+    rounded: ?bool = null,
+    single_sided: ?bool = null,
+    target_delay: ?f64 = null,
+    target_delay_max: ?f64 = null,
+    target_delay_min: ?f64 = null,
+    target_length: ?f64 = null,
+    target_length_max: ?f64 = null,
+    target_length_min: ?f64 = null,
+    target_skew: ?f64 = null,
+    target_skew_max: ?f64 = null,
+    target_skew_min: ?f64 = null,
+    tuning_mode: ?str = null,
+    members: list(str) = .{},
+
+    pub const fields_meta = .{
+        // KiCad prints the generator type as a raw unquoted symbol
+        // (writer :2521 TO_UTF8); its parser NeedSYMBOLs it.
+        .type = structure.SexpField{ .symbol = true },
+    };
 };
 
 pub const Image = struct {

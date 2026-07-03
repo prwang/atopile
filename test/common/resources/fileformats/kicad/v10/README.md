@@ -13,6 +13,8 @@ tests. Generated 2026-06-12 with kicad-cli 10.0.3:
 | `pcb/teardrop_elongated_pad.kicad_pcb` | upgrade of the KiCad QA board `teardrop_elongated_pad` — pad-level `(teardrops ...)`, board-level `(property ...)` text variables | no |
 | `pcb/two_segment_teardrop.kicad_pcb` | upgrade of the KiCad QA board `two_segment_teardrop` — via-level `(teardrops ...)`, teardrop zones `(attr (teardrop (type padvia)))`, via + setup IPC-4761 treatments | no |
 | `pcb/via_treatments.kicad_pcb` | KiCad QA board `padstacks` + hand-added vias (buried/micro, backdrill, tertiary_drill, front/back_post_machining, start_end_only, via padstack front_inner_back + custom, via teardrops), then normalized by `kicad-cli pcb upgrade --force` 10.0.3 so every byte is KiCad-authored; also exhibits blind vias, tri-state `(tenting (front none) ...)`, empty `(zone_layer_connections)`, flat pad chamfer, custom-pad primitives (gr_line/rect/bbox/arc/circle/poly) | no |
+| `pcb/tuning_generators_load_save.kicad_pcb` | `kicad-cli pcb upgrade --force` of the KiCad QA board `qa/data/pcbnew/tuning_generators_load_save.kicad_pcb` — a real GUI-authored `(generated (type tuning_pattern) ...)` single-mode serpentine with the full alphabetical property map (base_line pts, origin/end xy, target_length/_delay/_skew triples, ...) and 47 sorted quoted member uuids | no |
+| `pcb/tuning_diffpair_synth.kicad_pcb` | synthesized from `tuning_generators_load_save` (no upstream diff-pair QA sample exists): tuning_mode `diff_pair` + `base_line_coupled` pts, validated by a round-trip through the real KiCad parser+formatter (`kicad-cli pcb upgrade --force` 10.0.3 preserved it verbatim) | no |
 
 Key v10 dialect properties these files exhibit (vs v9):
 
