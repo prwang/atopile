@@ -63,19 +63,19 @@ def attach_random_designators(tg: fbrk.TypeGraph):
 
     assigned: dict[str, list[int]] = defaultdict(list)
 
-    # Parse existing designators to track which numbers are used per prefix
+    # Parse existing designators to track which numbers are used per prefix. Seed
+    # from EVERY designator in the graph -- the same domain as the uniqueness
+    # check below -- not just part_modules_sorted: a designator kept/loaded from
+    # the PCB (keep_designators) can sit on a module outside that set, and a
+    # freshly-assigned number must not collide with it.
     pattern = re.compile(r"([A-Z]+)([0-9]+)")
-    for module in part_modules_sorted:
-        if (designator_trait := module.try_get_sibling_trait(F.has_designator)) is None:
-            continue
-        # manual designator might match prefix or not
+    for designator_trait in fabll.Traits.get_implementors(
+        F.has_designator.bind_typegraph(tg)
+    ):
         existing = designator_trait.get_designator()
         if not (match := pattern.match(existing)):
             continue
-
-        prefix = match.group(1)
-        number = int(match.group(2))
-        assigned[prefix].append(number)
+        assigned[match.group(1)].append(int(match.group(2)))
 
     # Assign designators to components that don't have one yet
     for module, prefix in part_modules_sorted.items():
