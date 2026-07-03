@@ -105,6 +105,9 @@ def diagnosed(tmp_path_factory) -> Path:
     # 2) write a layout.yaml: a 2-copper stackup (TS-AUTH-B) + one single stage.
     nets_block = "\n".join(f"      - {a}" for a in addrs)
     (dst / "layout.yaml").write_text(
+        "rules:\n"
+        "  clearance: 0.1\n"
+        "  track_width: 0.15\n"
         "board:\n"
         "  stackup:\n"
         "    layers:\n"

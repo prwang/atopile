@@ -990,7 +990,10 @@ def generate_layout_plan(ctx: BuildStepContext) -> None:
     # §F / F5: author board net classes into the project file so KiCad's DRC (and
     # `ato diagnose`) judge DESIGN INTENT, not KiCad defaults. Merge onto any
     # existing project; write nothing when no classes are authored.
-    from faebryk.exporters.pcb.layout.board_rules import generate_project_rules
+    from faebryk.exporters.pcb.layout.board_rules import (
+        generate_dru_rules,
+        generate_project_rules,
+    )
     from faebryk.libs.kicad.other_fileformats import C_kicad_project_file
 
     proj_path = config.build.paths.kicad_project
@@ -1001,6 +1004,13 @@ def generate_layout_plan(ctx: BuildStepContext) -> None:
     if project is not None:
         project.dumps(proj_path)
         logger.info(f"Wrote board net-class rules to {proj_path}")
+    # the rules header's custom DRC rules (courtyard spacing, uncoupled max, the
+    # clearance floor) — <project>.kicad_dru is auto-loaded by kicad-cli pcb drc.
+    dru = generate_dru_rules(plan)
+    if dru is not None:
+        dru_path = proj_path.with_suffix(".kicad_dru")
+        dru_path.write_text(dru)
+        logger.info(f"Wrote board design rules to {dru_path}")
 
     artifact = plan.model_dump(mode="json")
     # A bundle stage carries COMPUTED geometry — the cross-section member offsets +

@@ -15,10 +15,14 @@ CROSS-SECTION CONVENTION (pinned — makes the oracle hand-computable):
 lanes are packed in declared order along the axis perpendicular to the centerline.
 `spacing` is the EDGE-TO-EDGE gap between adjacent lane SLOTS (so a lane's WIDTH
 shifts every downstream member's offset). A single lane's slot width = its width
-(the bundle default); a diff lane's slot width = gap + width. The whole packing is
+(the bundle default); a diff lane's slot width = 2*width + gap — the true copper
+envelope of two tracks with an EDGE-TO-EDGE gap between them. The whole packing is
 then centered about offset 0 (subtract the slot-envelope midpoint), so the
 cross-section is symmetric about the centerline. Within a diff slot, P sits at
-slot_center - gap/2, N at slot_center + gap/2.
+slot_center - (gap + width)/2, N at slot_center + (gap + width)/2, so the
+CENTER-TO-CENTER distance is gap + width and the copper edge gap is exactly `gap`.
+(Once got burned: gap was applied center-to-center, so gap == width produced two
+tracks touching edge-to-edge — a hard short on the board.)
 """
 
 from dataclasses import dataclass
@@ -57,12 +61,20 @@ def cross_section_offsets(
     `spacing` is the inter-lane edge gap for THIS segment (the trunk varies it per
     vertex); `default_width` is the bundle default a single lane (and a diff lane
     with no explicit width) takes."""
-    # slot widths: single = its width; diff = gap + width (the pair envelope)
+    # slot widths: single = its width; diff = 2*width + gap (the pair envelope:
+    # two tracks plus the edge-to-edge gap between them)
     slots: list[tuple[Any, float, float]] = []  # (lane, slot_width, track_width)
     for lane in lanes:
         if isinstance(lane, DiffLane):
+            if lane.gap is None:
+                # normally filled from rules.diff_pair_gap by LayoutPlan._apply_rules;
+                # a direct caller with an unfilled lane must not get silent geometry.
+                raise LayoutPlanError(
+                    f"diff lane {lane.diff}: gap is unset (no explicit gap and no "
+                    "rules.diff_pair_gap was applied)"
+                )
             w = lane.width if lane.width is not None else default_width
-            slots.append((lane, lane.gap + w, w))
+            slots.append((lane, 2 * w + lane.gap, w))
         else:
             slots.append((lane, default_width, default_width))
 
@@ -81,11 +93,13 @@ def cross_section_offsets(
         c = center - midpoint
         if isinstance(lane, DiffLane):
             p, n = lane.diff
+            # center-to-center = gap + width ⇒ copper EDGE gap is exactly lane.gap
+            half_pitch = (lane.gap + w) / 2
             out.append(
-                LaneOffset(p, c - lane.gap / 2, w, "diff", diff_partner=n, polarity="P")
+                LaneOffset(p, c - half_pitch, w, "diff", diff_partner=n, polarity="P")
             )
             out.append(
-                LaneOffset(n, c + lane.gap / 2, w, "diff", diff_partner=p, polarity="N")
+                LaneOffset(n, c + half_pitch, w, "diff", diff_partner=p, polarity="N")
             )
         else:
             out.append(LaneOffset(lane.net, c, w, "single"))

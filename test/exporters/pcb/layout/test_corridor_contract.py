@@ -21,7 +21,10 @@ _LOUD = (ValidationError, ValueError)
 
 
 def _plan(corridor_yaml: str, mode: str = "single"):
+    # rules header: the DesignRules gate (loudness pinned in
+    # test_design_rules_contract.py); corridor fixtures are rules-agnostic.
     return load_layout_plan(
+        "rules:\n  clearance: 0.1\n  track_width: 0.15\n  diff_pair_gap: 0.15\n"
         "rooms: []\nroute_stages:\n"
         f"  - name: bus\n    mode: {mode}\n    nets: [top.a.x]\n"
         f"    config: {{}}\n{corridor_yaml}"

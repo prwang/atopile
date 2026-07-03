@@ -366,6 +366,11 @@ def test_missing_stackup_is_loud():
 # stackup silently falls back to a fixed width = impedance out of control).
 # ===========================================================================
 _IMPEDANCE_NO_STACKUP = """
+rules:
+  clearance: 0.1
+  track_width: 0.15
+  diff_pair_width: 0.15
+  diff_pair_gap: 0.15
 route_stages:
   - name: hs
     mode: diff
@@ -373,6 +378,11 @@ route_stages:
       impedance: 100
 """
 _IMPEDANCE_WITH_STACKUP = """
+rules:
+  clearance: 0.1
+  track_width: 0.15
+  diff_pair_width: 0.15
+  diff_pair_gap: 0.15
 board:
   stackup:
     layers:

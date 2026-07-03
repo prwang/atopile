@@ -221,12 +221,22 @@ def _ir(signal_nets: dict[str, str]) -> dict:
     return {"signal_nets": dict(signal_nets)}
 
 
+def _rules():
+    """The minimal DesignRules header route_stages now require (the gate's
+    loudness is pinned in test_design_rules_contract.py, not here)."""
+    from faebryk.exporters.pcb.layout.layout_plan import DesignRules
+
+    return DesignRules(
+        clearance=0.05, track_width=0.15, diff_pair_width=0.15, diff_pair_gap=0.15
+    )
+
+
 def _plan(stages, board="2") -> LayoutPlan:
     """A plan over the given stages. board="2" ⇒ the 2-copper stackup; None ⇒ no
     board (for the loud-no-stackup test); a Board instance ⇒ used verbatim."""
     if board == "2":
         board = _board2()
-    return LayoutPlan(board=board, route_stages=stages)
+    return LayoutPlan(rules=_rules(), board=board, route_stages=stages)
 
 
 def _invs(plan, ir, **kw):
@@ -270,6 +280,11 @@ def _fake_invoker(summaries: dict):
 
 # a minimal valid bundle (1 single + 1 diff) with a 2-copper board, for R2.
 _BUNDLE_YAML = (
+    "rules:\n"
+    "  clearance: 0.05\n"
+    "  track_width: 0.15\n"
+    "  diff_pair_width: 0.15\n"
+    "  diff_pair_gap: 0.15\n"
     "board:\n"
     "  stackup:\n"
     "    layers:\n"
@@ -300,6 +315,16 @@ _BUNDLE_IR = _ir({"top.a.x": "/X", "top.d.p": "/DP", "top.d.n": "/DN"})
 # a single stage THEN the same bundle — for the "bundle OUTSIDE the --up-to slice
 # must not raise" nuance (the loudness is per the RUN SLICE, not the whole plan).
 _SINGLE_THEN_BUNDLE_YAML = (
+    "rules:\n"
+    "  clearance: 0.05\n"
+    "  track_width: 0.15\n"
+    "  diff_pair_width: 0.15\n"
+    "  diff_pair_gap: 0.15\n"
+    "rules:\n"
+    "  clearance: 0.05\n"
+    "  track_width: 0.15\n"
+    "  diff_pair_width: 0.15\n"
+    "  diff_pair_gap: 0.15\n"
     "board:\n"
     "  stackup:\n"
     "    layers:\n"
@@ -480,16 +505,20 @@ def test_bundle_in_vs_outside_up_to_slice():
 
 # ===========================================================================
 # R2c — bundle config (BundleRouteConfig) expands verbatim, explicitly-set keys
-# only: _BUNDLE_YAML sets only config.track_width ⇒ it reaches kwargs, an UNSET
-# field (clearance, via_size, ...) is NOT forwarded (the router default stands),
-# and no None leaks. The bundle analogue of R3.
+# only: _BUNDLE_YAML sets only config.track_width ⇒ it reaches kwargs; a truly
+# unset field (via_size, ...) is NOT forwarded (the router default stands) and no
+# None leaks. clearance is the exception BY DESIGN: the DesignRules gate fills it
+# from the rules header, so the router never starts on its own silent clearance.
+# The bundle analogue of R3.
 # ===========================================================================
 @needs_bundle_dispatch
 def test_bundle_config_expanded_verbatim():
     plan = load_layout_plan(_BUNDLE_YAML)  # config: {track_width: 0.1}
     inv = build_invocations(plan, _BUNDLE_IR, input_board=_IN, workdir=_WD)[0]
     assert inv.kwargs["track_width"] == 0.1  # explicitly set ⇒ forwarded
-    assert "clearance" not in inv.kwargs  # unset ⇒ router default stands
+    # clearance is ALWAYS concrete since the DesignRules gate: unset inherits the
+    # board rules header (the router never starts on its own silent default).
+    assert inv.kwargs["clearance"] == 0.05  # the fixture rules header
     assert "via_size" not in inv.kwargs and "via_drill" not in inv.kwargs
     assert None not in inv.kwargs.values()  # no None leak
 
@@ -951,6 +980,11 @@ def test_e2e_two_stage_chaining_and_missing_summary(tmp_path):
 # bucket③ e2e: a 2-copper stackup (so layers == [F.Cu, B.Cu]) + a trunk inside the
 # board area. The member addresses resolve through bridge② to real board nets.
 _BUNDLE_E2E_YAML = (
+    "rules:\n"
+    "  clearance: 0.05\n"
+    "  track_width: 0.15\n"
+    "  diff_pair_width: 0.15\n"
+    "  diff_pair_gap: 0.15\n"
     "board:\n"
     "  stackup:\n"
     "    layers:\n"
@@ -1022,6 +1056,11 @@ def test_e2e_bundle_run_writes_report_and_board(tmp_path):
 
 # a bundle whose 2nd member resolves to a net that is NOT on the board, for E19.
 _BUNDLE_FAIL_YAML = (
+    "rules:\n"
+    "  clearance: 0.05\n"
+    "  track_width: 0.15\n"
+    "  diff_pair_width: 0.15\n"
+    "  diff_pair_gap: 0.15\n"
     "board:\n"
     "  stackup:\n"
     "    layers:\n"

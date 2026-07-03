@@ -43,6 +43,11 @@ needs_f1 = pytest.mark.xfail(
 # a minimal two-copper stackup so build_invocations' TS-AUTH-B layer authority is
 # satisfied without a board section being optional-away.
 _LAYOUT_YAML = """\
+rules:
+  clearance: 0.1
+  track_width: 0.15
+  diff_pair_width: 0.15
+  diff_pair_gap: 0.15
 board:
   stackup:
     layers:

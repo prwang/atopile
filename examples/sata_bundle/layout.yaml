@@ -1,48 +1,100 @@
 # SATA channel layout intent (D-Tier2 bundle).
 #
 # The two SATA differential pairs (TX, RX) travel together as ONE bundle from the
-# host (placed northeast) down to the device (south). The trunk runs rigidly south,
+# host (placed north) down to the device (south). The trunk runs rigidly south,
 # then necks down (a transition segment) as it fans into the device breakout.
+
+# The board-wide rules header: the router starts from these (a plan with
+# route_stages and no rules is rejected at parse). diff_pair_width/gap are the
+# 100Ω solution for THIS stackup computed by the vendored 2D field solver
+# (vendor/2d_fields/RESULTS.md): W=0.20mm S=0.15mm ⇒ Zdiff ≈ 99.4Ω on L1
+# microstrip over the L2 ground plane through the 0.176mm 7628 prepreg.
+rules:
+  clearance: 5mil            # copper-copper minimum (the short-circuit rule)
+  track_width: 0.15          # single-ended default
+  diff_pair_width: 0.2       # solver: 100Ω pair width on this stackup
+  diff_pair_gap: 0.15        # solver: 100Ω intra-pair edge gap
+  inter_pair_clearance: 20mil
+  component_spacing: 20mil   # courtyard-to-courtyard (DRC courtyard_clearance)
+  uncoupled_max_length: 50mil
+
 rooms:
   - module: host
+    origin: [24, 6]
+    size: [12, 8]
   - module: device
+    origin: [24, 56]
+    size: [12, 8]
+
+# Explicit poses (room-relative): each port's four 0402 terminations sit in a
+# row ACROSS the bundle axis, line pads facing the trunk, in the same left-to-
+# right order as the trunk cross-section at that end — so the breakout fanout
+# never crosses itself. 2mm pitch clears the 20mil courtyard spacing rule.
+placements:
+  - component: host.term[0]   # tx.p — leftmost, matches trunk member order
+    at: [3, 6]
+    rotation: 90
+  - component: host.term[1]   # tx.n
+    at: [5, 6]
+    rotation: 90
+  - component: host.term[2]   # rx.p
+    at: [7, 6]
+    rotation: 90
+  - component: host.term[3]   # rx.n
+    at: [9, 6]
+    rotation: 90
+  - component: device.term[0]  # tx.p — device order is the mirror (see breakouts)
+    at: [9, 2]
+    rotation: 270
+  - component: device.term[1]  # tx.n
+    at: [7, 2]
+    rotation: 270
+  - component: device.term[2]  # rx.p
+    at: [5, 2]
+    rotation: 270
+  - component: device.term[3]  # rx.n
+    at: [3, 2]
+    rotation: 270
 
 # The board-level facts (D-Tier3): the SATA pairs carry controlled 100Ω
 # impedance, so a COMPLETE stackup is a hard dependency — declare one. The
 # copper layer set here is the single authority for the board's layer count.
+# 4-layer JLC-style stack, all copper 17um (0.5oz): signal / ground / ground /
+# signal, 7628 prepreg between each signal layer and its reference plane.
 board:
   outline:
     origin: [0, 0]
     size: [60, 70]
   stackup:
     layers:
-      - {name: F.Cu, type: copper, thickness: 0.035}
-      - {name: d1, type: dielectric, thickness: 0.2, material: FR4, epsilon_r: 4.5}
-      - {name: B.Cu, type: copper, thickness: 0.035}
+      - {name: F.Cu, type: copper, thickness: 0.017}
+      - {name: p1, type: dielectric, thickness: 0.176, material: 7628 prepreg, epsilon_r: 4.6}
+      - {name: In1.Cu, type: copper, thickness: 0.017}   # Ground1
+      - {name: core, type: dielectric, thickness: 1.1, material: FR4 core, epsilon_r: 4.6}
+      - {name: In2.Cu, type: copper, thickness: 0.017}   # Ground2
+      - {name: p2, type: dielectric, thickness: 0.176, material: 7628 prepreg, epsilon_r: 4.6}
+      - {name: B.Cu, type: copper, thickness: 0.017}
 
 route_stages:
   - type: bundle
     name: sata_link
     lanes:
       # TX pair, then RX pair — the bundle-global member order (P before N).
+      # width/gap inherit the rules header (the solver's 100Ω geometry).
       - diff: [host.tx.p.line, host.tx.n.line]
-        gap: 0.2
-        width: 0.2
         impedance: 100
       - diff: [host.rx.p.line, host.rx.n.line]
-        gap: 0.2
-        width: 0.2
         impedance: 100
     trunk:
       centerline:
-        # northeast → south. Equal spacings ⇒ rigid; the final unequal pair ⇒ a
-        # transition (neck-down) into the device breakout.
-        - at: [40, 8]
-          spacing: 0.5
-        - at: [40, 40]
-          spacing: 0.5
-        - at: [22, 58]
-          spacing: 0.3
+        # north → south between the two rooms. Equal spacings ⇒ rigid; the final
+        # unequal pair ⇒ a transition (neck-down) into the device breakout.
+        - at: [30, 16]
+          spacing: 0.6
+        - at: [30, 48]
+          spacing: 0.6
+        - at: [30, 54]
+          spacing: 0.508
     breakouts:
       # host derives its fanout order from the lane order; the device end mirrors it
       # (an explicit permutation — the pairs enter from the opposite side).
@@ -54,6 +106,4 @@ route_stages:
           - host.tx.n.line
           - host.tx.p.line
     config:
-      track_width: 0.2
-      clearance: 0.15
       impedance: 100

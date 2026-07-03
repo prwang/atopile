@@ -181,7 +181,21 @@ route_stages:
 """
 
 
+# route_stages require a `rules:` header since the DesignRules contract (see
+# test_design_rules_contract.py, which pins the loudness); these D2 fixtures
+# predate it and are rules-agnostic, so inject a minimal header where absent.
+_DEFAULT_RULES = (
+    "rules:\n"
+    "  clearance: 0.1\n"
+    "  track_width: 0.15\n"
+    "  diff_pair_width: 0.15\n"
+    "  diff_pair_gap: 0.15\n"
+)
+
+
 def _plan(yaml_text: str) -> "LayoutPlan":
+    if "rules:" not in yaml_text:
+        yaml_text = _DEFAULT_RULES + yaml_text
     return load_layout_plan(yaml_text)
 
 

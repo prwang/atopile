@@ -78,6 +78,11 @@ needs_router = pytest.mark.skipif(
 # F2a (pure) — StageResult.diag survives into route_report.json
 # ===========================================================================
 _LAYOUT_YAML = """\
+rules:
+  clearance: 0.1
+  track_width: 0.15
+  diff_pair_width: 0.15
+  diff_pair_gap: 0.15
 board:
   stackup:
     layers:

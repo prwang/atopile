@@ -78,6 +78,7 @@ from typing import Annotated, Any, Literal, Union
 import yaml
 from pydantic import (
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Discriminator,
     Field,
@@ -133,6 +134,86 @@ def _validate_polygon(points: list[tuple[float, float]], where: str) -> None:
         raise ValueError(f"{where}: polygon needs ≥ 3 points, got {len(points)}")
     if _polygon_self_intersects([tuple(p) for p in points]):
         raise ValueError(f"{where}: polygon is self-intersecting (must be simple)")
+
+
+# ---------------------------------------------------------------------------
+# DesignRules — the layout.yaml HEADER: board-wide rules the router starts from.
+#
+# The router cannot start with no rules: with route_stages present, a plan MUST
+# declare `rules:` (parse-time loud). The rules play two roles:
+#   * DEFAULTS — a stage/lane that omits a geometry knob inherits it here
+#     (track_width, clearance, diff pair width/gap), so every stage always
+#     reaches the router with concrete geometry;
+#   * MINIMUMS — an explicit stage/lane value below the board minimum (clearance,
+#     intra-pair gap vs clearance, trunk spacing vs inter_pair_clearance) is a
+#     short circuit by construction and is rejected at parse, not discovered by
+#     DRC after copper is already down.
+# They are also emitted as DRC authority (board_rules: .kicad_pro Default class +
+# .kicad_dru custom rules), so kicad-cli DRC judges the same numbers.
+#
+# Lengths accept mm floats or "mil"/"mm" strings ("5mil" == 0.127): board rules
+# are conventionally quoted in mil, layout.yaml is otherwise mm — support both,
+# reject anything else loudly.
+# ---------------------------------------------------------------------------
+_MM_PER_MIL = 0.0254
+
+
+def _parse_rule_len(v: Any) -> Any:
+    """A rule length: a number (mm) or a '<number>mil'/'<number>mm' string."""
+    if isinstance(v, bool):
+        raise ValueError(f"rule length must be a number or mil/mm string, got {v!r}")
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        s = v.strip().lower()
+        for suffix, factor in (("mil", _MM_PER_MIL), ("mm", 1.0)):
+            if s.endswith(suffix):
+                try:
+                    return float(s[: -len(suffix)].strip()) * factor
+                except ValueError:
+                    break
+        raise ValueError(
+            f"rule length {v!r} is not parseable — use a number (mm) or "
+            "'<number>mil' / '<number>mm'"
+        )
+    raise ValueError(f"rule length must be a number or mil/mm string, got {v!r}")
+
+
+RuleLen = Annotated[float, BeforeValidator(_parse_rule_len)]
+
+
+class DesignRules(BaseModel):
+    """The board-wide design rules header (see block comment above)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    clearance: RuleLen = Field(gt=0)  # copper-copper minimum (the short-circuit rule)
+    track_width: RuleLen = Field(gt=0)  # default single-ended width
+    diff_pair_width: RuleLen | None = Field(default=None, gt=0)
+    diff_pair_gap: RuleLen | None = Field(default=None, gt=0)  # intra-pair EDGE gap
+    inter_pair_clearance: RuleLen | None = Field(default=None, gt=0)  # pair-to-pair
+    component_spacing: RuleLen | None = Field(default=None, gt=0)  # courtyard-courtyard
+    uncoupled_max_length: RuleLen | None = Field(default=None, gt=0)  # per diff pair
+
+    @model_validator(mode="after")
+    def _validate_coherence(self) -> "DesignRules":
+        # P and N are DIFFERENT nets: an intra-pair edge gap below the board
+        # clearance can never pass DRC — the two rules would contradict.
+        if self.diff_pair_gap is not None and self.diff_pair_gap < self.clearance:
+            raise ValueError(
+                f"rules: diff_pair_gap {self.diff_pair_gap}mm is below clearance "
+                f"{self.clearance}mm — P/N are different nets, this can never pass "
+                "DRC"
+            )
+        if (
+            self.inter_pair_clearance is not None
+            and self.inter_pair_clearance < self.clearance
+        ):
+            raise ValueError(
+                f"rules: inter_pair_clearance {self.inter_pair_clearance}mm is "
+                f"below clearance {self.clearance}mm"
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -378,8 +459,10 @@ class DiffLane(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     diff: tuple[str, str]  # (P addr, N addr) — EXACTLY 2 (tuple arity is loud)
-    gap: float = Field(gt=0)  # intra-pair edge gap, > 0
-    width: float | None = Field(default=None, gt=0)  # else bundle default
+    # intra-pair copper EDGE gap. None ⇒ inherited from rules.diff_pair_gap by
+    # LayoutPlan._apply_rules (a lane with neither is loud there).
+    gap: float | None = Field(default=None, gt=0)
+    width: float | None = Field(default=None, gt=0)  # else rules/bundle default
     impedance: float | None = Field(default=None, gt=0)
 
 
@@ -795,10 +878,95 @@ class LayoutPlan(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    rules: DesignRules | None = None
     rooms: list[Room] = Field(default_factory=list)
     placements: list[Placement] = Field(default_factory=list)
     board: Board | None = None
     route_stages: list[_Stage] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _apply_rules(self) -> "LayoutPlan":
+        """The rules header (see DesignRules): required to route, fills stage/lane
+        geometry defaults, and rejects values below the board minimums at parse."""
+        if not self.route_stages:
+            return self
+        if self.rules is None:
+            raise LayoutPlanError(
+                "route_stages need a `rules:` header — the router cannot start "
+                "with no rules. Declare at least `rules: {clearance: ..., "
+                "track_width: ...}` (diff stages/lanes also inherit "
+                "diff_pair_width/diff_pair_gap from it)."
+            )
+        r = self.rules
+
+        def fill(model: BaseModel, field: str, value: float | None) -> None:
+            # write the default AND mark the field explicitly set: downstream
+            # forwards configs with model_dump(exclude_unset=True), so a plain
+            # attribute write would silently never reach the router.
+            if value is None or getattr(model, field) is not None:
+                return
+            setattr(model, field, value)
+            model.__pydantic_fields_set__.add(field)
+
+        for stage in self.route_stages:
+            cfg = stage.config
+            fill(cfg, "clearance", r.clearance)
+            if cfg.clearance < r.clearance:
+                raise LayoutPlanError(
+                    f"stage {stage.name!r}: clearance {cfg.clearance}mm is below "
+                    f"the board rule {r.clearance}mm"
+                )
+            if isinstance(stage, BundleStage):
+                fill(cfg, "track_width", r.track_width)
+                for lane in stage.lanes:
+                    if not isinstance(lane, DiffLane):
+                        continue
+                    fill(lane, "width", r.diff_pair_width)
+                    fill(lane, "gap", r.diff_pair_gap)
+                    if lane.gap is None:
+                        raise LayoutPlanError(
+                            f"bundle {stage.name!r}: diff lane {lane.diff} has no "
+                            "gap and the rules header declares no diff_pair_gap"
+                        )
+                    if lane.gap < r.clearance:
+                        raise LayoutPlanError(
+                            f"bundle {stage.name!r}: diff lane {lane.diff} gap "
+                            f"{lane.gap}mm is below the board clearance "
+                            f"{r.clearance}mm (P/N are different nets — this is a "
+                            "short circuit by construction)"
+                        )
+                if r.inter_pair_clearance is not None:
+                    for v in stage.trunk.centerline:
+                        if v.spacing < r.inter_pair_clearance:
+                            raise LayoutPlanError(
+                                f"bundle {stage.name!r}: trunk spacing "
+                                f"{v.spacing}mm at {v.at} is below the board "
+                                f"inter_pair_clearance {r.inter_pair_clearance}mm"
+                            )
+            elif stage.mode == "diff":
+                fill(
+                    cfg,
+                    "track_width",
+                    r.diff_pair_width
+                    if r.diff_pair_width is not None
+                    else r.track_width,
+                )
+                fill(cfg, "diff_pair_gap", r.diff_pair_gap)
+                if cfg.diff_pair_gap is None:
+                    raise LayoutPlanError(
+                        f"stage {stage.name!r}: diff mode has no diff_pair_gap and "
+                        "the rules header declares no diff_pair_gap"
+                    )
+                if cfg.diff_pair_gap < r.clearance:
+                    raise LayoutPlanError(
+                        f"stage {stage.name!r}: diff_pair_gap "
+                        f"{cfg.diff_pair_gap}mm is below the board clearance "
+                        f"{r.clearance}mm (P/N are different nets — this is a "
+                        "short circuit by construction)"
+                    )
+            else:  # single
+                fill(cfg, "track_width", r.track_width)
+        return self
 
     @model_validator(mode="after")
     def _validate_impedance_needs_stackup(self) -> "LayoutPlan":

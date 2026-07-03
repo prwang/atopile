@@ -89,10 +89,13 @@ CROSS-SECTION CONVENTION (pinned — makes the oracle hand-computable):
 lanes are packed in declared order along the axis perpendicular to the centerline;
 `spacing` is the EDGE-TO-EDGE gap between adjacent lane slots (so a lane's WIDTH
 shifts every downstream member's offset — required by T-A3's mutation self-check).
-A single lane's slot width = its width; a diff lane's slot width = gap + width.
-The whole packing is then centered about offset 0 (subtract the slot-envelope
-midpoint), so the cross-section is symmetric about the centerline. Within a diff
-slot, P sits at slot_center - gap/2, N at slot_center + gap/2.
+A single lane's slot width = its width; a diff lane's slot width = 2*width + gap
+(the true copper envelope). The whole packing is then centered about offset 0
+(subtract the slot-envelope midpoint), so the cross-section is symmetric about the
+centerline. Within a diff slot, P sits at slot_center - (gap + width)/2, N at
+slot_center + (gap + width)/2 — `gap` is the copper EDGE-TO-EDGE gap (center pitch
+= gap + width). Applying `gap` center-to-center was the short-circuit bug: with
+gap == width the pair's copper edges touched.
 
 == THE D/E BOUNDARY (bucket②, consumer-oracle, strict-xfail until E) =======
 
@@ -325,7 +328,20 @@ _BASE_BUNDLE = (
 _BASE_MEMBERS = ["top.a.x", "top.d.p", "top.d.n"]
 
 
+# minimal rules header (the DesignRules gate — loudness pinned in
+# test_design_rules_contract.py); these bundle fixtures are rules-agnostic.
+_DEFAULT_RULES = (
+    "rules:\n"
+    "  clearance: 0.05\n"
+    "  track_width: 0.15\n"
+    "  diff_pair_width: 0.15\n"
+    "  diff_pair_gap: 0.15\n"
+)
+
+
 def _plan(yaml_text: str) -> "LayoutPlan":
+    if "rules:" not in yaml_text:
+        yaml_text = _DEFAULT_RULES + yaml_text
     return load_layout_plan(yaml_text)
 
 
@@ -468,11 +484,13 @@ def test_malformed_bundle_is_loud(name):
 def _tiny_lanes():
     """[single A, diff(P,N gap0.2 width0.15), single B]; default_width 0.1.
 
-    Edge-packed, centered (see CROSS-SECTION CONVENTION):
-        A      offset -0.725  width 0.10
-        diff P offset -0.100  width 0.15
-        diff N offset +0.100  width 0.15
-        B      offset +0.725  width 0.10
+    Edge-packed, centered (see CROSS-SECTION CONVENTION); diff slot = 2*0.15+0.2
+    = 0.5, pair center pitch = gap + width = 0.35:
+        A      offset -0.800  width 0.10
+        diff P offset -0.175  width 0.15
+        diff N offset +0.175  width 0.15
+        B      offset +0.800  width 0.10
+    (copper edge gap inside the pair = 0.35 - 0.15 = 0.2 = the declared gap)
     """
     return [
         SingleLane(net="n.a"),
@@ -504,10 +522,13 @@ def test_cross_section_oracle():
     # members in lane order, diff P before N
     assert [o.net for o in offs] == ["n.a", "n.p", "n.n", "n.b"]
     o = _by_net(offs)
-    assert o["n.a"].offset == pytest.approx(-0.725)
-    assert o["n.p"].offset == pytest.approx(-0.1)
-    assert o["n.n"].offset == pytest.approx(0.1)
-    assert o["n.b"].offset == pytest.approx(0.725)
+    assert o["n.a"].offset == pytest.approx(-0.8)
+    assert o["n.p"].offset == pytest.approx(-0.175)
+    assert o["n.n"].offset == pytest.approx(0.175)
+    assert o["n.b"].offset == pytest.approx(0.8)
+    # the pinned semantics of `gap`: copper EDGE-TO-EDGE inside the pair
+    pitch = o["n.n"].offset - o["n.p"].offset
+    assert pitch - o["n.p"].width == pytest.approx(0.2)
     assert o["n.a"].width == pytest.approx(0.1)  # single → default_width
     assert o["n.p"].width == pytest.approx(0.15)  # diff → lane width
     # kind / polarity / partner
@@ -866,8 +887,10 @@ def test_bundle_track_offset_mutation_propagates():
 @needs_e_tier2
 @needs_sys_py
 def test_bundle_diff_lane_stays_coupled():
-    """L1 is never flattened: a diff lane's P and N stay a CONSTANT intra-pair gap
-    apart at EVERY point of the trunk — never two independent parallel singles."""
+    """L1 is never flattened: a diff lane's P and N stay a CONSTANT intra-pair
+    pitch apart at EVERY point of the trunk — never two independent parallel
+    singles. Pitch (center-to-center) = gap + width, i.e. copper EDGE gap = the
+    declared gap 0.2 (diff width 0.15 ⇒ pitch 0.35)."""
     members = _members_from_lanes(_tiny_lanes())  # middle diff(n.p, n.n) gap 0.2
     res = _run_bundle_geometry(
         _RIGID_TRUNK, members, _BREAKOUTS_GEO, track_width=0.3, clearance=0.1
@@ -875,9 +898,12 @@ def test_bundle_diff_lane_stays_coupled():
     out = {m["net"]: m for m in res["members"]}
     p, n = out["n.p"]["polyline"], out["n.n"]["polyline"]
     assert len(p) == len(n) and len(p) >= 2
+    diff_w = out["n.p"]["width"]
+    assert diff_w == pytest.approx(0.15)
     for (xp, yp), (xn, yn) in zip(p, n):
         assert abs(xp - xn) < 1e-6  # same x stations
-        assert abs(abs(yp - yn) - 0.2) < 1e-6  # constant intra-pair gap
+        # constant pitch; copper edge gap = pitch - width = the declared 0.2
+        assert abs(abs(yp - yn) - (0.2 + diff_w)) < 1e-6
 
 
 @needs_e_tier2
@@ -925,9 +951,10 @@ def test_bundle_transition_morphs_cross_section():
     near_mid = (p[0][1] + n[0][1]) / 2
     far_mid = (p[-1][1] + n[-1][1]) / 2
     assert abs(far_mid - near_mid) > 1e-6  # the pair's center re-packs (moves)
+    pitch = 0.2 + out["e.p"]["width"]  # edge gap 0.2 + diff width = center pitch
     for (xp, yp), (xn, yn) in zip(p, n):
         assert abs(xp - xn) < 1e-6
-        assert abs(abs(yp - yn) - 0.2) < 1e-6
+        assert abs(abs(yp - yn) - pitch) < 1e-6
 
 
 # ===========================================================================
