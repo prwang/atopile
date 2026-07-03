@@ -19,6 +19,7 @@ from atopile.layout_server.pcb_manager import (
     _pad_net_text_rotation,
     _pad_number_text_layers,
 )
+from faebryk.libs.kicad.fileformats import kicad
 
 TEST_PCB_V8 = Path("test/common/resources/fileformats/kicad/v8/pcb/test.kicad_pcb")
 TEST_PCB_V9 = Path("test/common/resources/fileformats/kicad/v9/pcb/test.kicad_pcb")
@@ -65,6 +66,28 @@ def test_get_render_model_v8(manager_v8: PcbManager):
     model = manager_v8.get_render_model()
     assert isinstance(model, RenderModel)
     assert isinstance(model.footprints, list)
+
+
+def test_get_render_model_center_dimension(manager_v8: PcbManager):
+    """A (dimension (type center)) carries no gr_text (KiCad 10.0.3 writer
+    :983-984, Dimension.gr_text is optional in the schema) — the render model
+    must skip it instead of dereferencing None."""
+    pcb = manager_v8.pcb
+    kicad.insert(
+        pcb,
+        "dimensions",
+        pcb.dimensions,
+        kicad.pcb.Dimension(
+            type=kicad.pcb.E_dimension_type.center,
+            layer="Dwgs.User",
+            uuid=str(kicad.gen_uuid()),
+            pts=kicad.pcb.DimensionPts(
+                xys=[kicad.pcb.Xy(x=10, y=10), kicad.pcb.Xy(x=12, y=10)]
+            ),
+        ),
+    )
+    model = manager_v8.get_render_model()
+    assert isinstance(model, RenderModel)
 
 
 def test_get_render_model_esp32(manager_esp32: PcbManager):

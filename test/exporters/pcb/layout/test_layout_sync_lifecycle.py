@@ -462,16 +462,22 @@ class _StubbedSync(LayoutSync):
 
 
 def _fp_with_subaddress(
-    addr: str, sub_addr: str, pads: list[tuple[str, int, str]], at: str = "0 0"
+    addr: str,
+    sub_addr: str,
+    pads: list[tuple[str, int, str]],
+    at: str = "0 0",
+    uuid: str | None = None,
 ) -> str:
     pad_blocks = "\n".join(
         f'        (pad "{p}" smd rect (at {i} 0) (size 1 1) (layers "F.Cu")'
         f' (net {num} "{name}"))'
         for i, (p, num, name) in enumerate(pads)
     )
+    uuid_block = f'        (uuid "{uuid}")\n' if uuid else ""
     return (
         f'    (footprint "test:FP"\n'
         f'        (layer "F.Cu")\n'
+        f"{uuid_block}"
         f"        (at {at})\n"
         f'        (property "atopile_address" "{addr}" (at 0 0) (layer "F.Fab")'
         f" (effects (font (size 1 1))))\n"
@@ -537,6 +543,103 @@ def test_pull_room_layout_inserts_generated_into_board(room_pull):
     assert len(pcb.zones) == 1
     z = pcb.zones[0]
     assert z.net == 7 and z.attr.teardrop.type == "padvia"
+
+
+ROOM_FP = "ffffffff-0001-4000-8000-000000000001"
+OUTSIDE_FP = "ffffffff-0002-4000-8000-000000000002"
+
+
+@pytest.fixture
+def inter_room_pull():
+    """room_pull, but TOP_VCC also reaches a pad OUTSIDE the room (a room
+    interface net): _clean_room's intra = inside - outside cannot reclaim it,
+    so only insert-dedup keeps repeated pulls idempotent."""
+    outside_fp = (
+        '    (footprint "test:CONN"\n'
+        '        (layer "F.Cu")\n'
+        f'        (uuid "{OUTSIDE_FP}")\n'
+        "        (at 50 50)\n"
+        '        (property "atopile_address" "other.conn1" (at 0 0)'
+        ' (layer "F.Fab") (effects (font (size 1 1))))\n'
+        '        (pad "1" smd rect (at 0 0) (size 1 1) (layers "F.Cu")'
+        ' (net 7 "TOP_VCC"))\n'
+        "    )"
+    )
+    top_text = (
+        "(kicad_pcb\n"
+        '    (version 20241229) (generator "test_atopile")'
+        ' (generator_version "latest")\n'
+        '    (layers (0 "F.Cu" signal) (2 "B.Cu" signal))\n'
+        '    (net 0 "")\n    (net 7 "TOP_VCC")\n'
+        + _fp_with_subaddress(
+            "top.mod.r1",
+            "sub/sub.kicad_pcb:mod.r1",
+            [("1", 7, "TOP_VCC"), ("2", 7, "TOP_VCC")],
+            at="10 10",
+            uuid=ROOM_FP,
+        )
+        + "\n"
+        + outside_fp
+        + "\n)"
+    )
+    sub_tracks = "\n".join(
+        [
+            _segment(SEG_A, 1, 1),
+            _segment(SEG_B, 1, 3),
+            _zone("bbbbbbbb-0005-4000-8000-000000000005", 1, "SUB_VCC", TEARDROP_ATTR),
+            _generated(GEN_FULL, "Full", [SEG_A, SEG_B]),
+        ]
+    )
+    top_file = _load(top_text)
+    sub_file = _load(
+        _board(
+            {0: "", 1: "SUB_VCC"},
+            [("mod.r1", [("1", 1, "SUB_VCC"), ("2", 1, "SUB_VCC")])],
+            tracks=sub_tracks,
+        )
+    )
+    s = _StubbedSync(top_file.kicad_pcb, sub_file.kicad_pcb)
+    s.sync_rooms()
+    return top_file, sub_file, s
+
+
+def test_repeated_pull_of_inter_room_net_is_idempotent(inter_room_pull):
+    """Pull x3 must converge to exactly ONE copy of the inter-room net's
+    copper and tuning pattern. _clean_room skips inter-room nets by design
+    (deleting them would eat user copper outside the room), so without
+    insert-dedup each pull stacked another 2 segments + teardrop zone +
+    generated, silently."""
+    top_file, _, s = inter_room_pull
+    pcb = top_file.kicad_pcb
+
+    for _ in range(3):
+        s.pull_room_layout("top")
+
+    assert len(pcb.segments) == 2
+    assert len(pcb.zones) == 1
+    assert [g.name for g in pcb.generateds] == ["Full"]
+    # the re-pulled generated's members converged onto the EXISTING pulled
+    # tracks (dedup remaps source uuids onto the first pull's copies)
+    assert list(pcb.generateds[0].members) == [seg.uuid for seg in pcb.segments]
+    assert pcb.zones[0].net == 7 and pcb.zones[0].attr.teardrop.type == "padvia"
+
+
+def test_repeated_pull_intra_room_still_replaces(room_pull):
+    """Control: an intra-room net keeps the clean -> re-pull lifecycle (fresh
+    copies each pull, counts stable) — dedup must not freeze the normal
+    replace path."""
+    top_file, _, s = room_pull
+    pcb = top_file.kicad_pcb
+    first_uuids = {seg.uuid for seg in pcb.segments}
+
+    s.pull_room_layout("top")
+
+    assert len(pcb.segments) == 2
+    assert len(pcb.zones) == 1
+    assert [g.name for g in pcb.generateds] == ["Full"]
+    # clean deleted the first pull's copies; the re-pull inserted fresh ones
+    assert {seg.uuid for seg in pcb.segments}.isdisjoint(first_uuids)
+    assert list(pcb.generateds[0].members) == [seg.uuid for seg in pcb.segments]
 
 
 @needs_kicad_cli

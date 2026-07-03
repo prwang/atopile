@@ -137,6 +137,26 @@
 		(net "SIG")
 		(uuid "5e91e004-0000-4000-8000-000000000004")
 	)
+	(footprint "Corrupter:CLASSED"
+		(layer "F.Cu")
+		(uuid "f00dface-0000-4000-8000-000000000001")
+		(at 60 60)
+		(property "Reference" "U1"
+			(at 0 -2 0)
+			(layer "F.SilkS")
+			(uuid "f00dface-0000-4000-8000-000000000002")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(component_classes
+			(class "PWR")
+			(class "ANALOG")
+		)
+	)
 	(zone
 		(net "GND")
 		(layer "F.Cu")
@@ -146,6 +166,10 @@
 			(clearance 0.5)
 		)
 		(min_thickness 0.25)
+		(placement
+			(enabled yes)
+			(component_class "CLASSA")
+		)
 		(fill
 			(thermal_gap 0.5)
 			(thermal_bridge_width 0.5)

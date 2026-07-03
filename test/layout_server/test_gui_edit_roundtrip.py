@@ -80,8 +80,10 @@ def _refs(view: dict) -> set[tuple[str, str]]:
 
 def _pads_by_ref(view: dict) -> dict[str, list[dict]]:
     """Every footprint's full pad projection (net, geometry, teardrops,
-    padstack), keyed by reference — pad `at` is footprint-relative, so a
-    footprint move must leave this map untouched."""
+    padstack), keyed by reference — pad `at` x/y are footprint-relative, but
+    the angle is board-frame per KiCad's file grammar (it includes the
+    footprint's rotation), so a pure translation move must leave this map
+    untouched; a rotate legitimately changes every pad's angle."""
     return {fp["reference"]: fp["pads"] for fp in view["footprints"]}
 
 

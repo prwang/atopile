@@ -144,6 +144,27 @@ def _generated_xy(g) -> list[float] | None:
     return _xy(g.xy) if g is not None else None
 
 
+def _zone_placement(p) -> dict[str, Any] | None:
+    """Rule-area room binding. The file grammar fuses source type + value into
+    a single token — (sheetname "X") | (component_class "X") — so these two
+    fields ARE the binding; source_type/source model KiCad's in-memory/protobuf
+    shape and are by design always None on file-parsed boards (writing them
+    SIGSEGVs kicad-cli), so projecting them would carry zero information.
+    An absent source token parses as an empty SHEETNAME source (KiCad's
+    parser default; the 10.0.3 writer always re-emits it as (sheetname "")),
+    so it projects identically to sheetname ""."""
+    if p is None:
+        return None
+    sheetname = p.sheetname
+    if sheetname is None and p.component_class is None:
+        sheetname = ""
+    return {
+        "enabled": p.enabled,
+        "sheetname": sheetname,
+        "component_class": p.component_class,
+    }
+
+
 def _pts_chain(pts) -> list[Any]:
     """A (pts ...) chain in file order: [x, y] per xy entry and
     {"arc": [start, mid, end]} per interleaved arc entry.
@@ -245,6 +266,13 @@ def semantic_view(pcb: kicad.pcb.KicadPcb) -> dict[str, Any]:
                 "reference": ref,
                 "at": _xyr(fp.at),
                 "layer": fp.layer,
+                # static (component_classes (class ...)) membership — GUI- or
+                # D5-assigned; KiCad treats it as an unordered set, so sort
+                "component_classes": (
+                    sorted(c.name for c in fp.component_classes.classes)
+                    if fp.component_classes is not None
+                    else []
+                ),
                 "pads": pads,
             }
         )
@@ -324,15 +352,7 @@ def semantic_view(pcb: kicad.pcb.KicadPcb) -> dict[str, Any]:
                     if z.keepout is not None
                     else None
                 ),
-                "placement": (
-                    {
-                        "enabled": z.placement.enabled,
-                        "source_type": z.placement.source_type,
-                        "source": z.placement.source,
-                    }
-                    if z.placement is not None
-                    else None
-                ),
+                "placement": _zone_placement(z.placement),
             }
             for z in pcb.zones
         ),

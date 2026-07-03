@@ -7,6 +7,7 @@
     72.0,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "lcsc:BAT-TH_BS-02-A1AJ010",
    "pads": [
@@ -49,6 +50,7 @@
     85.022146,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "lcsc:LED0603-RD-YELLOW",
    "pads": [
@@ -93,6 +95,7 @@
     46.75,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "logos:faebryk_logo",
    "pads": [],
@@ -104,6 +107,7 @@
     84.772146,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "lcsc:R0402",
    "pads": [
@@ -169,9 +173,9 @@
    "name": "keepout_test",
    "net": "",
    "placement": {
+    "component_class": null,
     "enabled": false,
-    "source": null,
-    "source_type": null
+    "sheetname": ""
    },
    "polygon": [
     [

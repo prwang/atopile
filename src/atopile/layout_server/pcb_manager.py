@@ -1115,6 +1115,10 @@ class PcbManager:
             texts.append(self._extract_text_box_text(tb, uuid=uid))
 
         for dimension in pcb.dimensions:
+            if dimension.gr_text is None:
+                # center dimensions carry no gr_text (KiCad 10.0.3 writer
+                # :983-984) — nothing to render as text
+                continue
             if _is_hidden(dimension.gr_text):
                 continue
             if not dimension.gr_text.text.strip():

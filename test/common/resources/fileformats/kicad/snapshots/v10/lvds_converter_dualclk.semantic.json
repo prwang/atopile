@@ -7,6 +7,7 @@
     63.0,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "Capacitor_SMD:C_0805_2012Metric",
    "pads": [
@@ -51,6 +52,7 @@
     72.85,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "Capacitor_SMD:C_0805_2012Metric",
    "pads": [
@@ -95,6 +97,7 @@
     70.0,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "Capacitor_SMD:C_0805_2012Metric",
    "pads": [
@@ -139,6 +142,7 @@
     76.175,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "Capacitor_SMD:C_1206_3216Metric",
    "pads": [
@@ -183,6 +187,7 @@
     65.35,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "Samacsys:SOP65P780X200-14N",
    "pads": [
@@ -419,6 +424,7 @@
     74.85,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "Samacsys:SOP65P780X200-14N",
    "pads": [
@@ -655,6 +661,7 @@
     64.85,
     180.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "Samacsys:SOP65P640X120-16N",
    "pads": [
@@ -923,6 +930,7 @@
     57.96,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "Connector_PinHeader_2.54mm:PinHeader_1x08_P2.54mm_Vertical",
    "pads": [
@@ -1055,6 +1063,7 @@
     76.51,
     180.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "Connector_PinHeader_2.54mm:PinHeader_1x08_P2.54mm_Vertical",
    "pads": [
@@ -1187,6 +1196,7 @@
     68.0,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "Resistor_SMD:R_0805_2012Metric",
    "pads": [
@@ -1231,6 +1241,7 @@
     68.0,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "Resistor_SMD:R_0805_2012Metric",
    "pads": [
@@ -1275,6 +1286,7 @@
     59.5,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "Resistor_SMD:R_0805_2012Metric",
    "pads": [
@@ -1319,6 +1331,7 @@
     59.5,
     180.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "Resistor_SMD:R_0805_2012Metric",
    "pads": [

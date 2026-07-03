@@ -7,6 +7,7 @@
     138.43,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:BUS_PC",
    "pads": [
@@ -949,6 +950,7 @@
     83.82,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:CP_Axial_L10.0mm_D4.5mm_P15.00mm_Horizontal",
    "pads": [
@@ -991,6 +993,7 @@
     91.44,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:C_Disc_D3.0mm_W2.0mm_P2.50mm",
    "pads": [
@@ -1033,6 +1036,7 @@
     99.06,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:C_Disc_D3.0mm_W2.0mm_P2.50mm",
    "pads": [
@@ -1075,6 +1079,7 @@
     52.197,
     180.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:CP_Axial_L10.0mm_D4.5mm_P15.00mm_Horizontal",
    "pads": [
@@ -1117,6 +1122,7 @@
     113.03,
     -90.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:CP_Axial_L10.0mm_D4.5mm_P15.00mm_Horizontal",
    "pads": [
@@ -1159,6 +1165,7 @@
     111.76,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:CP_Axial_L10.0mm_D4.5mm_P15.00mm_Horizontal",
    "pads": [
@@ -1201,6 +1208,7 @@
     38.06,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:LED_D5.0mm",
    "pads": [
@@ -1243,6 +1251,7 @@
     38.08,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:LED_D5.0mm",
    "pads": [
@@ -1285,6 +1294,7 @@
     47.0,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:tux",
    "pads": [],
@@ -1296,6 +1306,7 @@
     105.41,
     -90.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:PinHeader_2x08_P2.54mm_Vertical",
    "pads": [
@@ -1548,6 +1559,7 @@
     72.4,
     90.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:DSUB-25_Female_Horizontal_P2.77x2.84mm_EdgePinOffset9.90mm_Housed_MountingHolesOffset11.32mm",
    "pads": [
@@ -1965,6 +1977,7 @@
     99.06,
     90.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
    "pads": [
@@ -2007,6 +2020,7 @@
     91.44,
     -90.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
    "pads": [
@@ -2049,6 +2063,7 @@
     57.15,
     180.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
    "pads": [
@@ -2091,6 +2106,7 @@
     41.91,
     180.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
    "pads": [
@@ -2133,6 +2149,7 @@
     42.037,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
    "pads": [
@@ -2175,6 +2192,7 @@
     113.03,
     0.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:R_Array_SIP10",
    "pads": [
@@ -2337,6 +2355,7 @@
     124.46,
     90.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:DIP-20_W7.62mm",
    "pads": [
@@ -2649,6 +2668,7 @@
     124.46,
     90.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:DIP-20_W7.62mm",
    "pads": [
@@ -2961,6 +2981,7 @@
     124.46,
     90.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:DIP-20_W7.62mm",
    "pads": [
@@ -3273,6 +3294,7 @@
     76.2,
     90.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:DIP-32_W15.24mm",
    "pads": [
@@ -3765,6 +3787,7 @@
     112.903,
     90.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:DIP-24_W7.62mm",
    "pads": [
@@ -4137,6 +4160,7 @@
     82.55,
     180.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:PGA120",
    "pads": [
@@ -5949,6 +5973,7 @@
     92.71,
     -90.0
    ],
+   "component_classes": [],
    "layer": "F.Cu",
    "name": "interf_u:Crystal_HC18-U_Horizontal",
    "pads": [

@@ -24,7 +24,6 @@ construct exists with the expected value) so a fixture regression cannot turn a
 test vacuously green.
 """
 
-from pathlib import Path
 
 import pytest
 
@@ -270,3 +269,109 @@ def test_generated_target_length_change_moves_view():
     targets[0][1] = "123.456"
 
     _assert_view_moves(root, baseline, "changing generated target_length")
+
+
+# --- zone placement source + footprint component classes (D5 room binding) ---
+
+
+def _zone_placement(root: Node) -> Node:
+    placements = [
+        p
+        for z in children(root, "zone")
+        for p in children(z, "placement")
+    ]
+    assert placements, "fixture lost its zone placement"
+    return placements[0]
+
+
+def _placement_class(root: Node) -> Node:
+    classes = children(_zone_placement(root), "component_class")
+    assert classes and classes[0][1] == '"CLASSA"', (
+        "fixture lost its placement component_class"
+    )
+    return classes[0]
+
+
+def test_zone_placement_class_rename_moves_view():
+    """(component_class "X") is the rule area's room-identity token (D5) —
+    binding it to a different class pairs the rule-area polygon with a
+    different footprint set. The view must see it."""
+    raw = _raw("zone_arc_tuning")
+    baseline = _view(raw)
+    root = sexp_tree.parse(raw)[0]
+
+    _placement_class(root)[1] = '"OTHER"'
+
+    _assert_view_moves(root, baseline, "renaming the placement component_class")
+
+
+def test_zone_placement_class_to_sheetname_swap_moves_view():
+    """The token name IS the source type: (component_class "X") resolves via
+    the .kicad_pro class assignments, (sheetname "X") via hierarchy paths —
+    functionally different bindings even with the same value."""
+    raw = _raw("zone_arc_tuning")
+    baseline = _view(raw)
+    root = sexp_tree.parse(raw)[0]
+
+    _placement_class(root)[0] = "sheetname"
+
+    _assert_view_moves(root, baseline, "swapping component_class -> sheetname")
+
+
+def test_zone_placement_source_drop_moves_view():
+    """Dropping the source token leaves an enabled-but-sourceless placement —
+    KiCad then defaults to an empty SHEETNAME source, binding the rule area to
+    the wrong footprint set. Semantics, not formatting."""
+    raw = _raw("zone_arc_tuning")
+    baseline = _view(raw)
+    root = sexp_tree.parse(raw)[0]
+
+    placement = _zone_placement(root)
+    _placement_class(root)  # precondition: the token exists with CLASSA
+    placement[:] = [n for n in placement if head(n) != "component_class"]
+
+    _assert_view_moves(root, baseline, "dropping the placement source token")
+
+
+def test_footprint_component_class_drop_moves_view():
+    """(component_classes (class ...)) is GUI/D5-assigned membership that DRC
+    rules key on (hasComponentClass) — losing a class through a managed
+    rewrite changes which rules apply to the footprint."""
+    raw = _raw("zone_arc_tuning")
+    baseline = _view(raw)
+    root = sexp_tree.parse(raw)[0]
+
+    blocks = [
+        cc
+        for fp in children(root, "footprint")
+        for cc in children(fp, "component_classes")
+    ]
+    assert blocks and len(children(blocks[0], "class")) == 2, (
+        "fixture lost its footprint component_classes"
+    )
+    del blocks[0][1]  # drop the first (class ...) entry
+
+    _assert_view_moves(root, baseline, "dropping a footprint component class")
+
+
+def test_footprint_component_class_reorder_is_view_neutral():
+    """Class membership is an unordered set in KiCad (COMPONENT_CLASS lookup
+    by name) — swapping the two (class ...) entries is pure formatting and
+    must not move the view (control for the drop test above)."""
+    raw = _raw("zone_arc_tuning")
+    baseline = _view(raw)
+    root = sexp_tree.parse(raw)[0]
+    pristine = sexp_tree.dumps(root)
+
+    blocks = [
+        cc
+        for fp in children(root, "footprint")
+        for cc in children(fp, "component_classes")
+    ]
+    assert blocks and len(children(blocks[0], "class")) == 2, (
+        "fixture lost its footprint component_classes"
+    )
+    blocks[0][1:] = list(reversed(blocks[0][1:]))
+
+    assert sexp_tree.dumps(root) != pristine, "reorder corruption was a no-op"
+    assert _view_of_tree(root) == baseline

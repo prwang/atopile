@@ -262,6 +262,23 @@ class LayoutSync:
         # source track uuid -> pulled-copy uuid; consumed by the generated
         # (tuning pattern) pull below, whose members reference tracks by uuid.
         pulled_uuids: dict[str, str] = {}
+        # Insert-dedup index: _clean_room only reclaims intra-room nets, but
+        # the pull copies EVERY mapped net — without this, each repeated pull
+        # of an inter-room net (pads inside and outside the room) stacks
+        # another identical copy of its tracks/zones (and of the tuning
+        # patterns riding on them). A pulled copy that is semantically
+        # identical (uuid-ignored) to an existing top-board object is skipped,
+        # and the source uuid is remapped onto the existing copy so generated
+        # members converge onto it. uuid-less existing objects cannot anchor a
+        # member remap and are not indexed (the pull then inserts a fresh
+        # copy, the pre-dedup behavior).
+        existing_track_uuids: dict[tuple[str, str], str] = {
+            self._pull_identity(obj): obj.uuid
+            for obj in chain(
+                top_pcb.segments, top_pcb.arcs, top_pcb.zones, top_pcb.vias
+            )
+            if obj.uuid
+        }
         for track in chain(sub_pcb.segments, sub_pcb.arcs, sub_pcb.zones, sub_pcb.vias):
             # Get source net name
             sub_net: kicad.pcb.Net | None = find_or(
@@ -305,12 +322,19 @@ class LayoutSync:
                 continue
 
             PCB_Transformer.move_object(new_track, offset)
+            existing_uuid = existing_track_uuids.get(self._pull_identity(new_track))
+            if existing_uuid is not None:
+                # already on the board from a previous pull of this room —
+                # skip the copy and let generated members remap onto it
+                if track.uuid:
+                    pulled_uuids[track.uuid] = existing_uuid
+                continue
             if track.uuid:
                 pulled_uuids[track.uuid] = new_track.uuid
             new_objects.append(new_track)
 
         new_objects.extend(
-            self._sync_generateds(sub_pcb, net_map, offset, pulled_uuids)
+            self._sync_generateds(sub_pcb, top_pcb, net_map, offset, pulled_uuids)
         )
 
         return new_objects
@@ -318,6 +342,7 @@ class LayoutSync:
     def _sync_generateds(
         self,
         sub_pcb: PCB,
+        top_pcb: PCB,
         net_map: dict[str, str],
         offset: kicad.pcb.Xy,
         pulled_uuids: dict[str, str],
@@ -331,7 +356,15 @@ class LayoutSync:
         neither be displayed nor re-tuned coherently by KiCad. Empty-member
         generateds are dropped the same way (KiCad itself refuses to save
         them). Silent options (pulling with dangling source-board member uuids,
-        or quietly skipping) violate loud-or-nothing."""
+        or quietly skipping) violate loud-or-nothing.
+
+        A generated identical (uuid-ignored: type, name, layer, remapped
+        members, tuning properties, geometry after offset) to one already on
+        the board is skipped — the members-remap onto deduped tracks makes a
+        repeated pull of an inter-room net reproduce the existing pattern
+        exactly, and stacking another copy would give KiCad two tuning
+        patterns claiming the same member tracks."""
+        existing_gen_identities = {self._pull_identity(g) for g in top_pcb.generateds}
         new_generateds = []
         for gen in sub_pcb.generateds:
             members = list(gen.members)
@@ -354,9 +387,36 @@ class LayoutSync:
             if gen.last_netname is not None and gen.last_netname in net_map:
                 new_gen.last_netname = net_map[gen.last_netname]
             self._move_generated(new_gen, offset)
+            if self._pull_identity(new_gen) in existing_gen_identities:
+                continue
             new_generateds.append(new_gen)
 
         return new_generateds
+
+    @staticmethod
+    def _pull_identity(obj) -> tuple[str, str]:
+        """Semantic identity of a pullable object: type name + the full field
+        tree with every `uuid` field dropped. Two pulls of the same source
+        object under the same offset and net map produce identical trees, so
+        identity equality means "this pull would re-insert an exact
+        duplicate". Everything else (layer, net, geometry, widths, zone
+        fill/attr, generated members and tuning properties) stays in the tree
+        and keeps distinct objects distinct."""
+
+        def canon(v):
+            # every pyzig sexp struct exposes its schema field list
+            if hasattr(type(v), "__field_names__"):
+                return {
+                    f: canon(getattr(v, f))
+                    for f in type(v).__field_names__()
+                    if f != "uuid"
+                }
+            if v is None or isinstance(v, (str, int, float)):
+                return v
+            # pyzig MutableList (and any other sequence)
+            return [canon(x) for x in v]
+
+        return (type(obj).__name__, repr(canon(obj)))
 
     @staticmethod
     def _move_generated(gen: "kicad.pcb.Generated", offset: kicad.pcb.Xy) -> None:

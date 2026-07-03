@@ -18,7 +18,23 @@
    "width": 0.2
   }
  ],
- "footprints": [],
+ "footprints": [
+  {
+   "at": [
+    60.0,
+    60.0,
+    0.0
+   ],
+   "component_classes": [
+    "ANALOG",
+    "PWR"
+   ],
+   "layer": "F.Cu",
+   "name": "Corrupter:CLASSED",
+   "pads": [],
+   "reference": "U1"
+  }
+ ],
  "generateds": [
   {
    "base_line": [
@@ -182,7 +198,11 @@
    ],
    "name": null,
    "net": "GND",
-   "placement": null,
+   "placement": {
+    "component_class": "CLASSA",
+    "enabled": true,
+    "sheetname": null
+   },
    "polygon": [
     [
      100.0,
