@@ -474,6 +474,57 @@ is textualized, making DRC "green" reflect design intent rather than KiCad defau
 - board authoring: first delivery = text→board emit + missing → loud; DRC-rule coverage of KiCad's full rule grammar is incremental.
   F-silk idempotency is only for **unchanged** text (gr_text has no managed-marker slot; changing text/shifting leaves an old orphan, needs manual cleanup).
 
+### H. Non-blocking pipeline: deferred BOM + partial P&R + picker sidecar + concurrency (driver: "no designer finalizes the BOM before P&R")
+
+**Motivation** (decided by user 2026-07-03): the part picker (and its symbolic solver) must NOT sit on the
+critical path to a routable board. Real hardware flow = constrain footprints → place & route → finalize BOM,
+possibly all three *concurrently by different agents*. A global solve is not always feasible (the solver can
+even non-terminate, see the backstop below); the same philosophy that lets a board *route partially* should
+let it *pick partially*.
+
+**Grounded seam** (verified against `build_steps.py` muster + `picker.py` + `cli/route.py`, 2026-07-03):
+- Muster order: `load_pcb → picker → prepare_nets → update_pcb → … → generate_bom`.
+- `update_pcb`'s only hard requirement is a footprint per node (`transformer.check_unattached_fps`); it does
+  **not** need the MPN. `generate_bom` is the only consumer of the picked MPN.
+- `ato route` reads **only** `.kicad_pcb` + `layout_ir.json` + `layout.yaml` — zero picker dependency.
+- Footprint sources today: `is_atomic_part` (local, no solver) and the picker's EasyEDA asset. `r.package="R0402"`
+  sets only `has_package_requirements.size` — a **picker constraint, not a footprint source**. There is no
+  package→standard-KiCad-footprint table (gap → H2).
+- In `picker.py::pick_topologically`, explicit picks (`is_pickable_by_supplier_id`/`by_part_number`) attach a
+  footprint with no type-solver; only `_pick_tree` + the terminal "verify design" `simplify` are solver-heavy.
+
+**Solver convergence backstop** [✅ 2026-07-03]: `solver.py::simplify` iteration cap now degrades to the
+best-effort partial state (gated on `ALLOW_PARTIAL_STATE` / `FBRK_SPARTIAL`, default true) instead of raising
+`TimeoutError`. The per-algorithm `dirty` flag is bookkeeping-derived, not a graph diff, so it can churn
+equivalent forms forever (confirmed: frozen |V|/|E|/|ops|, drifting content, 60 strict iters never converge —
+trigger `ResistorVoltageDivider`). Strict mode (`FBRK_SPARTIAL=false`) keeps the hard failure for CI. Regression
+`test_solver.py::test_iteration_limit_degrades_to_partial_state` (mutation-verified). Caveat: partial solve
+picks loose passive values; it is a *don't-crash* net, not a *correct-pick* guarantee — that is what H1 (defer)
+and H3 (sidecar constraints) properly address.
+
+- [x] **H1 — deferred BOM (`ato build --no-pick` + `ato bom`)** [✅ 2026-07-03]: `--no-pick` threads
+  `config.build.no_pick` → `pick_parts` → `pick_parts_recursively(no_solve=True)`, which runs the cheap explicit
+  picks + skips `_pick_tree`/verify (`picker.py`). Produces a routable board from footprints alone (pinned/atomic
+  designs). `ato bom` (`cli/bom.py`, v1) resolves the full BOM on demand by driving the pipeline to `generate-bom`
+  with picking on. Env crosses the build-queue worker via `ATO_NO_PICK` (mirrors `keep_picked_parts`). Tests:
+  `test_picks.py::test_no_solve_defers_type_picking` (mutation-verified, zero-network). e2e: `picked_demo`
+  `--no-pick` → full artifacts + BOM. **Known limit**: a *type-picked* design (bare `package=` passives) with
+  `--no-pick` correctly skips the solver but then fails loudly at `check_unattached_fps` (no footprint) until H2.
+- [ ] **H2 — footprint-from-package provider**: map `package="R0402"` (and/or an explicit ato-level `footprint=`)
+  to a generic KiCad footprint (`Resistor_SMD:R_0402_1005Metric`) attaching `has_associated_footprint` with no
+  picker, so generic passives route without any BOM. Source = KiCad stdlib (`kicad-footprints` installed
+  2026-07-03 → `/usr/share/kicad/footprints/`; `part_lifecycle.py::get_footprint_from_identifier` is the attach
+  path). Makes `--no-pick` broadly useful. 3-gate.
+- [ ] **H3 — part-picker sidecar (incremental subset picking + extra constraints, `.ato` unchanged)**: an
+  out-of-source overlay (e.g. `<build>.picks.yaml` in the build dir) that records picked parts + additional
+  per-component picking constraints, layered over the instance graph before/instead of the solver. Lets a BOM be
+  finalized incrementally (pick a subset now, add constraints, resolve the rest later) without editing the `.ato`.
+  Ties H1 (`ato bom` reads/writes it) and H4 (its own file, separate from the board).
+- [ ] **H4 — concurrency safety (parallel place/route ‖ BOM finalize)**: prove/enforce that the artifact set is
+  safe for two agents to write concurrently. Partition by writer: route owns copper in `.kicad_pcb`; bom owns the
+  picks sidecar + part-info; establish atomic writes (write-temp+rename) and a documented ownership/lock model so
+  a concurrent `ato route` and `ato bom` cannot clobber each other. Needs a contract/stress test.
+
 ### Side tasks (can be parallelized / do not block the critical path; deliberately not numbered in the E/F sequence)
 No hard dependency on §E/§F, can be done when convenient; each keeps its original identifier (not stuffed into the E/F numbering, to avoid falsely claiming they are on the critical path).
 

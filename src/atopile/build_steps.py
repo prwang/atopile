@@ -645,7 +645,9 @@ def pick_parts(ctx: BuildStepContext) -> None:
         pcb = ctx.require_pcb()
         load_part_info_from_pcb(pcb.transformer.pcb, app.tg)
     try:
-        pick_parts_recursively(app, solver, progress=None)
+        pick_parts_recursively(
+            app, solver, progress=None, no_solve=config.build.no_pick
+        )
     except* PickError as ex:
         raise ExceptionGroup(
             "Failed to pick parts for some modules",

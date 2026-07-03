@@ -529,6 +529,8 @@ def pick_topologically(
     tree: Tree["F.Pickable.is_pickable"],
     solver: Solver,
     progress: Advancable | None = None,
+    *,
+    no_solve: bool = False,
 ):
     import faebryk.libs.picker.api.picker_lib as picker_lib
 
@@ -561,6 +563,30 @@ def pick_topologically(
 
     timings.add("setup")
 
+    if no_solve:
+        # Footprint-first / deferred-BOM mode (`ato build --no-pick`, resolved later
+        # by `ato bom`). Explicit picks (pinned mpn/lcsc_id via `_pick_explicit_modules`
+        # above) and atomic parts already have their footprints attached WITHOUT the
+        # symbolic solver. The modules still in `tree` are *type*-pickable: turning a
+        # value range into a concrete MPN needs the solver (`_pick_tree`) plus the
+        # terminal "verify design" solve below -- exactly the work a designer does not
+        # need before place & route. Skip both so a routable board can be produced from
+        # footprints alone. Any module that thereby lacks a footprint surfaces loudly
+        # downstream (`transformer.check_unattached_fps` / a later `ato bom`), never
+        # silently dropped.
+        deferred = [
+            m
+            for m in tree.keys()
+            if not m.get_pickable_node().has_trait(F.Pickable.has_part_picked)
+        ]
+        if deferred:
+            logger.warning(
+                f"--no-pick: deferred MPN resolution for {len(deferred)} module(s). "
+                "The board is built from footprints only; run `ato bom` to resolve "
+                "concrete parts."
+            )
+        return
+
     with timings.measure("pick tree"):
         if all_modules := set(tree.keys()):
             pick_tree: Tree[PickNodeData] = _pick_tree(
@@ -592,14 +618,18 @@ def pick_topologically(
 # TODO should be a Picker
 @debug_perf
 def pick_parts_recursively(
-    module: fabll.Node, solver: Solver, progress: Advancable | None = None
+    module: fabll.Node,
+    solver: Solver,
+    progress: Advancable | None = None,
+    *,
+    no_solve: bool = False,
 ):
     pick_tree = get_pick_tree(module)
     if progress:
         progress.set_total(len(pick_tree))
 
     try:
-        pick_topologically(pick_tree, solver, progress)
+        pick_topologically(pick_tree, solver, progress, no_solve=no_solve)
     # FIXME: This does not get called anymore
     except PickErrorChildren as e:
         failed_parts = e.get_all_children()

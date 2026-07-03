@@ -136,6 +136,8 @@ def _build_subprocess_env(build: Build) -> dict[str, str]:
         env["ATO_KEEP_NET_NAMES"] = "1" if build.keep_net_names else "0"
     if build.keep_designators is not None:
         env["ATO_KEEP_DESIGNATORS"] = "1" if build.keep_designators else "0"
+    if build.no_pick:
+        env["ATO_NO_PICK"] = "1"
     if build.verbose:
         env["ATO_VERBOSE"] = "1"
         # Force Rich to emit ANSI formatting even when stdout is piped.

@@ -633,6 +633,13 @@ class BuildTargetConfig(BaseConfigModel, validate_assignment=True):
     """
     fail_on_drcs: bool = Field(default=False)
     dont_solve_equations: bool = Field(default=False)
+    no_pick: bool = Field(default=False)
+    """
+    Footprint-first build: skip resolving concrete parts (MPN/LCSC) via the
+    symbolic solver, producing a routable board from footprints alone. The BOM is
+    then resolved on demand with `ato bom`. Explicitly pinned parts (mpn/lcsc_id)
+    and atomic parts are still attached. Wired via `ato build --no-pick`.
+    """
     keep_designators: bool | None = Field(default=True)
     keep_picked_parts: bool | None = Field(default=None)
     keep_net_names: bool | None = Field(default=None)

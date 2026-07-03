@@ -212,6 +212,7 @@ def _build_all_projects(
     keep_picked_parts: bool | None = None,
     keep_net_names: bool | None = None,
     keep_designators: bool | None = None,
+    no_pick: bool = False,
 ) -> None:
     """
     Build all projects in a directory.
@@ -294,6 +295,7 @@ def _build_all_projects(
                 keep_picked_parts=keep_picked_parts,
                 keep_net_names=keep_net_names,
                 keep_designators=keep_designators,
+                no_pick=no_pick,
                 verbose=verbose,
             )
         )
@@ -361,6 +363,16 @@ def build(
             envvar="ATO_KEEP_DESIGNATORS",
         ),
     ] = None,
+    no_pick: Annotated[
+        bool,
+        typer.Option(
+            "--no-pick",
+            help="Footprint-first build: skip resolving concrete parts (MPN/LCSC) "
+            "via the solver and produce a routable board from footprints alone. "
+            "Resolve the BOM later with `ato bom`.",
+            envvar="ATO_NO_PICK",
+        ),
+    ] = False,
     standalone: bool = False,
     open_layout: Annotated[
         bool | None, typer.Option("--open", envvar="ATO_OPEN_LAYOUT")
@@ -424,6 +436,7 @@ def build(
             keep_picked_parts=keep_picked_parts,
             keep_net_names=keep_net_names,
             keep_designators=keep_designators,
+            no_pick=no_pick,
         )
 
         # Install dependencies if needed (same as single project mode)
@@ -474,6 +487,7 @@ def build(
             keep_picked_parts=keep_picked_parts,
             keep_net_names=keep_net_names,
             keep_designators=keep_designators,
+            no_pick=no_pick,
         )
         return
 
@@ -488,6 +502,7 @@ def build(
         keep_picked_parts=keep_picked_parts,
         keep_net_names=keep_net_names,
         keep_designators=keep_designators,
+        no_pick=no_pick,
     )
 
     try:
@@ -528,6 +543,7 @@ def build(
                 keep_picked_parts=keep_picked_parts,
                 keep_net_names=keep_net_names,
                 keep_designators=keep_designators,
+                no_pick=no_pick,
                 verbose=verbose,
             )
         )

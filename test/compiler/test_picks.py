@@ -52,6 +52,38 @@ def test_ato_pick_resistor():
 
 
 @pytest.mark.usefixtures("setup_project_config")
+def test_no_solve_defers_type_picking():
+    """`ato build --no-pick`: a type-pickable module is left UNPICKED (MPN
+    resolution deferred to `ato bom`), and the symbolic solver is never run.
+
+    A bare ``Resistor`` with only a package is *type*-pickable: resolving it to a
+    concrete MPN normally requires the solver + the components API. With
+    ``no_solve=True`` that resolution must be skipped, so the module ends without
+    ``has_part_picked`` and (the point of the feature) no network/solver work is
+    done -- this test deliberately runs with no cache seeded, so it would fail or
+    hang if the type-picking path were still entered.
+    """
+    _, _, _, result, app_instance = build_instance(
+        """
+        import Resistor
+
+        module A:
+            r1 = new Resistor
+            r1.package = "R0805"
+        """,
+        "A",
+    )
+
+    r1 = F.Resistor.bind_instance(_get_child(app_instance, "r1"))
+
+    pick_parts_recursively(r1, Solver(), no_solve=True)
+
+    assert not r1.has_trait(F.Pickable.has_part_picked), (
+        "no_solve must defer type-picking, not resolve an MPN"
+    )
+
+
+@pytest.mark.usefixtures("setup_project_config")
 def test_ato_pick_capacitor():
     _, _, _, result, app_instance = build_instance(
         """

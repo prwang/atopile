@@ -21,6 +21,7 @@ import typer
 
 from atopile import version
 from atopile.cli import (
+    bom,
     build,
     configure,
     create,
@@ -209,6 +210,7 @@ app.command(deprecated=True, hidden=True)(install.install)
 app.command()(inspect_.inspect)
 app.command()(view.view)
 app.command()(route.route)
+app.command()(bom.bom)
 app.command()(diagnose.diagnose)
 app.add_typer(package.package_app, name="package", hidden=True)
 app.add_typer(install.dependencies_app, name="dependencies", help="Manage dependencies")
