@@ -29,6 +29,15 @@ hard error (LayoutPlanError) — never a silently-dropped assignment. Duplicate
 class names / a net in two classes are rejected earlier, at parse (Board model).
 The honest non-error case is "no net_classes AND no rules authored" → returns
 None (write nothing; KiCad defaults stand, visibly, not silently swallowed).
+
+`generate_component_classes` (D5) is the sibling for rooms with
+`source: component_class`: each such room becomes one `component_class_settings`
+assignment — class name = room.module, one SHEET_NAME condition whose primary is
+that same module (the C3-stamped sheetname is the single membership authority).
+Merge-preserving at TWO levels: only the component_class_settings section is
+authored, and within it user-authored assignments for OTHER classes survive;
+only the atopile-owned class names (= the plan's component_class rooms) are
+replaced. kicad-cli resolves the assignments headlessly on board load.
 """
 
 from typing import Any
@@ -108,6 +117,42 @@ def generate_project_rules(
 
     project.net_settings.classes = classes
     project.net_settings.netclass_patterns = patterns
+    return project
+
+
+def generate_component_classes(
+    plan: LayoutPlan,
+    base_project: C_kicad_project_file | None = None,
+) -> C_kicad_project_file | None:
+    """Author one component-class assignment per `source: component_class` room
+    into the project file's `component_class_settings`, or None when the plan has
+    no such room (write nothing — the honest non-error case).
+
+    Class name == room.module; membership = a single SHEET_NAME condition on
+    that module (conditions_operator ALL), i.e. the same C3 sheetname stamped on
+    the room's footprints — the rule area's `(component_class <module>)` source
+    and this assignment agree by construction. `base_project` is merged:
+    assignments for class names atopile does NOT own are preserved in their
+    original order; atopile-owned ones are (re)emitted after them in plan
+    order (deterministic, idempotent re-emit)."""
+    cc_rooms = [r for r in plan.rooms if r.source == "component_class"]
+    if not cc_rooms:
+        return None
+
+    project = base_project if base_project is not None else C_kicad_project_file()
+    _CC = C_kicad_project_file.C_component_class_settings
+
+    owned = {room.module for room in cc_rooms}
+    settings = project.component_class_settings
+    kept = [a for a in settings.assignments if a.component_class not in owned]
+    settings.assignments = kept + [
+        _CC.C_assignment(
+            component_class=room.module,
+            conditions_operator="ALL",
+            conditions={"SHEET_NAME": _CC.C_condition(primary=room.module)},
+        )
+        for room in cc_rooms
+    ]
     return project
 
 

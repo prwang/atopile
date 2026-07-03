@@ -246,3 +246,53 @@ def test_room_polygons_from_pcb_extracts_managed_rings():
     rings = room_polygons_from_pcb(pcb)
     assert set(rings) == {"top.r1"}  # the user zone is excluded
     assert rings["top.r1"] == _RINGS["top.r1"]
+
+
+@needs_f3
+def test_room_polygons_from_pcb_accepts_component_class_source():
+    """D5 regression: a managed zone sourced by `(component_class "X")` (no
+    sheetname) contributes its ring under the class name — reverse-resolution
+    (coord→room) keeps working for component_class-sourced rooms, they are not
+    silently skipped."""
+    import types
+
+    from faebryk.libs.kicad.fileformats import kicad
+
+    def _zone(name, placement, corners):
+        return kicad.pcb.Zone(
+            net=0,
+            net_name="",
+            layers=[],
+            layer="F.Cu",
+            uuid=kicad.gen_uuid(),
+            name=name,
+            hatch=kicad.pcb.Hatch(mode=kicad.pcb.E_zone_hatch_mode.EDGE, pitch=0.5),
+            connect_pads=kicad.pcb.ConnectPads(mode=None, clearance=0),
+            min_thickness=0.25,
+            filled_areas_thickness=False,
+            placement=placement,
+            polygon=kicad.pcb.Polygon(
+                pts=kicad.pcb.Pts(xys=[kicad.pcb.Xy(x=x, y=y) for x, y in corners])
+            ),
+        )
+
+    pcb = types.SimpleNamespace(
+        zones=[
+            _zone(
+                "rule_area_top.r1",
+                kicad.pcb.ZonePlacement(component_class="top.r1", enabled=True),
+                _RINGS["top.r1"],
+            ),
+            _zone(
+                "rule_area_top.r2",
+                kicad.pcb.ZonePlacement(sheetname="top.r2", enabled=True),
+                _RINGS["top.r2"],
+            ),
+        ]
+    )
+
+    rings = room_polygons_from_pcb(pcb)
+    # both sources are room keys; each ring lands under its own module name
+    assert set(rings) == {"top.r1", "top.r2"}
+    assert rings["top.r1"] == _RINGS["top.r1"]
+    assert rings["top.r2"] == _RINGS["top.r2"]

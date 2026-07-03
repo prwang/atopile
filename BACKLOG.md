@@ -22,7 +22,7 @@ BACKLOG keeps only "conclusion + code pointer", never restating implementation d
 - Python 3.14 dev environment = **`uv sync`** (`ziglang==0.15.1` provided by pip build dependency). Clone must
   `git fetch --tags` otherwise setuptools-scm produces a non-SemVer version number and the `ato` CLI crashes at startup.
 - **room source = footprint `sheetname` [changed by C3, old "= KiCad named group" is void]**: group has an unpatchable
-  ownership defect (see §C3); atopile creates zero groups. component class source deferred (D5, must first fix fileformats schema).
+  ownership defect (see §C3); atopile creates zero groups. The component_class source coexists since D5 (opt-in `Room.source`, class name == sheetname == room.module; see the D5 side-task entry).
 - **v10-only route (2026-06-13 decided by the user, Option B, upgrade-on-write)**: this branch's target dialect = v10;
   **forward-compatible v9 write-out is not done** (v9 is read-only, reading it in upgrades it to v10 at write-out). Corollaries: (i) no "write v9" code
   path; (ii) net name is the unique key within the file, name drift = geometry-ownership drift; (iii) after S7 the "one-way gate / read-only don't-save" discipline
@@ -38,7 +38,7 @@ BACKLOG keeps only "conclusion + code pointer", never restating implementation d
 | B | layout_ir (text↔geometry sole interface) | ✅ |
 | C | room geometry (forced via / room copy) | ✅ |
 | **C3** | **group→sheetname migration (room de-group-ification)** | ✅ 2026-06-15 (see §C3 code pointers) |
-| **D** | **layout.yaml loading + placement rule area (D1–D4)** | ✅ 2026-06-16 (see §D code pointers); D5 deferred |
+| **D** | **layout.yaml loading + placement rule area (D1–D4)** | ✅ 2026-06-16 (see §D code pointers); D5 component_class ✅ 2026-07-03 (side-task entry) |
 | **D-Tier2** | **bundle bus-transport schema + geometry (bucket ①)** | ✅ bucket ① 2026-06-20 (model+geometry) + D-side build integration 2026-06-25 (`generate_layout_plan` calls `bundle_artifact`, e2e `examples/sata_bundle`); bucket ② `batch_route_bundle` contract strict-xfail, implementation moved to §E E-Tier2 (decided by the user) |
 | **D-Tier3** | **self-contained: placement (room-relative coordinates) + board outline + full stackup** | 🟢 bucket ① + bucket ② TS-AUTH-A + placements→transformer landed (2026-06-26 / 2026-06-28): placement schema+`apply_placements` build consumption / `Room.polygon`+rotation+layers / `board.outline`+full `stackup` / impedance→stackup hard dependency / **single layer-count authority, board side** `config` derived from `stackup_layers` (kills 2-layer hardcode); contracts `test_placement_contract.py`+`test_placement_apply_contract.py`+`test_board_section_contract.py`. **TS-AUTH-B (router layer list) ✅ 2026-06-28 (E1 passes `layers` from `stackup_layers`)**; remaining **bucket ③=§E DoD** (pure-text e2e); net-class/pour/keepout/silk go to §F |
 | **Incremental execution** | **route_stages `--up-to` breakpoint + stage name unique** | ✅ 2026-06-28: stage name uniqueness + `--up-to` (name/1-based index, out-of-range → loud, writes partial board + `route_report.json`) lands in the E1 runner |
@@ -380,7 +380,7 @@ Under contract-first the downstream ratchet's contract stays in its respective D
 bucket ② = **§E-Tier2 ✅**; **TS-AUTH-B (router layer list) ✅ lands in §E1**; bucket ③ pure-text e2e = **§E DoD** (the routing half is already proven by the
 E18 bundle e2e; the self-contained board-build half remains).
 
-Side branches genuinely not on the critical path (P0.2-S7 final acceptance, D5 component_class) are collected into the "Side tasks" section **after** §E/§F, **deliberately not numbered in the E/F
+Side branches genuinely not on the critical path (P0.2-S7 final acceptance; D5 component_class, shipped 2026-07-03) are collected into the "Side tasks" section **after** §E/§F, **deliberately not numbered in the E/F
 sequence** (numbering them would falsely claim they are on the critical path).
 
 ### E. [needs §C + §D] KiCadRoutingTools fork
@@ -634,15 +634,29 @@ No hard dependency on §E/§F, can be done when convenient; each keeps its origi
     **Do not touch** the `fileformats/kicad/v8|v9` corpus boards (they are deliberately kept old-version read-only inputs).
   - BOM / manufacturing artifacts / DRC smoke: BOM+DRC already run in the default build, mfg-data in the `all` target; all that's missing is a smoke e2e asserting
     `.bom.csv`/`.bom.json`/`.gerber.zip`/`.pick_and_place.csv` are produced and the BOM is non-empty (reusing the existing `_build` fixture).
-- [ ] **D5 component_class placement** (placement rule area from the component_class source; coexisting with the sheetname source):
-  - **the token is empirically verified safe (2026-06-28)**: `(placement (enabled yes) (component_class "X"))` loads via `kicad-cli pcb upgrade --force`
-    rc=0, written back verbatim——it is legal KiCad-10 grammar, **not in** the `source_type`/`source` SEGFAULT class (those two are mis-built memory/
-    protobuf fields, the file has no such token, writing them out crashes, see §D conclusion + regression `test_generated_placement_has_no_source_type`).
-  - remaining implementation (5 items, not a quick fact&pointer): ① add a `component_class: ?str = null` field to the zig `ZonePlacement` (mirroring the existing
-    `sheetname`, automatic build-on-import recompile, the `E_zone_placement_source_type` enum already has this member); ② add a
-    component_class source field to layout.yaml/`Room`; ③ `rule_area` emits `(component_class "X")` by source; ④ **write `.kicad_pro` to declare class-member ownership**
-    (atopile currently does not write .kicad_pro——`set_kicad_netlist_path_in_project` is dead code, the model `C_kicad_project_file` exists; a net-new channel);
-    ⑤ add a `(component_class)` round-trip + kicad-cli ingest test.
+- [x] **D5 component_class placement** ✅ SHIPPED 2026-07-03 (placement rule area from the component_class source, coexisting with the sheetname source):
+  - **File grammar (KiCad-10 SSOT)**: `(placement (enabled ...) <ONE source token>)`, source token = `(sheetname "X")` | `(component_class "X")` | `(group "X")` —
+    the token NAME is the source type. `(component_class "X")` is legal grammar, empirically verified safe through `kicad-cli pcb upgrade --force`
+    (rc=0, verbatim round-trip; 2026-06-28), **not in** the `source_type`/`source` SEGFAULT class (those two mis-built memory/protobuf fields stay
+    forever unwritten — regressions `test_generated_placement_has_no_source_type` + the D5 `test_placement_carries_exactly_one_source`).
+  - **Shipped shape**: `Room.source: "sheetname" (default) | "component_class"` (layout_plan.py; the default preserves every existing plan). Class name ==
+    `room.module` == the C3-stamped sheetname — ONE room identity, no second name field. `rule_area.py` emits exactly one source token per
+    `room.source`; the S5a real-room check applies to both sources. Class membership is DECLARED in the `.kicad_pro`:
+    `board_rules.generate_component_classes` authors one `component_class_settings` assignment per component_class room
+    (`{component_class: <module>, conditions_operator: ALL, conditions: {SHEET_NAME: {primary: <module>}}}`; JSON shape SSOT =
+    KiCad `common/project/component_class_settings.cpp`, model = `other_fileformats.C_component_class_settings`, absent condition keys OMITTED never
+    null — KiCad's loader throws on null), merge-preserving at two levels (only its section authored; foreign assignments inside the section survive).
+    It rides the **live** `.kicad_pro` write channel §F5 opened (`build_steps.generate_layout_plan` → `generate_project_rules` +
+    `generate_component_classes` → one `project.dumps`); the old premise "atopile never writes .kicad_pro" was retired by §F5
+    (`set_kicad_netlist_path_in_project` remains dead code and is NOT the channel). kicad-cli resolves the assignments headlessly on board load
+    (`BOARD::SynchronizeComponentClasses`). F3 reverse-resolution accepts `placement.component_class` as the room key
+    (`layout_ir_resolve.room_polygons_from_pcb`). The zig schema fields (`ZonePlacement.component_class`, `Footprint.component_classes`) landed as
+    D5-prep (see the §P1+ fidelity entry).
+  - **Tests (all mutation-verified)**: `test_rule_area_contract.py` D5.x (component_class round-trip, exactly-one-source, S5a for both sources,
+    kicad-cli ingest of board+project with DRC-neutrality), `test_board_rules_contract.py` D5 block (assignment emit + KiCad-exact JSON shape,
+    no-class-rooms→None, merge-not-clobber, composition with F5 net classes),
+    `test_layout_ir_resolve_contract.py::test_room_polygons_from_pcb_accepts_component_class_source`, and
+    `test_component_class_e2e.py` (layout.yaml → rule area + .kicad_pro on a synthetic board, the unit-level chain proof).
 
 ### G. Won't do / deferred
 - ❌ **hack uuid = absolutely forbidden** (inviolable principle): uuid is a 128-bit opaque id, atopile **neither writes

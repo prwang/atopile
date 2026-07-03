@@ -13,6 +13,13 @@ clearance class turns 0 clearance violations into 36), rc=0 (no SEGFAULT). This
 file pins the pure emitter: the classes + assignments are correct, unresolvable
 nets are loud, and an existing project is merged (not clobbered).
 
+D5 lives in the same module: `generate_component_classes` authors
+`component_class_settings` assignments (one SHEET_NAME condition per
+`source: component_class` room, class name == room.module) into the SAME
+project file, merge-preserving. The D5 tests here pin the emitter + merge; the
+kicad-cli ingest of board+project together is pinned in
+test_rule_area_contract.py::test_kicad_ingests_component_class_rule_area.
+
 S0 strict-xfail: gated on the emitter landing.
 """
 
@@ -37,6 +44,21 @@ except Exception:  # noqa: BLE001
 
 needs_f5 = pytest.mark.xfail(
     not _F5_LANDED, reason="F5 board_rules not landed yet", strict=True
+)
+
+try:
+    from faebryk.exporters.pcb.layout.board_rules import generate_component_classes
+
+    _D5_LANDED = True
+except Exception:  # noqa: BLE001
+    _D5_LANDED = False
+
+    def generate_component_classes(*a, **k):
+        raise RuntimeError("D5 generate_component_classes not landed")
+
+
+needs_d5 = pytest.mark.xfail(
+    not _D5_LANDED, reason="D5 component-class authoring not landed yet", strict=True
 )
 
 _YAML = """\
@@ -196,3 +218,114 @@ def test_kicad_cli_drc_honors_emitter_output(tmp_path):
     with_rules = _clearance_count(True)
     without_rules = _clearance_count(False)
     assert with_rules > without_rules, (with_rules, without_rules)
+
+
+# ===========================================================================
+# D5 — component-class declarations → .kicad_pro component_class_settings.
+# generate_component_classes authors ONE SHEET_NAME assignment per
+# `source: component_class` room (class name == room.module == the C3-stamped
+# sheetname); merge-preserving at both levels (other project sections AND
+# foreign assignments survive). JSON shape SSOT: KiCad
+# common/project/component_class_settings.cpp.
+# ===========================================================================
+def _cc_plan(rooms):
+    from faebryk.exporters.pcb.layout.layout_plan import LayoutPlan, Room
+
+    return LayoutPlan(
+        rooms=[Room(**r) for r in rooms], route_stages=[]
+    )
+
+
+@needs_d5
+def test_component_class_rooms_emit_assignments():
+    """Only component_class-sourced rooms are declared; the assignment shape is
+    exactly KiCad's: conditions_operator ALL + one SHEET_NAME condition whose
+    primary is the room module."""
+    import json
+
+    plan = _cc_plan(
+        [
+            {"module": "top.r1", "source": "component_class"},
+            {"module": "top.r2"},  # sheetname room: NOT declared as a class
+        ]
+    )
+    proj = generate_component_classes(plan)
+    assert proj is not None
+    settings = proj.component_class_settings
+    assert settings.meta.version == 0
+    assert settings.sheet_component_classes.enabled is False
+    assert [a.component_class for a in settings.assignments] == ["top.r1"]
+    a = settings.assignments[0]
+    assert a.conditions_operator == "ALL"
+    assert set(a.conditions) == {"SHEET_NAME"}
+    assert a.conditions["SHEET_NAME"].primary == "top.r1"
+
+    # serialized shape: KiCad's loader does contains("secondary") then
+    # get<string>() — an absent secondary must be OMITTED, never null.
+    dumped = json.loads(proj.dumps())["component_class_settings"]
+    cond = dumped["assignments"][0]["conditions"]["SHEET_NAME"]
+    assert cond == {"primary": "top.r1"}
+
+
+@needs_d5
+def test_no_component_class_rooms_writes_nothing():
+    """A plan whose rooms are all sheetname-sourced authors NO project file
+    (None) — the explicit, non-erroring outcome (mirrors F5's no-classes pin)."""
+    assert generate_component_classes(_cc_plan([{"module": "top.r1"}])) is None
+    assert generate_component_classes(_cc_plan([])) is None
+
+
+@needs_d5
+def test_component_classes_merge_not_clobber():
+    """Emitting onto an existing project preserves (a) every other project
+    section, (b) foreign (user-authored) class assignments in their original
+    position; a STALE atopile-owned assignment for the same class is replaced,
+    not duplicated (idempotent re-emit)."""
+    from faebryk.libs.kicad.other_fileformats import C_kicad_project_file
+
+    _CC = C_kicad_project_file.C_component_class_settings
+    base = C_kicad_project_file()
+    base.pcbnew.page_layout_descr_file = "my_frame.kicad_wks"
+    base.component_class_settings.assignments = [
+        _CC.C_assignment(
+            component_class="USER_CLASS",
+            conditions_operator="ANY",
+            conditions={"REFERENCE": _CC.C_condition(primary="R1,R2")},
+        ),
+        _CC.C_assignment(  # stale artifact of a previous emit — must be replaced
+            component_class="top.r1",
+            conditions_operator="ALL",
+            conditions={"SHEET_NAME": _CC.C_condition(primary="top.STALE")},
+        ),
+    ]
+
+    plan = _cc_plan([{"module": "top.r1", "source": "component_class"}])
+    proj = generate_component_classes(plan, base_project=base)
+    assert proj is not None
+    assert proj.pcbnew.page_layout_descr_file == "my_frame.kicad_wks"
+    assignments = proj.component_class_settings.assignments
+    assert [a.component_class for a in assignments] == ["USER_CLASS", "top.r1"]
+    # the user assignment is untouched, the owned one is refreshed
+    assert assignments[0].conditions["REFERENCE"].primary == "R1,R2"
+    assert assignments[1].conditions["SHEET_NAME"].primary == "top.r1"
+
+
+@needs_d5
+def test_component_classes_compose_with_net_class_rules():
+    """The build-step chain (F5 then D5 onto ONE project object) yields a single
+    project carrying BOTH sections — net classes and class assignments."""
+    plan = load_layout_plan(
+        _YAML.replace(
+            "route_stages: []",
+            "rooms:\n  - module: top.r1\n    source: component_class\n"
+            "route_stages: []",
+        )
+    )
+    proj = generate_project_rules(plan, _IR)
+    assert proj is not None
+    proj = generate_component_classes(plan, base_project=proj)
+    assert proj is not None
+    assert any(c.name == "HV" for c in proj.net_settings.classes)
+    assert [
+        a.component_class for a in proj.component_class_settings.assignments
+    ] == ["top.r1"]

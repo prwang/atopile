@@ -280,11 +280,19 @@ class GridRouteOverride(BaseModel):
 
 
 class Room(BaseModel):
-    """A placement region == one footprint sheetname (= ato address, §C3)."""
+    """A placement region == one footprint sheetname (= ato address, §C3).
+
+    `source` selects the KiCad placement-source token for the room's rule area
+    (D5): `sheetname` (default, the §C3 channel) emits `(sheetname <module>)`;
+    `component_class` emits `(component_class <module>)` and declares the class
+    itself in the .kicad_pro (board_rules.generate_component_classes) with a
+    SHEET_NAME condition on that same `module` — membership always derives from
+    the one room identity, so no second name field exists."""
 
     model_config = ConfigDict(extra="forbid")
 
     module: str
+    source: Literal["sheetname", "component_class"] = "sheetname"
     origin: tuple[float, float] | None = None
     size: tuple[float, float] | None = None
     polygon: list[tuple[float, float]] | None = None

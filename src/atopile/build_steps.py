@@ -991,6 +991,7 @@ def generate_layout_plan(ctx: BuildStepContext) -> None:
     # `ato diagnose`) judge DESIGN INTENT, not KiCad defaults. Merge onto any
     # existing project; write nothing when no classes are authored.
     from faebryk.exporters.pcb.layout.board_rules import (
+        generate_component_classes,
         generate_dru_rules,
         generate_project_rules,
     )
@@ -1001,9 +1002,17 @@ def generate_layout_plan(ctx: BuildStepContext) -> None:
         C_kicad_project_file.loads(proj_path) if proj_path.exists() else None
     )
     project = generate_project_rules(plan, ir, base_project=base_project)
+    # D5: rooms with `source: component_class` need their class DECLARED in the
+    # same project file (assignments keyed by the C3 sheetname); merge onto
+    # whatever F5 produced so both sections land in one write.
+    cc_project = generate_component_classes(
+        plan, base_project=project if project is not None else base_project
+    )
+    if cc_project is not None:
+        project = cc_project
     if project is not None:
         project.dumps(proj_path)
-        logger.info(f"Wrote board net-class rules to {proj_path}")
+        logger.info(f"Wrote board rules (.kicad_pro) to {proj_path}")
     # the rules header's custom DRC rules (courtyard spacing, uncoupled max, the
     # clearance floor) — <project>.kicad_dru is auto-loaded by kicad-cli pcb drc.
     dru = generate_dru_rules(plan)

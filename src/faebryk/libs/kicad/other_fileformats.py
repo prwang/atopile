@@ -587,6 +587,70 @@ class C_kicad_project_file(JSON_File):
 
     @dataclass_json(undefined=Undefined.INCLUDE)
     @dataclass
+    class C_component_class_settings:
+        """KiCad component-class membership declarations (D5).
+
+        JSON shape SSOT: KiCad common/project/component_class_settings.cpp —
+        `{"meta": {"version": 0}, "sheet_component_classes": {"enabled": bool},
+        "assignments": [{"component_class": str, "conditions_operator":
+        "ALL"|"ANY", "conditions": {<CONDITION_NAME>: {"primary": str,
+        "secondary": str}}}]}`. Condition names include SHEET_NAME (the one
+        atopile authors: class name == room.module == the C3-stamped
+        sheetname). kicad-cli resolves these headlessly on board load
+        (BOARD::SynchronizeComponentClasses)."""
+
+        @dataclass_json(undefined=Undefined.INCLUDE)
+        @dataclass
+        class C_meta:
+            version: int = 0
+            unknown: CatchAll = None
+
+        meta: C_meta = field(default_factory=C_meta)
+
+        @dataclass_json(undefined=Undefined.INCLUDE)
+        @dataclass
+        class C_sheet_component_classes:
+            enabled: bool = False
+            unknown: CatchAll = None
+
+        sheet_component_classes: C_sheet_component_classes = field(
+            default_factory=C_sheet_component_classes
+        )
+
+        @dataclass_json(undefined=Undefined.INCLUDE)
+        @dataclass
+        class C_condition:
+            # KiCad omits absent primary/secondary keys entirely (its loader
+            # does contains() then get<string>() — a JSON null would throw), so
+            # a None here must be EXCLUDED from the dump, not emitted as null.
+            primary: Optional[str] = field(
+                metadata=config(exclude=lambda v: v is None), default=None
+            )
+            secondary: Optional[str] = field(
+                metadata=config(exclude=lambda v: v is None), default=None
+            )
+            unknown: CatchAll = None
+
+        @dataclass_json(undefined=Undefined.INCLUDE)
+        @dataclass
+        class C_assignment:
+            component_class: str = ""
+            conditions_operator: str = "ALL"
+            conditions: dict[
+                str,
+                "C_kicad_project_file.C_component_class_settings.C_condition",
+            ] = field(default_factory=dict)
+            unknown: CatchAll = None
+
+        assignments: list[C_assignment] = field(default_factory=list)
+        unknown: CatchAll = None
+
+    component_class_settings: C_component_class_settings = field(
+        default_factory=C_component_class_settings
+    )
+
+    @dataclass_json(undefined=Undefined.INCLUDE)
+    @dataclass
     class C_cvpcb:
         equivalence_files: list[str] = field(default_factory=list)
         unknown: CatchAll = None

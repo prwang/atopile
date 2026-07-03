@@ -145,17 +145,22 @@ class LayoutResolver:
 def room_polygons_from_pcb(pcb) -> dict[str, list[tuple[float, float]]]:
     """Extract room rings from a board's MANAGED placement zones.
 
-    A managed rule area is a zone named `rule_area_<sheetname>` (rule_area.py);
-    its ring is `zone.polygon.pts.xys` and its room name is
-    `zone.placement.sheetname`. User-authored zones (no prefix / no placement) are
-    ignored. The returned dict feeds `LayoutResolver(ir, room_polygons=...)`."""
+    A managed rule area is a zone named `rule_area_<module>` (rule_area.py); its
+    ring is `zone.polygon.pts.xys` and its room name is the zone's placement
+    SOURCE value — `placement.sheetname` OR `placement.component_class`
+    (whichever the D5 Room.source emitted; both carry room.module, so either is
+    the room key). User-authored zones (no prefix / no placement) are ignored.
+    The returned dict feeds `LayoutResolver(ir, room_polygons=...)`."""
     rings: dict[str, list[tuple[float, float]]] = {}
     for zone in pcb.zones:
         name = getattr(zone, "name", None)
         if not name or not name.startswith(_MANAGED_ZONE_PREFIX):
             continue
         placement = getattr(zone, "placement", None)
-        sheetname = getattr(placement, "sheetname", None) if placement else None
+        sheetname = (
+            getattr(placement, "sheetname", None)
+            or getattr(placement, "component_class", None)
+        ) if placement else None
         if not sheetname:
             continue
         polygon = getattr(zone, "polygon", None)

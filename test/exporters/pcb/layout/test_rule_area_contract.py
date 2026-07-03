@@ -27,6 +27,13 @@ native field); copper-layer geometry must carry a real net — a placement rule
 area is a keepout, it carries no copper. Multi-room boards get one independent
 zone per room (D-spec "multi-room" pin), no cross-contamination.
 
+D5 extends the protocol with `Room.source`: `component_class` swaps the
+placement source token to the equally-native `(component_class <module>)` and
+declares the class in the .kicad_pro (SHEET_NAME assignment, class name ==
+module — see board_rules.generate_component_classes + its contract file). The
+D5.x tests pin: token round-trip, exactly-one-source, S5a for both sources, and
+the kicad-cli ingest of board+project together.
+
 == THE RATCHET (S0 discipline) ============================================
 
 `_D3_LANDED` probes the rule_area module AND layout_plan (D3 builds real D2
@@ -150,6 +157,15 @@ def _placement_zones(pcb) -> dict[str, object]:
     }
 
 
+def _class_placement_zones(pcb) -> dict[str, object]:
+    """{component_class -> zone} for every class-sourced placement zone (D5)."""
+    return {
+        z.placement.component_class: z
+        for z in pcb.zones
+        if z.placement is not None and z.placement.component_class is not None
+    }
+
+
 def _bbox(zone) -> tuple[float, float, float, float]:
     xs = [p.x for p in zone.polygon.pts.xys]
     ys = [p.y for p in zone.polygon.pts.xys]
@@ -195,6 +211,103 @@ def test_placement_sheetname_round_trips():
     assert "(placement" in text and '(sheetname "top.r1")' in text
     reloaded = _load(text).kicad_pcb
     assert set(_placement_zones(reloaded)) == {"top.r1"}
+
+
+# ===========================================================================
+# D5.1 — a `source: component_class` room round-trips through dumps/loads with
+# the placement sourced by the NATIVE `(component_class "X")` token (mirrors
+# D3.1's sheetname pin; empirically verified safe through kicad-cli 2026-06-28,
+# unlike the SEGFAULT-class source_type/source fields).
+# ===========================================================================
+@needs_d3
+def test_placement_component_class_round_trips():
+    bf = _load(_board(_FPS))
+    pcb = bf.kicad_pcb
+    ir = layout_ir(pcb)
+    plan = _plan_with(
+        [
+            Room(
+                module="top.r1",
+                origin=(0.0, 0.0),
+                size=(20.0, 20.0),
+                source="component_class",
+            )
+        ]
+    )
+    generate_rule_areas(pcb, plan, ir)
+
+    zones = _class_placement_zones(pcb)
+    assert set(zones) == {"top.r1"}
+    assert zones["top.r1"].placement.enabled is True
+    # the OTHER source token must be absent (exactly-one-source grammar)
+    assert zones["top.r1"].placement.sheetname is None
+
+    # survives dumps→loads VERBATIM: the component_class token reaches the text
+    # (footprints still carry their C3 `(sheetname ...)` — the PLACEMENT-level
+    # sheetname absence is asserted on the reloaded model, where it is scoped).
+    text = kicad.dumps(bf)
+    assert "(placement" in text and '(component_class "top.r1")' in text
+    reloaded = _load(text).kicad_pcb
+    assert set(_class_placement_zones(reloaded)) == {"top.r1"}
+    assert _placement_zones(reloaded) == {}
+    assert _class_placement_zones(reloaded)["top.r1"].placement.sheetname is None
+
+
+# ===========================================================================
+# D5.1b — mutually-exclusive source: whatever Room.source says, the generated
+# placement carries EXACTLY ONE source token (sheetname XOR component_class),
+# and never source_type/source (the SEGFAULT class — see D3.1b below).
+# ===========================================================================
+@needs_d3
+@pytest.mark.parametrize("source", ["sheetname", "component_class"])
+def test_placement_carries_exactly_one_source(source):
+    bf = _load(_board(_FPS))
+    pcb = bf.kicad_pcb
+    ir = layout_ir(pcb)
+    generate_rule_areas(
+        pcb,
+        _plan_with(
+            [Room(module="top.r1", origin=(0.0, 0.0), size=(5.0, 5.0), source=source)]
+        ),
+        ir,
+    )
+    (zone,) = [z for z in pcb.zones if z.placement is not None]
+    sources = [
+        f
+        for f in ("sheetname", "component_class")
+        if getattr(zone.placement, f) is not None
+    ]
+    assert sources == [source]
+    assert getattr(zone.placement, sources[0]) == "top.r1"
+    assert zone.placement.source_type is None and zone.placement.source is None
+    assert "source_type" not in kicad.dumps(bf)
+
+
+# ===========================================================================
+# D5.1c — S5a holds for the component_class source too: an unknown module is
+# LOUD (its membership would come from the same nonexistent sheetname).
+# ===========================================================================
+@needs_d3
+def test_unknown_component_class_room_is_loud():
+    bf = _load(_board(_FPS))
+    pcb = bf.kicad_pcb
+    ir = layout_ir(pcb)
+    with pytest.raises(RuleAreaError):
+        generate_rule_areas(
+            pcb,
+            _plan_with(
+                [
+                    Room(
+                        module="top.NOPE",
+                        origin=(0.0, 0.0),
+                        size=(5.0, 5.0),
+                        source="component_class",
+                    )
+                ]
+            ),
+            ir,
+        )
+    assert not any(z.placement is not None for z in pcb.zones)
 
 
 # ===========================================================================
@@ -354,3 +467,59 @@ def test_kicad_ingests_generated_rule_area(tmp_path):
     assert _drc_violation_count(modified, tmp_path / "m.json") == (
         _drc_violation_count(baseline, tmp_path / "b.json")
     ), "the generated rule area changed the DRC violation count"
+
+
+# ===========================================================================
+# D5.2 — KiCad cross-validation of the FULL component-class chain (slow, needs
+# kicad-cli): rule area with `(component_class "X")` on the board + the class
+# DECLARATION in the sibling .kicad_pro (board_rules.generate_component_classes,
+# SHEET_NAME assignment). `kicad-cli pcb upgrade --force` ingests it rc=0, the
+# token survives VERBATIM, and DRC (which loads the project file, so the class
+# assignment is resolved headlessly) reports the same violation count as the
+# bare baseline board — the D5 constructs are DRC-neutral.
+# ===========================================================================
+@needs_d3
+@needs_kicad_cli
+@pytest.mark.not_in_ci
+@pytest.mark.slow
+def test_kicad_ingests_component_class_rule_area(tmp_path):
+    from faebryk.exporters.pcb.layout.board_rules import generate_component_classes
+
+    room = "top.power_supply_3v3"  # >16 bytes, like D3.5
+    fps = [(f"{room}.u1", room, [("1", "N1", 5.0, 5.0)], (5.0, 5.0))]
+    bf = _load(_board(fps))
+    pcb = bf.kicad_pcb
+    ir = layout_ir(pcb)
+    plan = _plan_with(
+        [
+            Room(
+                module=room,
+                origin=(0.0, 0.0),
+                size=(20.0, 20.0),
+                source="component_class",
+            )
+        ]
+    )
+    generate_rule_areas(pcb, plan, ir)
+
+    modified = tmp_path / "modified.kicad_pcb"
+    modified.write_text(kicad.dumps(bf))
+    project = generate_component_classes(plan)
+    assert project is not None
+    project.dumps(tmp_path / "modified.kicad_pro")
+    baseline = tmp_path / "baseline.kicad_pcb"
+    baseline.write_text(_board(fps))  # same board, no rule area, no project
+
+    for f in (modified, baseline):
+        r = subprocess.run(
+            ["kicad-cli", "pcb", "upgrade", "--force", str(f)],
+            capture_output=True, text=True, timeout=180,
+        )
+        assert r.returncode == 0, f"upgrade failed on {f.name}:\n{r.stderr}"
+
+    up = modified.read_text()
+    assert "(version 20260206)" in up
+    assert "(placement" in up and f'(component_class "{room}")' in up
+    assert _drc_violation_count(modified, tmp_path / "m.json") == (
+        _drc_violation_count(baseline, tmp_path / "b.json")
+    ), "the component-class rule area / declaration changed the DRC count"

@@ -4,10 +4,16 @@
 rule_area — turn a resolved LayoutPlan into KiCad placement rule areas (§D, D3).
 
 For each room in the plan this emits one placement rule area onto the board: a
-keepout zone whose `placement.sheetname` is the room's ato address — the §C3
-source channel KiCad preserves verbatim (no `group`, no custom S-expression
-token; `ZonePlacement.sheetname` is a native field). C3 has already stamped that
-same sheetname onto the room's footprints, so the rule area and its members agree.
+keepout zone whose placement source carries the room's ato address. The source
+token is picked by `Room.source` (D5): the default `sheetname` — the §C3
+channel KiCad preserves verbatim (no `group`, no custom S-expression token;
+`ZonePlacement.sheetname` is a native field) — or `component_class`, which
+emits the equally-native `(component_class <module>)` token; the class itself
+is declared in the .kicad_pro by `board_rules.generate_component_classes` with
+a SHEET_NAME condition on the same `module`. Either way C3 has already stamped
+that sheetname onto the room's footprints, so the rule area and its members
+agree — which is also why the S5a real-room check below applies to BOTH
+sources. A placement carries exactly ONE source token, never two.
 
 Room boundary (`_room_boundary`) — three geometry forms:
   * explicit `polygon` (D-Tier3; ≥ 3 pts, simple) ⇒ that polygon verbatim;
@@ -116,15 +122,24 @@ def _room_boundary(room: Room, ir: dict[str, Any]) -> list[tuple[float, float]]:
 
 
 def _make_placement_rule_area(
-    sheetname: str, corners: list[tuple[float, float]], layers: list[str]
+    room: Room, corners: list[tuple[float, float]], layers: list[str]
 ) -> Zone:
+    # KiCad-10 placement grammar: (enabled ...) + exactly ONE source sub-item,
+    # (sheetname "X") | (component_class "X") — the token NAME is the source
+    # type. room.source picks which token carries room.module (D5).
+    if room.source == "component_class":
+        placement = kicad.pcb.ZonePlacement(
+            component_class=room.module, enabled=True
+        )
+    else:
+        placement = kicad.pcb.ZonePlacement(sheetname=room.module, enabled=True)
     return Zone(
         net=0,
         net_name="",
         layers=layers if len(layers) > 1 else [],
         layer=layers[0] if len(layers) == 1 else None,
         uuid=kicad.gen_uuid(),
-        name=f"rule_area_{sheetname}",
+        name=f"rule_area_{room.module}",
         hatch=kicad.pcb.Hatch(mode=kicad.pcb.E_zone_hatch_mode.EDGE, pitch=0.5),
         connect_pads=kicad.pcb.ConnectPads(mode=None, clearance=0),
         min_thickness=0.25,
@@ -138,15 +153,12 @@ def _make_placement_rule_area(
             copperpour=kicad.pcb.E_zone_keepout.ALLOWED,
             footprints=kicad.pcb.E_zone_keepout.ALLOWED,
         ),
-        # placement carries ONLY enabled + sheetname. Do NOT set
-        # ZonePlacement.source_type / source: those schema fields have no valid
-        # KiCad-10 grammar and emitting them SEGFAULTS kicad-cli's loader
-        # (verified by isolation 2026-06-16; see CLAUDE.md fileformats hazard).
-        # This is the canonical KiCad-authored enabled-placement form.
-        placement=kicad.pcb.ZonePlacement(
-            sheetname=sheetname,
-            enabled=True,
-        ),
+        # placement carries ONLY enabled + one source token (built above). Do
+        # NOT set ZonePlacement.source_type / source: those schema fields have
+        # no valid KiCad-10 grammar and emitting them SEGFAULTS kicad-cli's
+        # loader (verified by isolation 2026-06-16; see CLAUDE.md fileformats
+        # hazard). This is the canonical KiCad-authored enabled-placement form.
+        placement=placement,
         # fill is optional — KiCad synthesizes a default (fill ...) block on load
         # either way — but we emit the canonical one so a freshly-generated board
         # round-trips through `kicad-cli upgrade` with no spurious diff. It does
@@ -168,16 +180,18 @@ def generate_rule_areas(
     pcb: PCB, plan: LayoutPlan, ir: dict[str, Any]
 ) -> list[Zone]:
     """Emit one placement rule area per plan room onto `pcb`; return the inserted
-    zones. Each room gets an INDEPENDENT zone sourced by its sheetname — no
-    cross-room contamination (D3.4).
+    zones. Each room gets an INDEPENDENT zone sourced by its own Room.source
+    token (sheetname or component_class) — no cross-room contamination (D3.4).
 
     Idempotent: any previously-generated rule area (name prefix `rule_area_`) is
     removed first, so re-emitting onto an already-stamped board does not duplicate
     or accrete zones (D4 re-emit). User-authored zones are untouched."""
     # S5a (loud, never silent): every plan room must name a REAL board room (= a footprint
-    # sheetname in the IR). A rule area whose sheetname matches no footprint would
-    # group NOTHING — a silent half-output — so reject it loudly, in BOTH geometry
-    # modes (explicit origin/size must not be a loophole around this check).
+    # sheetname in the IR) — for BOTH sources: a component_class room's membership
+    # is declared via a SHEET_NAME condition on that same module, so an unknown
+    # module groups NOTHING either way. A rule area that groups nothing is a
+    # silent half-output — reject it loudly, in BOTH geometry modes (explicit
+    # origin/size must not be a loophole around this check).
     rooms_ir = ir.get("rooms", {})
     for room in plan.rooms:
         if room.module not in rooms_ir:
@@ -198,8 +212,6 @@ def generate_rule_areas(
         # an explicit room.layers takes effect (no longer silently ignored, S5a);
         # otherwise the zone spans every signal layer.
         layers = list(room.layers) if room.layers else default_layers
-        zone = _make_placement_rule_area(
-            room.module, _room_boundary(room, ir), layers
-        )
+        zone = _make_placement_rule_area(room, _room_boundary(room, ir), layers)
         inserted.append(kicad.insert(pcb, "zones", pcb.zones, zone))
     return inserted
