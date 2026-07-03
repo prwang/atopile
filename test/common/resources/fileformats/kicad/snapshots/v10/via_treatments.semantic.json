@@ -471,40 +471,6 @@
   {
    "at": [
     126.0,
-    80.0
-   ],
-   "drill": 0.3,
-   "layers": [
-    "In1.Cu",
-    "In4.Cu"
-   ],
-   "net": "A",
-   "padstack": null,
-   "size": 0.6,
-   "teardrops": null,
-   "treatments": null,
-   "type": "buried"
-  },
-  {
-   "at": [
-    126.0,
-    81.0
-   ],
-   "drill": 0.2,
-   "layers": [
-    "F.Cu",
-    "In1.Cu"
-   ],
-   "net": "A",
-   "padstack": null,
-   "size": 0.4,
-   "teardrops": null,
-   "treatments": null,
-   "type": "micro"
-  },
-  {
-   "at": [
-    126.0,
     84.0
    ],
    "drill": 0.4,
@@ -929,6 +895,40 @@
     "tenting": null,
     "tertiary_drill": null
    },
+   "type": "micro"
+  },
+  {
+   "at": [
+    126.0,
+    80.0
+   ],
+   "drill": 0.3,
+   "layers": [
+    "In1.Cu",
+    "In4.Cu"
+   ],
+   "net": "B",
+   "padstack": null,
+   "size": 0.6,
+   "teardrops": null,
+   "treatments": null,
+   "type": "buried"
+  },
+  {
+   "at": [
+    126.0,
+    81.0
+   ],
+   "drill": 0.2,
+   "layers": [
+    "F.Cu",
+    "In1.Cu"
+   ],
+   "net": "B",
+   "padstack": null,
+   "size": 0.4,
+   "teardrops": null,
+   "treatments": null,
    "type": "micro"
   },
   {

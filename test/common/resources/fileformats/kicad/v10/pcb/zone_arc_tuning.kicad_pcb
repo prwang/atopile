@@ -77,6 +77,60 @@
 			(outputdirectory "")
 		)
 	)
+	(footprint "Corrupter:CLASSED"
+		(layer "F.Cu")
+		(uuid "f00dface-0000-4000-8000-000000000001")
+		(at 60 60)
+		(property "Reference" "U1"
+			(at 0 -2 0)
+			(layer "F.SilkS")
+			(uuid "f00dface-0000-4000-8000-000000000002")
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(property "Value" ""
+			(at 0 0 0)
+			(layer "F.Fab")
+			(uuid "e1d3ad1c-0d72-4bb3-b7b6-88d803e6ccb7")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 0 0 0)
+			(layer "F.Fab")
+			(hide yes)
+			(uuid "40f866f1-234f-4713-b4c3-0b95dcc3b472")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 0 0 0)
+			(layer "F.Fab")
+			(hide yes)
+			(uuid "79807465-a270-4937-94b6-5f662410fc40")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(component_classes
+			(class "ANALOG")
+			(class "PWR")
+		)
+		(duplicate_pad_numbers_are_jumpers no)
+		(embedded_fonts no)
+	)
 	(gr_rect
 		(start 25 25)
 		(end 125 115)
@@ -137,35 +191,47 @@
 		(net "SIG")
 		(uuid "5e91e004-0000-4000-8000-000000000004")
 	)
-	(footprint "Corrupter:CLASSED"
-		(layer "F.Cu")
-		(uuid "f00dface-0000-4000-8000-000000000001")
-		(at 60 60)
-		(property "Reference" "U1"
-			(at 0 -2 0)
-			(layer "F.SilkS")
-			(uuid "f00dface-0000-4000-8000-000000000002")
-			(effects
-				(font
-					(size 1 1)
-					(thickness 0.15)
-				)
-			)
-		)
-		(component_classes
-			(class "PWR")
-			(class "ANALOG")
-		)
-	)
 	(zone
 		(net "GND")
 		(layer "F.Cu")
-		(uuid "3dc4bb60-0000-4000-8000-000000000001")
+		(uuid "3dc4bb60-0000-4000-8000-000000000000")
 		(hatch edge 0.5)
 		(connect_pads
 			(clearance 0.5)
 		)
 		(min_thickness 0.25)
+		(fill yes
+			(thermal_gap 0.5)
+			(thermal_bridge_width 0.5)
+			(island_removal_mode 0)
+		)
+		(polygon
+			(pts
+				(xy 60 90)
+				(arc
+					(start 70 90)
+					(mid 73.535534 91.464466)
+					(end 75 95)
+				)
+				(xy 75 100) (xy 60 100)
+			)
+		)
+	)
+	(zone
+		(layer "F.Cu")
+		(uuid "3dc4bb60-0000-4000-8000-000000000001")
+		(hatch edge 0.5)
+		(connect_pads
+			(clearance 0)
+		)
+		(min_thickness 0.25)
+		(keepout
+			(tracks not_allowed)
+			(vias not_allowed)
+			(pads not_allowed)
+			(copperpour allowed)
+			(footprints allowed)
+		)
 		(placement
 			(enabled yes)
 			(component_class "CLASSA")

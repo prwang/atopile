@@ -934,17 +934,21 @@
 				(anchor circle)
 			)
 			(primitives
+				(gr_line
+					(start 0 0.635)
+					(end 1.905 3.81)
+					(width 0.2)
+				)
+				(gr_rect
+					(start 1.905 3.81)
+					(end 3.175 5.08)
+					(width 0)
+					(fill yes)
+				)
 				(gr_bbox
 					(start -5.08 -4.1275)
 					(end -3.175 -0.9525)
 					(fill no)
-				)
-				(gr_poly
-					(pts
-						(xy -2.54 -2.54) (xy 0 -2.54) (xy 0 0) (xy -5.08 0) (xy -5.08 -5.08) (xy -2.54 -5.08)
-					)
-					(width 0.2)
-					(fill yes)
 				)
 				(gr_arc
 					(start 3.54 -2.54)
@@ -958,15 +962,11 @@
 					(width 0.1)
 					(fill yes)
 				)
-				(gr_line
-					(start 0 0.635)
-					(end 1.905 3.81)
+				(gr_poly
+					(pts
+						(xy -2.54 -2.54) (xy 0 -2.54) (xy 0 0) (xy -5.08 0) (xy -5.08 -5.08) (xy -2.54 -5.08)
+					)
 					(width 0.2)
-				)
-				(gr_rect
-					(start 1.905 3.81)
-					(end 3.175 5.08)
-					(width 0)
 					(fill yes)
 				)
 			)
@@ -1211,6 +1211,14 @@
 		(net "B")
 		(uuid "4da21d74-ca51-4030-841d-9fa4271dd639")
 	)
+	(via micro
+		(at 126 81)
+		(size 0.4)
+		(drill 0.2)
+		(layers "F.Cu" "In1.Cu")
+		(net "B")
+		(uuid "7a000001-0000-0000-0000-000000000002")
+	)
 	(via
 		(at 126 82)
 		(size 0.8)
@@ -1400,6 +1408,14 @@
 		(net "B")
 		(uuid "dd040225-30f9-4c79-ad3e-e43383b2fb35")
 	)
+	(via buried
+		(at 126 80)
+		(size 0.6)
+		(drill 0.3)
+		(layers "In1.Cu" "In4.Cu")
+		(net "B")
+		(uuid "7a000001-0000-0000-0000-000000000001")
+	)
 	(via micro
 		(at 126 83)
 		(size 0.3)
@@ -1458,14 +1474,6 @@
 		(filling no)
 		(net "A")
 		(uuid "2ff08d6b-d2fa-498c-aa0a-437903b48438")
-	)
-	(via micro
-		(at 126 81)
-		(size 0.4)
-		(drill 0.2)
-		(layers "F.Cu" "In1.Cu")
-		(net "A")
-		(uuid "7a000001-0000-0000-0000-000000000002")
 	)
 	(via
 		(at 126 84)
@@ -1557,14 +1565,6 @@
 		(filling no)
 		(net "A")
 		(uuid "b86ba856-d576-4a99-a8e8-6d1c7f1f8e54")
-	)
-	(via buried
-		(at 126 80)
-		(size 0.6)
-		(drill 0.3)
-		(layers "In1.Cu" "In4.Cu")
-		(net "A")
-		(uuid "7a000001-0000-0000-0000-000000000001")
 	)
 	(embedded_fonts no)
 )
