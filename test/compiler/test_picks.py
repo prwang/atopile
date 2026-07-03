@@ -84,6 +84,71 @@ def test_no_solve_defers_type_picking():
 
 
 @pytest.mark.usefixtures("setup_project_config")
+def test_attach_package_footprint_from_package_only():
+    """H2: a package-only Resistor gains a generic KiCad standard footprint with
+    no picker/solver, so `ato build --no-pick` can produce a routable board.
+    """
+    from faebryk.libs.app.package_footprint import attach_package_footprint
+    from faebryk.libs.kicad.paths import GLOBAL_FP_DIR_PATH
+
+    if not (GLOBAL_FP_DIR_PATH / "Resistor_SMD.pretty").is_dir():
+        pytest.skip("KiCad standard footprint library not installed")
+
+    _, _, _, result, app_instance = build_instance(
+        """
+        import Resistor
+
+        module A:
+            r1 = new Resistor
+            r1.package = "R0402"
+        """,
+        "A",
+    )
+    r1 = F.Resistor.bind_instance(_get_child(app_instance, "r1"))
+
+    assert not r1.has_trait(F.Footprints.has_associated_footprint)
+    attached = attach_package_footprint(r1)
+    assert attached is True
+
+    assert r1.has_trait(F.Footprints.has_associated_footprint)
+    fp = r1.get_trait(F.Footprints.has_associated_footprint).get_footprint()
+    klf = fp.get_trait(F.KiCadFootprints.has_associated_kicad_library_footprint)
+    assert klf.get_kicad_identifier() == "Resistor_SMD:R_0402_1005Metric"
+    # 2-terminal chip -> two pads
+    assert len(fp.get_pads()) == 2
+
+    # strict gap-filler: a second call is a no-op (never clobbers)
+    assert attach_package_footprint(r1) is False
+
+
+@pytest.mark.usefixtures("setup_project_config")
+def test_attach_package_footprint_unshipped_size_is_loud_noop():
+    """H2 loud-or-nothing: a package KiCad does not ship (2220) attaches nothing
+    (returns False), rather than fabricating a wrong footprint name.
+    """
+    from faebryk.libs.app.package_footprint import attach_package_footprint
+    from faebryk.libs.kicad.paths import GLOBAL_FP_DIR_PATH
+
+    if not (GLOBAL_FP_DIR_PATH / "Resistor_SMD.pretty").is_dir():
+        pytest.skip("KiCad standard footprint library not installed")
+
+    _, _, _, result, app_instance = build_instance(
+        """
+        import Resistor
+
+        module A:
+            r1 = new Resistor
+            r1.package = "R2220"
+        """,
+        "A",
+    )
+    r1 = F.Resistor.bind_instance(_get_child(app_instance, "r1"))
+
+    assert attach_package_footprint(r1) is False
+    assert not r1.has_trait(F.Footprints.has_associated_footprint)
+
+
+@pytest.mark.usefixtures("setup_project_config")
 def test_ato_pick_capacitor():
     _, _, _, result, app_instance = build_instance(
         """

@@ -37,8 +37,18 @@ def attach_random_designators(tg: fbrk.TypeGraph):
                 return i + 1
         return len(used) + 1
 
-    parts = fabll.Traits.get_implementors(F.Pickable.has_part_picked.bind_typegraph(tg))
-    part_modules = [p.get_sibling_trait(fabll.is_module) for p in parts]
+    # Anything that will land on the board needs a designator. That is every
+    # picked part, PLUS any module that has a footprint without a pick -- e.g. a
+    # package-derived generic footprint in a --no-pick / deferred-BOM build (H2).
+    # In a normal (fully picked) build the second set is a subset of the first,
+    # so this is a no-op there.
+    part_modules_by_locator: dict[str, fabll.Node] = {}
+    for trait_t in (F.Pickable.has_part_picked, F.Footprints.has_associated_footprint):
+        for impl in fabll.Traits.get_implementors(trait_t.bind_typegraph(tg)):
+            m = impl.try_get_sibling_trait(fabll.is_module)
+            if m is not None:
+                part_modules_by_locator.setdefault(m.get_module_locator(), m)
+    part_modules = list(part_modules_by_locator.values())
 
     parts_with_prefix = {
         m: prefix.get_prefix()

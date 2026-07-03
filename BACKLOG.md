@@ -510,11 +510,22 @@ and H3 (sidecar constraints) properly address.
   `test_picks.py::test_no_solve_defers_type_picking` (mutation-verified, zero-network). e2e: `picked_demo`
   `--no-pick` → full artifacts + BOM. **Known limit**: a *type-picked* design (bare `package=` passives) with
   `--no-pick` correctly skips the solver but then fails loudly at `check_unattached_fps` (no footprint) until H2.
-- [ ] **H2 — footprint-from-package provider**: map `package="R0402"` (and/or an explicit ato-level `footprint=`)
-  to a generic KiCad footprint (`Resistor_SMD:R_0402_1005Metric`) attaching `has_associated_footprint` with no
-  picker, so generic passives route without any BOM. Source = KiCad stdlib (`kicad-footprints` installed
-  2026-07-03 → `/usr/share/kicad/footprints/`; `part_lifecycle.py::get_footprint_from_identifier` is the attach
-  path). Makes `--no-pick` broadly useful. 3-gate.
+- [x] **H2 — footprint-from-package provider** [✅ 2026-07-03]: `package="R0402"` now yields a generic KiCad
+  standard footprint (`Resistor_SMD:R_0402_1005Metric`) with no picker/solver, so generic passives route under
+  `--no-pick`. Pieces: `libs/kicad/standard_footprints.py` (`resolve_standard_footprint(size, prefix)` — computes
+  the canonical chip name, gated on the `.kicad_mod` existing on disk, so unshipped sizes like R_2220 return None
+  → loud-or-nothing); `libs/app/package_footprint.py` (`attach_package_footprint` — strict gap-filler: skips
+  modules that already have a footprint; creates `is_pad` nodes from the standard fp's pad names + matches the
+  R/C/L leads via `can_attach_to_any_pad`; attaches `has_associated_kicad_library_footprint` + registers the
+  std lib in the project fp-lib-table via `_insert_fp_lib`); wired in `build_steps.pick_parts` gated on
+  `config.build.no_pick`. **Also fixed** `designators.py::attach_random_designators`: it assigned designators only
+  to `has_part_picked` modules, so a footprint-without-pick had none and failed `ingest_footprint`; broadened to
+  "anything with a footprint" (a no-op superset in normal builds). Source = KiCad stdlib (`kicad-footprints` →
+  `/usr/share/kicad/footprints/`). Tests: `test_standard_footprints.py` (9), `test_picks.py`
+  attach + loud-noop (2). e2e verified: a `package=`-only 2-resistor design builds a full board with both
+  footprints and the shared net bound (`R1 R_0402 ~ R2 R_0603` on `unnamed[0]-1`). **Limits**: chip R/C/L only
+  (2-terminal); polarized/multi-pad and non-chip packages are a loud skip. Optional `footprint="Lib:Name"` ato pin
+  not yet added.
 - [ ] **H3 — part-picker sidecar (incremental subset picking + extra constraints, `.ato` unchanged)**: an
   out-of-source overlay (e.g. `<build>.picks.yaml` in the build dir) that records picked parts + additional
   per-component picking constraints, layered over the instance graph before/instead of the solver. Lets a BOM be

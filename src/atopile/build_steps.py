@@ -653,6 +653,17 @@ def pick_parts(ctx: BuildStepContext) -> None:
             "Failed to pick parts for some modules",
             [UserPickError(str(e)) for e in iter_leaf_exceptions(ex)],
         ) from ex
+
+    if config.build.no_pick:
+        # Footprint-first: give package-only R/C/L modules a generic KiCad
+        # footprint so the board is routable without resolving the BOM (H2).
+        # No-op for modules that already have a footprint (real pick / atomic).
+        from faebryk.libs.app.package_footprint import attach_package_footprints
+
+        n = attach_package_footprints(app)
+        if n:
+            logger.info(f"Attached {n} package footprint(s) (deferred BOM)")
+
     save_part_info_to_pcb(app)
 
 
