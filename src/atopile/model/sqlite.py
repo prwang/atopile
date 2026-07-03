@@ -51,6 +51,9 @@ def _get_connection(db_path: Path, timeout: float = 30.0):
         conn = sqlite3.connect(db_path, timeout=timeout)
         # Enable WAL mode for better concurrent access
         conn.execute("PRAGMA journal_mode=WAL")
+        # Wait (don't fail) if another writer holds the lock, so concurrent
+        # build/route/bom workers don't hit "database is locked" (H4).
+        conn.execute("PRAGMA busy_timeout=30000")
         connections[db_path] = conn
 
     conn = connections[db_path]

@@ -217,7 +217,12 @@ class kicad:
 
         if path is not None:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(raw, encoding="utf-8")
+            # Atomic write: a concurrent reader (e.g. a parallel `ato route`
+            # snapshotting the board while `ato bom` finalizes) must see either
+            # the old or the new file, never a truncated one (H4).
+            from faebryk.libs.util import atomic_write_text
+
+            atomic_write_text(path, raw, encoding="utf-8")
             # keep the loads cache coherent: a load after this dump returns
             # the object just written instead of a stale earlier parse
             if not hasattr(kicad.loads, "cache"):

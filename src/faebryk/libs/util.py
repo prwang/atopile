@@ -1765,6 +1765,37 @@ def run_live(
     return "\n".join(stdout_lines), "\n".join(stderr_lines), process
 
 
+def atomic_write_bytes(path: Path, data: bytes) -> None:
+    """Write ``data`` to ``path`` atomically: a concurrent reader sees either the
+    old file or the fully-written new file, never a truncated/partial one.
+
+    Writes to a unique temp file in the SAME directory (so ``os.replace`` is a
+    same-filesystem rename, atomic on POSIX and Windows) then replaces the target.
+    Same directory also avoids EXDEV across mounts. This is the concurrency-safety
+    foundation for running place/route in parallel with BOM finalization (H4).
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}.{uuid.uuid4().hex}")
+    try:
+        with open(tmp, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        # never leave a stray temp behind on failure
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def atomic_write_text(path: Path, data: str, encoding: str = "utf-8") -> None:
+    """Text counterpart of :func:`atomic_write_bytes` (torn-write-safe)."""
+    atomic_write_bytes(path, data.encode(encoding))
+
+
 @contextmanager
 def global_lock(lock_file_path: Path, timeout_s: float | None = None):
     # TODO consider using filelock instead
@@ -1772,18 +1803,34 @@ def global_lock(lock_file_path: Path, timeout_s: float | None = None):
     lock_file_path.parent.mkdir(parents=True, exist_ok=True)
 
     start_time = time.time()
-    while try_or(
-        lambda: bool(lock_file_path.touch(exist_ok=False)),
-        default=True,
-        catch=FileExistsError,
-    ):
-        # check if pid still alive
+    while True:
+        # Create + stamp our pid in ONE atomic step (O_CREAT|O_EXCL). The old
+        # touch-then-write left an empty-file window during which a competing
+        # reader parsed "" -> ValueError -> unlinked a freshly-held lock (TOCTOU).
+        try:
+            fd = os.open(
+                lock_file_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644
+            )
+        except FileExistsError:
+            pass
+        else:
+            with os.fdopen(fd, "w") as f:
+                f.write(str(os.getpid()))
+            break
+
+        # lock is held -- check if the holder is still alive
         try:
             pid = int(lock_file_path.read_text(encoding="utf-8"))
-        except ValueError:
-            lock_file_path.unlink(missing_ok=True)
+        except (ValueError, FileNotFoundError):
+            # empty (mid-write by the holder) or vanished: retry, do NOT unlink
+            # a lock we may be racing the holder to stamp.
+            if timeout_s and time.time() - start_time > timeout_s:
+                raise TimeoutError()
+            time.sleep(0.05)
             continue
-        assert pid != os.getpid()
+        if pid == os.getpid():
+            # re-entrant acquisition by the same process is a bug
+            raise RuntimeError(f"global_lock already held by this process: {pid}")
         if not psutil.pid_exists(pid):
             lock_file_path.unlink(missing_ok=True)
             continue
@@ -1791,8 +1838,6 @@ def global_lock(lock_file_path: Path, timeout_s: float | None = None):
             raise TimeoutError()
         time.sleep(0.1)
 
-    # write our pid to the lock file
-    lock_file_path.write_text(str(os.getpid()), encoding="utf-8")
     try:
         yield
     finally:

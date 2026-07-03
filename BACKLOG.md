@@ -520,10 +520,22 @@ and H3 (sidecar constraints) properly address.
   per-component picking constraints, layered over the instance graph before/instead of the solver. Lets a BOM be
   finalized incrementally (pick a subset now, add constraints, resolve the rest later) without editing the `.ato`.
   Ties H1 (`ato bom` reads/writes it) and H4 (its own file, separate from the board).
-- [ ] **H4 — concurrency safety (parallel place/route ‖ BOM finalize)**: prove/enforce that the artifact set is
-  safe for two agents to write concurrently. Partition by writer: route owns copper in `.kicad_pcb`; bom owns the
-  picks sidecar + part-info; establish atomic writes (write-temp+rename) and a documented ownership/lock model so
-  a concurrent `ato route` and `ato bom` cannot clobber each other. Needs a contract/stress test.
+- **H4 — concurrency safety (parallel place/route ‖ BOM finalize)**: prove/enforce that the artifact set is
+  safe for two agents to write concurrently.
+  - [x] **H4 foundation** [✅ 2026-07-03]: atomic writes + lock correctness. `util.py` `atomic_write_bytes`/
+    `atomic_write_text` (temp in same dir → fsync → `os.replace`, EXDEV-safe); the board writer
+    `fileformats.py::dumps` (was truncate-in-place `write_text` → a concurrent reader could see a torn/empty
+    board) now routes through it. `global_lock` TOCTOU fixed: create+stamp pid in one `O_CREAT|O_EXCL` step
+    (the old touch-then-write left an empty-file window during which a reader unlinked a freshly-held lock);
+    same-pid re-acquire now raises instead of `assert`. `sqlite.py` adds `PRAGMA busy_timeout=30000` (WAL already
+    on). Tests `test/libs/test_concurrency.py` (torn-read, crash-leaves-original, cross-process mutual exclusion);
+    both load-bearing guards mutation-verified. 197 kicad/util tests green; real build writes the board atomically.
+  - [ ] **H4 partition + snapshot lock** (remaining): route OWNS copper (writes only under `<output_base>.route/`);
+    bom/finalize OWNS picks (writes `.bom.*` + the H3 sidecar, must NOT re-enter `update_pcb`/write `paths.layout`
+    or `.kicad_pro`). `ato route` should acquire `global_lock` only to snapshot `paths.layout` into its workdir
+    (ms) then route the private copy. Route the other artifact writers (jlcpcb/json_bom/other_fileformats/
+    layout_plan_runner) through the atomic helper. Backup names → sub-second/uuid unique (backups collide within
+    one second today). Add the two-process stress harness on `examples/layout_reuse`.
 
 ### Side tasks (can be parallelized / do not block the critical path; deliberately not numbered in the E/F sequence)
 No hard dependency on §E/§F, can be done when convenient; each keeps its original identifier (not stuffed into the E/F numbering, to avoid falsely claiming they are on the critical path).
