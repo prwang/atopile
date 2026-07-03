@@ -19,6 +19,16 @@ Grammar ground truth = KiCad 10.0.3 (pcb_io_kicad_sexpr[_parser].cpp):
 - via-level v10 keys: blind/buried/micro type tokens, start_end_only,
   backdrill/tertiary_drill, front/back_post_machining,
   capping/filling (opt-bools) and covering/plugging (nested front/back).
+- pad-level hole treatments: the same backdrill / tertiary_drill /
+  front_post_machining / back_post_machining grammar also exists on pads
+  (format(PAD) :1735-1777, parsePAD). Before this landed our Pad modeled
+  none of them — real counterbore/backdrill fabrication data was S5a-warned
+  and DROPPED on any managed rewrite (reproduced 2026-07-03).
+- pad (property ...): one bare token out of the 9 the 10.0.3 writer emits.
+  ``pad_prop_pressfit`` was missing from our enum — a press-fit pad made
+  loads() hard-fail with InvalidValue, board-blocking (reproduced
+  2026-07-03). The writer emits property BEFORE (layers ...), not after
+  thermal_gap.
 - tri-state opt-bools: KiCad's FormatOptBool writes yes|no|none; "none"
   (unspecified/inherit) reads as None and is re-emitted as none.
 
@@ -198,6 +208,131 @@ def test_pad_teardrops_and_padstack_roundtrip():
     flat = re.sub(r"\s+", " ", out)
     assert flat.index("(teardrops") < flat.index('(uuid "00000000-0000-0000-0000-0000000000ac"')
     assert flat.index('(uuid "00000000-0000-0000-0000-0000000000ac"') < flat.index("(padstack")
+
+
+# The exact real-grammar press-fit pad that used to hard-fail with
+# "InvalidValue ... 'pad_prop_pressfit'" and whose hole treatments were
+# S5a-dropped — reproduced 2026-07-03 before the fix.
+_PAD_TREATMENTS = _board(
+    '\t(footprint "test:PF"\n\t\t(layer "F.Cu")\n\t\t(at 0 0)\n'
+    '\t\t(pad "1" thru_hole circle\n\t\t\t(at 0 0)\n\t\t\t(size 1.5 1.5)\n'
+    "\t\t\t(drill 0.7)\n"
+    '\t\t\t(backdrill (size 1) (layers "B.Cu" "In1.Cu"))\n'
+    '\t\t\t(tertiary_drill (size 1.1) (layers "F.Cu" "In1.Cu"))\n'
+    "\t\t\t(front_post_machining counterbore (size 1.2) (depth 0.2))\n"
+    "\t\t\t(back_post_machining countersink (size 1.2) (angle 90))\n"
+    "\t\t\t(property pad_prop_pressfit)\n"
+    '\t\t\t(layers "*.Cu" "*.Mask")\n'
+    '\t\t\t(net "GND")\n'
+    '\t\t\t(uuid "00000000-0000-0000-0000-0000000000b0")\n\t\t)\n\t)\n'
+)
+
+# Every property token the 10.0.3 pad writer can emit
+# (pcb_io_kicad_sexpr :1663-1675 + parser T_none); the enum must stay closed
+# over this set — a missing member is a board-blocking hard parse error, not
+# a warn+drop (structure.zig InvalidValue).
+_ALL_PAD_PROPERTY_TOKENS = [
+    "pad_prop_bga",
+    "pad_prop_fiducial_glob",
+    "pad_prop_fiducial_loc",
+    "pad_prop_testpoint",
+    "pad_prop_castellated",
+    "pad_prop_heatsink",
+    "pad_prop_mechanical",
+    "pad_prop_pressfit",
+    "none",
+]
+
+
+@pytest.mark.parametrize("token", _ALL_PAD_PROPERTY_TOKENS)
+def test_every_kicad_pad_property_token_loads(token: str):
+    """The board-blocking burn: a pad (property ...) token KiCad 10.0.3
+    writes must load — pad_prop_pressfit used to raise InvalidValue."""
+    board = _PAD_TREATMENTS.replace("pad_prop_pressfit", token)
+    pcb = kicad.loads(kicad.pcb.PcbFile, board).kicad_pcb
+    assert not kicad.last_unknown_keys
+    assert pcb.footprints[0].pads[0].properties == token
+
+
+def test_pad_hole_treatments_roundtrip():
+    """Pad-level backdrill / tertiary_drill / post machining (the same
+    grammar as vias) must be modeled, not S5a-dropped."""
+    pcb = kicad.loads(kicad.pcb.PcbFile, _PAD_TREATMENTS).kicad_pcb
+    assert not kicad.last_unknown_keys
+    pad = pcb.footprints[0].pads[0]
+    assert pad.backdrill.size == 1.0
+    assert list(pad.backdrill.layers) == ["B.Cu", "In1.Cu"]
+    assert pad.tertiary_drill.size == 1.1
+    assert list(pad.tertiary_drill.layers) == ["F.Cu", "In1.Cu"]
+    assert pad.front_post_machining.mode == "counterbore"
+    assert pad.front_post_machining.depth == 0.2
+    assert pad.back_post_machining.mode == "countersink"
+    assert pad.back_post_machining.angle == 90.0
+    assert pad.properties == "pad_prop_pressfit"
+
+    out = kicad.dumps(kicad.loads(kicad.pcb.PcbFile, _PAD_TREATMENTS))
+    assert not sexp_tree.data_loss(_PAD_TREATMENTS, out)
+    # dumps -> loads equivalence
+    pad2 = kicad.loads(kicad.pcb.PcbFile, out).kicad_pcb.footprints[0].pads[0]
+    assert pad2.backdrill.size == 1.0
+    assert pad2.front_post_machining.mode == "counterbore"
+    assert pad2.properties == "pad_prop_pressfit"
+
+
+def test_pad_write_order_matches_kicad():
+    """Emission order = 10.0.3 format(PAD): drill, backdrill,
+    tertiary_drill, front/back_post_machining, property, layers. Our dump
+    used to put (property ...) after thermal_gap — KiCad re-saves moved it
+    back before (layers ...), churn on every such pad."""
+    out = kicad.dumps(kicad.loads(kicad.pcb.PcbFile, _PAD_TREATMENTS))
+    flat = re.sub(r"\s+", " ", out)
+    order = [
+        "(drill",
+        "(backdrill",
+        "(tertiary_drill",
+        "(front_post_machining",
+        "(back_post_machining",
+        "(property pad_prop_pressfit)",
+        '(layers "*.Cu"',
+    ]
+    positions = [flat.index(tok) for tok in order]
+    assert positions == sorted(positions), (
+        f"pad write order diverges from KiCad 10.0.3: {list(zip(order, positions))}"
+    )
+
+
+def test_footprint_net_tie_write_order_matches_kicad():
+    """10.0.3 footprint writer emits net_tie_pad_groups (:1390) BEFORE
+    duplicate_pad_numbers_are_jumpers (:1398); we used to swap them."""
+    board = _board(
+        '\t(footprint "test:NT"\n\t\t(layer "F.Cu")\n\t\t(at 0 0)\n'
+        '\t\t(net_tie_pad_groups "1,2")\n'
+        "\t\t(duplicate_pad_numbers_are_jumpers no)\n\t)\n"
+    )
+    out = kicad.dumps(kicad.loads(kicad.pcb.PcbFile, board))
+    assert not sexp_tree.data_loss(board, out)
+    flat = re.sub(r"\s+", " ", out)
+    assert flat.index("(net_tie_pad_groups") < flat.index(
+        "(duplicate_pad_numbers_are_jumpers"
+    )
+
+
+def test_absent_pad_treatments_are_none():
+    plain = _board(
+        '\t(footprint "test:PL"\n\t\t(layer "F.Cu")\n\t\t(at 0 0)\n'
+        '\t\t(pad "1" thru_hole circle\n\t\t\t(at 0 0)\n\t\t\t(size 1.5 1.5)\n'
+        '\t\t\t(drill 0.7)\n\t\t\t(layers "*.Cu")\n'
+        '\t\t\t(uuid "00000000-0000-0000-0000-0000000000b1")\n\t\t)\n\t)\n'
+    )
+    pad = kicad.loads(kicad.pcb.PcbFile, plain).kicad_pcb.footprints[0].pads[0]
+    assert pad.backdrill is None
+    assert pad.tertiary_drill is None
+    assert pad.front_post_machining is None
+    assert pad.back_post_machining is None
+    assert pad.properties is None
+    out = kicad.dumps(kicad.loads(kicad.pcb.PcbFile, plain))
+    assert "backdrill" not in out
+    assert "post_machining" not in out
 
 
 _VIA_TREATMENTS = _board(

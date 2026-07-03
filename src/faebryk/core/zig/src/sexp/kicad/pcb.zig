@@ -216,6 +216,7 @@ pub const E_pad_property = enum {
     pad_prop_castellated,
     pad_prop_heatsink,
     pad_prop_mechanical,
+    pad_prop_pressfit,
     none,
 };
 
@@ -693,8 +694,9 @@ pub const PadPadstack = struct {
 };
 
 // Field order = the KiCad 10.0.3 pad emission order (pcb_io_kicad_sexpr
-// format(PAD) :1698-2185): ... options, primitives, teardrops, tenting,
-// uuid, padstack.
+// format(PAD) :1698-2185): ... drill, backdrill, tertiary_drill,
+// front_post_machining, back_post_machining, property, layers, ...,
+// options, primitives, teardrops, tenting, uuid, padstack.
 pub const Pad = struct {
     name: str,
     type: E_pad_type,
@@ -703,6 +705,14 @@ pub const Pad = struct {
     size: Wh,
     rect_delta: ?Xy = null,
     drill: ?PadDrill = null,
+    // Pad-level hole treatments, same grammar as the via-level ones (10.0.3
+    // format(PAD) :1735-1777 / parsePAD): backdrill + tertiary_drill reuse
+    // Backdrill, front/back_post_machining reuse PostMachining.
+    backdrill: ?Backdrill = null,
+    tertiary_drill: ?Backdrill = null,
+    front_post_machining: ?PostMachining = null,
+    back_post_machining: ?PostMachining = null,
+    properties: ?E_pad_property = null,
     layers: list(str) = .{},
     remove_unused_layers: ?bool = null,
     keep_end_layers: ?bool = null,
@@ -726,7 +736,6 @@ pub const Pad = struct {
     thermal_bridge_width: ?f64 = null,
     thermal_bridge_angle: ?f64 = null,
     thermal_gap: ?f64 = null,
-    properties: ?E_pad_property = null,
     options: ?PadOptions = null,
     primitives: ?PadPrimitives = null,
     teardrops: ?Teardrop = null,
@@ -859,11 +868,13 @@ pub const Footprint = struct {
     // (writer :1248); absent when the footprint has no static classes.
     component_classes: ?FootprintComponentClasses = null,
     attr: list(E_Attr) = .{},
-    duplicate_pad_numbers_are_jumpers: ?bool = null,
     // net-tie groups: (net_tie_pad_groups "1,2" "3,4"). The sibling
     // jumper_pad_groups construct nests headless lists — ("1" "2") — which
     // the schema engine cannot represent; it stays S5a-loud by decision.
+    // Emitted BEFORE duplicate_pad_numbers_are_jumpers (10.0.3 footprint
+    // writer :1390 vs :1398).
     net_tie_pad_groups: list(str) = .{},
+    duplicate_pad_numbers_are_jumpers: ?bool = null,
     fp_lines: list(Line) = .{},
     fp_arcs: list(Arc) = .{},
     fp_circles: list(Circle) = .{},

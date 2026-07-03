@@ -167,6 +167,33 @@
   },
   {
    "at": [
+    122.0,
+    100.0,
+    0.0
+   ],
+   "layer": "F.Cu",
+   "name": "TestPoint:TestPoint_THTPad_D1.5mm_Drill0.7mm",
+   "pads": [
+    {
+     "at": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "*.Cu",
+      "*.Mask"
+     ],
+     "name": "1",
+     "net": "B",
+     "padstack": null,
+     "teardrops": null
+    }
+   ],
+   "reference": "P7"
+  },
+  {
+   "at": [
     121.0,
     93.6,
     0.0

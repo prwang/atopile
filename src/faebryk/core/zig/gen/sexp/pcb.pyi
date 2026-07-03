@@ -99,6 +99,7 @@ class E_pad_property(str, Enum):
     PAD_PROP_CASTELLATED = "pad_prop_castellated"
     PAD_PROP_HEATSINK = "pad_prop_heatsink"
     PAD_PROP_MECHANICAL = "pad_prop_mechanical"
+    PAD_PROP_PRESSFIT = "pad_prop_pressfit"
     NONE = "none"
 
 class E_pad_chamfer_corner(str, Enum):
@@ -798,6 +799,11 @@ class Pad:
     size: Wh
     rect_delta: Xy | None
     drill: PadDrill | None
+    backdrill: Backdrill | None
+    tertiary_drill: Backdrill | None
+    front_post_machining: PostMachining | None
+    back_post_machining: PostMachining | None
+    properties: str | None
     layers: list[str]
     remove_unused_layers: bool | None
     keep_end_layers: bool | None
@@ -818,7 +824,6 @@ class Pad:
     thermal_bridge_width: float | None
     thermal_bridge_angle: float | None
     thermal_gap: float | None
-    properties: str | None
     options: PadOptions | None
     primitives: PadPrimitives | None
     teardrops: Teardrop | None
@@ -836,6 +841,11 @@ class Pad:
         size: Wh,
         rect_delta: Xy | None,
         drill: PadDrill | None,
+        backdrill: Backdrill | None,
+        tertiary_drill: Backdrill | None,
+        front_post_machining: PostMachining | None,
+        back_post_machining: PostMachining | None,
+        properties: str | None,
         layers: list[str],
         remove_unused_layers: bool | None,
         keep_end_layers: bool | None,
@@ -856,7 +866,6 @@ class Pad:
         thermal_bridge_width: float | None,
         thermal_bridge_angle: float | None,
         thermal_gap: float | None,
-        properties: str | None,
         options: PadOptions | None,
         primitives: PadPrimitives | None,
         teardrops: Teardrop | None,
@@ -981,8 +990,8 @@ class Footprint:
     propertys: list[Property]
     component_classes: FootprintComponentClasses | None
     attr: list[str]
-    duplicate_pad_numbers_are_jumpers: bool | None
     net_tie_pad_groups: list[str]
+    duplicate_pad_numbers_are_jumpers: bool | None
     fp_lines: list[Line]
     fp_arcs: list[Arc]
     fp_circles: list[Circle]
@@ -1010,8 +1019,8 @@ class Footprint:
         propertys: list[Property],
         component_classes: FootprintComponentClasses | None,
         attr: list[str],
-        duplicate_pad_numbers_are_jumpers: bool | None,
         net_tie_pad_groups: list[str],
+        duplicate_pad_numbers_are_jumpers: bool | None,
         fp_lines: list[Line],
         fp_arcs: list[Arc],
         fp_circles: list[Circle],
