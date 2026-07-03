@@ -152,11 +152,13 @@ class LayoutSync:
                     # Match by size if multiple pads with same number
                     best_match = min(
                         tgt_pads,
-                        key=lambda p: abs(p.size.w - src_pad.size.w)
-                        + (
-                            abs(p.size.h - src_pad.size.h)
-                            if p.size.h and src_pad.size.h
-                            else 0
+                        key=lambda p: (
+                            abs(p.size.w - src_pad.size.w)
+                            + (
+                                abs(p.size.h - src_pad.size.h)
+                                if p.size.h and src_pad.size.h
+                                else 0
+                            )
                         ),
                     )
                     tgt_pad = best_match
@@ -257,6 +259,9 @@ class LayoutSync:
         offset: kicad.pcb.Xy,
     ):
         new_objects = []
+        # source track uuid -> pulled-copy uuid; consumed by the generated
+        # (tuning pattern) pull below, whose members reference tracks by uuid.
+        pulled_uuids: dict[str, str] = {}
         for track in chain(sub_pcb.segments, sub_pcb.arcs, sub_pcb.zones, sub_pcb.vias):
             # Get source net name
             sub_net: kicad.pcb.Net | None = find_or(
@@ -277,8 +282,16 @@ class LayoutSync:
                 new_track.net = self._get_net_number(top_pcb, net_map[sub_net.name])
                 if isinstance(new_track, kicad.pcb.Zone):
                     new_track.net_name = net_map[sub_net.name]
-            elif not isinstance(new_track, kicad.pcb.Zone):
-                # S5a: a track whose net cannot be mapped to the top board must
+            elif isinstance(new_track, kicad.pcb.Zone) and track.net == 0:
+                # Only a zone that was GENUINELY net-0 in the source (keepout /
+                # rule area) passes through unmapped; the copy already carries
+                # net 0. A real-but-unmappable-net zone falls into the loud
+                # drop below instead — pulling it as net-0 would be silent
+                # dead copper (net-full zones, e.g. teardrop zones, lose their
+                # fill: KiCad GCs net-0 copper on save).
+                pass
+            else:
+                # S5a: copper whose net cannot be mapped to the top board must
                 # NOT be pulled as net-0 dead copper — KiCad GC's net-0 dangling
                 # copper on save, and until then it silently shorts whatever it
                 # crosses (empirically: relic segments overlapping pads, DRC
@@ -290,14 +303,76 @@ class LayoutSync:
                     "mapping (a net-less track is dead copper)"
                 )
                 continue
-            else:
-                # a zone may legitimately carry net 0 (keepouts); keep behavior.
-                new_track.net = 0
 
             PCB_Transformer.move_object(new_track, offset)
+            if track.uuid:
+                pulled_uuids[track.uuid] = new_track.uuid
             new_objects.append(new_track)
 
+        new_objects.extend(
+            self._sync_generateds(sub_pcb, net_map, offset, pulled_uuids)
+        )
+
         return new_objects
+
+    def _sync_generateds(
+        self,
+        sub_pcb: PCB,
+        net_map: dict[str, str],
+        offset: kicad.pcb.Xy,
+        pulled_uuids: dict[str, str],
+    ) -> list["kicad.pcb.Generated"]:
+        """Pull tuning-pattern generateds whose member tracks were ALL pulled,
+        remapping member uuids to the pulled copies.
+
+        A generated with only partially pulled members is dropped LOUDLY: half
+        a tuning pattern is meaningless — its properties (base_line, targets,
+        amplitudes) describe the complete member track set, so a subset can
+        neither be displayed nor re-tuned coherently by KiCad. Empty-member
+        generateds are dropped the same way (KiCad itself refuses to save
+        them). Silent options (pulling with dangling source-board member uuids,
+        or quietly skipping) violate loud-or-nothing."""
+        new_generateds = []
+        for gen in sub_pcb.generateds:
+            members = list(gen.members)
+            pulled = [m for m in members if m in pulled_uuids]
+            if not members or len(pulled) != len(members):
+                logger.warning(
+                    f"reuse pull: dropping generated {gen.type} '{gen.name}' on "
+                    f"{gen.layer} — {len(pulled)}/{len(members)} member tracks "
+                    "pulled (a partial tuning pattern is meaningless)"
+                )
+                continue
+
+            new_gen = kicad.copy(gen)
+            new_gen.uuid = kicad.gen_uuid()
+            new_gen.members = [pulled_uuids[m] for m in members]
+            # last_netname is KiCad's status cache of the tuned net; remap it
+            # alongside the member tracks' nets (all members were pulled, so
+            # their net mapped — an unmapped last_netname here can only be a
+            # stale cache, which KiCad recomputes on the next tune).
+            if gen.last_netname is not None and gen.last_netname in net_map:
+                new_gen.last_netname = net_map[gen.last_netname]
+            self._move_generated(new_gen, offset)
+            new_generateds.append(new_gen)
+
+        return new_generateds
+
+    @staticmethod
+    def _move_generated(gen: "kicad.pcb.Generated", offset: kicad.pcb.Xy) -> None:
+        """Translate a generated's own geometry by `offset`.
+
+        transformer.move_object only knows copper/graphics; a tuning pattern's
+        geometry lives in its xy/pts property wrappers (origin/end/base_line/
+        base_line_coupled) and must move with the member tracks."""
+        for xy_field in ("origin", "end"):
+            wrapper = getattr(gen, xy_field)
+            if wrapper is not None:
+                wrapper.xy = kicad.geo.add(wrapper.xy, offset)
+        for pts_field in ("base_line", "base_line_coupled"):
+            wrapper = getattr(gen, pts_field)
+            if wrapper is not None:
+                wrapper.pts.xys = [kicad.geo.add(pt, offset) for pt in wrapper.pts.xys]
 
     def _sync_other(self, sub_pcb: PCB, top_pcb: PCB, offset: kicad.pcb.Xy):
         new_graphics = []
@@ -377,11 +452,20 @@ class LayoutSync:
         footprints. Inter-room nets (pads in two rooms) and a sibling room's nets
         are NOT deleted — this is strictly safer than the old membership-based
         clean, which deleted whatever a group happened to list. Footprints are
-        never deleted (they are repositioned by the pull)."""
+        never deleted (they are repositioned by the pull).
+
+        Intra-room-net ZONES include teardrop zones (net-full zones with
+        attr.teardrop): deleting them here is intentional — teardrops are
+        derived copper attached to the deleted tracks, and the re-pull
+        (`_sync_routes`) copies the source board's teardrop zones back with
+        attr.teardrop intact and the net remapped.
+
+        A generated (tuning pattern) whose member tracks are deleted here is
+        deleted WITH them, loudly: its members would otherwise dangle, and
+        KiCad refuses to save empty-member tuning patterns. The re-pull
+        restores source-board generateds via `_sync_generateds`."""
         pcb = self.pcb
-        room_fp_uuids = {
-            fp.uuid for fp in pcb.footprints if fp.sheetname == room_name
-        }
+        room_fp_uuids = {fp.uuid for fp in pcb.footprints if fp.sheetname == room_name}
         if not room_fp_uuids:
             return
 
@@ -394,13 +478,32 @@ class LayoutSync:
                     bucket.add(pad.net.number)
         intra = inside - outside
 
+        deleted_uuids: set[str] = set()
         for container, name in [
             (pcb.segments, "segments"),
             (pcb.arcs, "arcs"),
             (pcb.vias, "vias"),
             (pcb.zones, "zones"),
         ]:
+            deleted_uuids.update(x.uuid for x in container if x.net in intra and x.uuid)
             kicad.filter(pcb, name, container, lambda x: x.net not in intra)
+
+        if not deleted_uuids:
+            return
+        doomed = {
+            gen.uuid for gen in pcb.generateds if set(gen.members) & deleted_uuids
+        }
+        if not doomed:
+            return
+        for gen in pcb.generateds:
+            if gen.uuid in doomed:
+                logger.warning(
+                    f"room clean '{room_name}': deleting generated {gen.type} "
+                    f"'{gen.name}' on {gen.layer} — its member tracks were "
+                    "intra-room copper (dangling members are unsaveable; the "
+                    "re-pull restores the source board's tuning patterns)"
+                )
+        kicad.filter(pcb, "generateds", pcb.generateds, lambda g: g.uuid not in doomed)
 
     def pull_room_layout(self, room_name: str):
         """Pull layout for a specific room from its source file (BACKLOG §C3)."""
@@ -447,6 +550,11 @@ class LayoutSync:
         # on each footprint's sheetname (set by sync_rooms), so the old
         # member-sort determinism guard (A1/A3) is obsolete.
         for new_element in new_fps + new_routes + new_other:
+            if isinstance(new_element, kicad.pcb.Generated):
+                # transformer.get_pcb_container doesn't know generateds (only
+                # layout_sync creates them); file position is schema-driven.
+                kicad.insert(top_pcb, "generateds", top_pcb.generateds, new_element)
+                continue
             container, container_name = PCB_Transformer.get_pcb_container(
                 new_element, top_pcb
             )
