@@ -410,6 +410,106 @@
   }
  ],
  "footprints": [],
+ "generateds": [
+  {
+   "base_line": [
+    [
+     115.571487,
+     50.14
+    ],
+    [
+     123.13735,
+     50.14
+    ]
+   ],
+   "base_line_coupled": null,
+   "corner_radius_percent": 100.0,
+   "end": [
+    123.13735,
+    50.14
+   ],
+   "initial_side": "left",
+   "is_time_domain": false,
+   "last_diff_pair_gap": 0.18,
+   "last_netname": "",
+   "last_status": "too_short",
+   "last_track_width": 0.2,
+   "last_tuning_length": 0.0,
+   "layer": "F.Cu",
+   "locked": null,
+   "max_amplitude": 2.0,
+   "members": [
+    "0376a7f9-ca8e-458b-9d43-8cd3a2a6bc63",
+    "0461661b-2681-445d-844d-36fe87fd5675",
+    "06764c74-03e5-4cdd-9d3c-66a9449a0b79",
+    "19d41ad9-cced-4f7a-b477-770f3747302b",
+    "23598711-1292-428d-920c-a74be818ad7e",
+    "2f6798f2-7245-45ac-b638-798d5cc07bf0",
+    "32dfa4c2-9427-47a8-bd2d-ceb643557c88",
+    "3b913f43-9eae-4c65-9978-5b8d339e4163",
+    "3d5e09fa-3d6d-4ef1-914a-0f5c228935f9",
+    "44d73d7d-cf4f-4327-b231-2463bdfe4326",
+    "48626af6-29e2-4f63-9d3e-122aa7b4ab9c",
+    "4a64cb98-0cb5-4e84-be7d-331ff151461c",
+    "4b411291-a17e-456b-a755-a48e9631eb4a",
+    "4e879df0-63f3-4cb5-9164-ba33f0b14629",
+    "588a4917-59d3-4955-9add-663bc4767847",
+    "59b90d87-2f26-45db-9ce8-68ce8720ea38",
+    "6f4c6cc9-69de-4bc5-af94-c19e9090a86d",
+    "71f8bf22-de50-41c8-825f-904f110a02bf",
+    "7269ec18-3e42-46f7-847b-da594f31ad8f",
+    "72c5d2fa-96ad-46fa-b509-ba435bef0d9f",
+    "767c8903-fd9f-4b6f-928b-98dd2c7597aa",
+    "7e47bebe-0dd6-4cfd-94dc-ee99962d4434",
+    "81aa3b3f-7131-448f-81ce-e2677966b704",
+    "9059e5ed-2aca-4368-82ba-41b385dc3811",
+    "91c3b598-b183-4c54-a5ba-e81d86f8b752",
+    "93331fa0-f088-494f-bb3f-3176a38bbf75",
+    "93ffb905-f4d4-4d6f-9d14-0d9786a08101",
+    "9568f820-d1e6-490c-ba36-a4f2bbd6740c",
+    "9a9a8f38-4d0b-433a-b590-5d7512f8439b",
+    "9f8c447b-e5c8-4000-a9a1-c72d9bea35fb",
+    "a33210e6-9f45-4513-9f49-0851a05915d6",
+    "a4375fde-a926-4e9f-bce5-e55f71434880",
+    "a697b4a2-c596-4045-9f46-e645ac352ae2",
+    "a764fcd6-6263-450e-b747-c64338e0d901",
+    "a8d58e65-4b30-4eb5-84c7-aee72c58f2ec",
+    "a9194b6b-c1cb-4532-812c-d60b7a2c3e42",
+    "b0d4aab8-c57b-40b9-9c8b-1f3eb20c6447",
+    "bf81b70e-6c92-4fa5-9780-102df6c38109",
+    "c05fe201-beaa-4f3d-8f86-2c044c39a7ad",
+    "c57febd1-a087-4666-84b8-277ae6bc22d2",
+    "d6d9b09a-5a95-454c-82fb-b8e919d934e0",
+    "dabeb0f1-d930-4995-8ecf-a4549a0b252f",
+    "db664cf3-f269-4ad7-a42c-5f1e0f68c331",
+    "deea7a88-92cb-4b2d-944a-56499ad070bc",
+    "eab2f350-d181-4351-8fe1-1d59f4400931",
+    "ee8ed2c3-24bd-4b28-a241-887d40cca598",
+    "faa07f56-f9fe-4e13-88c3-8d80b6691460"
+   ],
+   "min_amplitude": 0.2,
+   "min_spacing": 0.6,
+   "name": "Tuning Pattern",
+   "origin": [
+    115.571487,
+    50.14
+   ],
+   "override_custom_rules": false,
+   "rounded": true,
+   "single_sided": false,
+   "target_delay": 100.1,
+   "target_delay_max": 100.2,
+   "target_delay_min": 100.0,
+   "target_length": 100.0,
+   "target_length_max": 100.1,
+   "target_length_min": 99.9,
+   "target_skew": 0.0,
+   "target_skew_max": 0.1,
+   "target_skew_min": -0.1,
+   "tuning_mode": "single",
+   "type": "tuning_pattern"
+  }
+ ],
  "groups": [],
  "nets": [],
  "segments": [
@@ -739,7 +839,7 @@
    "width": 0.2
   }
  ],
- "semantic_view_version": 1,
+ "semantic_view_version": 2,
  "vias": [],
  "zones": []
 }

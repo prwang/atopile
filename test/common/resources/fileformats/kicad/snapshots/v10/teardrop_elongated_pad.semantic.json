@@ -20,12 +20,25 @@
       "B.Cu"
      ],
      "name": "7",
-     "net": "/CAN2L"
+     "net": "/CAN2L",
+     "padstack": null,
+     "teardrops": {
+      "allow_two_segments": true,
+      "best_length_ratio": 0.5,
+      "best_width_ratio": 1.0,
+      "curved_edges": true,
+      "enabled": true,
+      "filter_ratio": 0.9,
+      "max_length": 1.0,
+      "max_width": 2.0,
+      "prefer_zone_connections": true
+     }
     }
    ],
    "reference": "J1"
   }
  ],
+ "generateds": [],
  "groups": [],
  "nets": [
   "/CAN2L"
@@ -58,7 +71,7 @@
    "width": 0.1
   }
  ],
- "semantic_view_version": 1,
+ "semantic_view_version": 2,
  "vias": [],
  "zones": []
 }

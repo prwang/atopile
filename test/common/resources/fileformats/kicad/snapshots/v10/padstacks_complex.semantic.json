@@ -21,7 +21,40 @@
       "*.Mask"
      ],
      "name": "3",
-     "net": ""
+     "net": "",
+     "padstack": {
+      "layers": [
+       {
+        "name": "B.Cu",
+        "offset": null,
+        "shape": "rect",
+        "size": [
+         1.524,
+         1.524
+        ]
+       },
+       {
+        "name": "In1.Cu",
+        "offset": null,
+        "shape": "rect",
+        "size": [
+         1.016,
+         1.016
+        ]
+       },
+       {
+        "name": "In2.Cu",
+        "offset": null,
+        "shape": "rect",
+        "size": [
+         1.27,
+         0.0
+        ]
+       }
+      ],
+      "mode": "custom"
+     },
+     "teardrops": null
     }
    ],
    "reference": ""
@@ -46,7 +79,31 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": ""
+     "net": "",
+     "padstack": {
+      "layers": [
+       {
+        "name": "B.Cu",
+        "offset": null,
+        "shape": "oval",
+        "size": [
+         2.54,
+         1.016
+        ]
+       },
+       {
+        "name": "Inner",
+        "offset": null,
+        "shape": "oval",
+        "size": [
+         1.27,
+         1.27
+        ]
+       }
+      ],
+      "mode": "front_inner_back"
+     },
+     "teardrops": null
     }
    ],
    "reference": ""
@@ -71,7 +128,40 @@
       "*.Mask"
      ],
      "name": "4",
-     "net": ""
+     "net": "",
+     "padstack": {
+      "layers": [
+       {
+        "name": "B.Cu",
+        "offset": null,
+        "shape": "rect",
+        "size": [
+         1.524,
+         1.524
+        ]
+       },
+       {
+        "name": "In1.Cu",
+        "offset": null,
+        "shape": "rect",
+        "size": [
+         1.016,
+         1.016
+        ]
+       },
+       {
+        "name": "In2.Cu",
+        "offset": null,
+        "shape": "rect",
+        "size": [
+         1.27,
+         0.0
+        ]
+       }
+      ],
+      "mode": "custom"
+     },
+     "teardrops": null
     }
    ],
    "reference": ""
@@ -96,16 +186,41 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": ""
+     "net": "",
+     "padstack": {
+      "layers": [
+       {
+        "name": "B.Cu",
+        "offset": null,
+        "shape": "roundrect",
+        "size": [
+         1.27,
+         0.635
+        ]
+       },
+       {
+        "name": "Inner",
+        "offset": null,
+        "shape": "roundrect",
+        "size": [
+         1.016,
+         1.016
+        ]
+       }
+      ],
+      "mode": "front_inner_back"
+     },
+     "teardrops": null
     }
    ],
    "reference": ""
   }
  ],
+ "generateds": [],
  "groups": [],
  "nets": [],
  "segments": [],
- "semantic_view_version": 1,
+ "semantic_view_version": 2,
  "vias": [],
  "zones": []
 }

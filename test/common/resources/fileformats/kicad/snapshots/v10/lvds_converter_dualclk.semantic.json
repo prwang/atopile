@@ -22,7 +22,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -36,7 +38,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "/GND"
+     "net": "/GND",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "C2"
@@ -62,7 +66,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -76,7 +82,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "/GND"
+     "net": "/GND",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "C3"
@@ -102,7 +110,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -116,7 +126,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "/GND"
+     "net": "/GND",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "C4"
@@ -142,7 +154,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -156,7 +170,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "/GND"
+     "net": "/GND",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "C5"
@@ -182,7 +198,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -196,7 +214,9 @@
       "F.Paste"
      ],
      "name": "10",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -210,7 +230,9 @@
       "F.Paste"
      ],
      "name": "11",
-     "net": "/CLK_N"
+     "net": "/CLK_N",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -224,7 +246,9 @@
       "F.Paste"
      ],
      "name": "12",
-     "net": "/Q1"
+     "net": "/Q1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -238,7 +262,9 @@
       "F.Paste"
      ],
      "name": "13",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -252,7 +278,9 @@
       "F.Paste"
      ],
      "name": "14",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -266,7 +294,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "/DATA"
+     "net": "/DATA",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -280,7 +310,9 @@
       "F.Paste"
      ],
      "name": "3",
-     "net": "/CLK_N"
+     "net": "/CLK_N",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -294,7 +326,9 @@
       "F.Paste"
      ],
      "name": "4",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -308,7 +342,9 @@
       "F.Paste"
      ],
      "name": "5",
-     "net": "/OUT_B"
+     "net": "/OUT_B",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -322,7 +358,9 @@
       "F.Paste"
      ],
      "name": "6",
-     "net": "unconnected-(IC2-1~{Q}-Pad6)"
+     "net": "unconnected-(IC2-1~{Q}-Pad6)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -336,7 +374,9 @@
       "F.Paste"
      ],
      "name": "7",
-     "net": "/GND"
+     "net": "/GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -350,7 +390,9 @@
       "F.Paste"
      ],
      "name": "8",
-     "net": "unconnected-(IC2-2~{Q}-Pad8)"
+     "net": "unconnected-(IC2-2~{Q}-Pad8)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -364,7 +406,9 @@
       "F.Paste"
      ],
      "name": "9",
-     "net": "/OUT_A"
+     "net": "/OUT_A",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "IC2"
@@ -390,7 +434,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -404,7 +450,9 @@
       "F.Paste"
      ],
      "name": "10",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -418,7 +466,9 @@
       "F.Paste"
      ],
      "name": "11",
-     "net": "/GND"
+     "net": "/GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -432,7 +482,9 @@
       "F.Paste"
      ],
      "name": "12",
-     "net": "/GND"
+     "net": "/GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -446,7 +498,9 @@
       "F.Paste"
      ],
      "name": "13",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -460,7 +514,9 @@
       "F.Paste"
      ],
      "name": "14",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -474,7 +530,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "/DATA"
+     "net": "/DATA",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -488,7 +546,9 @@
       "F.Paste"
      ],
      "name": "3",
-     "net": "/CLK"
+     "net": "/CLK",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -502,7 +562,9 @@
       "F.Paste"
      ],
      "name": "4",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -516,7 +578,9 @@
       "F.Paste"
      ],
      "name": "5",
-     "net": "/Q1"
+     "net": "/Q1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -530,7 +594,9 @@
       "F.Paste"
      ],
      "name": "6",
-     "net": "unconnected-(IC3-1~{Q}-Pad6)"
+     "net": "unconnected-(IC3-1~{Q}-Pad6)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -544,7 +610,9 @@
       "F.Paste"
      ],
      "name": "7",
-     "net": "/GND"
+     "net": "/GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -558,7 +626,9 @@
       "F.Paste"
      ],
      "name": "8",
-     "net": "unconnected-(IC3-2~{Q}-Pad8)"
+     "net": "unconnected-(IC3-2~{Q}-Pad8)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -572,7 +642,9 @@
       "F.Paste"
      ],
      "name": "9",
-     "net": "unconnected-(IC3-2Q-Pad9)"
+     "net": "unconnected-(IC3-2Q-Pad9)",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "IC3"
@@ -598,7 +670,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "/CLK-"
+     "net": "/CLK-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -612,7 +686,9 @@
       "F.Paste"
      ],
      "name": "10",
-     "net": "/DATA+"
+     "net": "/DATA+",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -626,7 +702,9 @@
       "F.Paste"
      ],
      "name": "11",
-     "net": "/DATA"
+     "net": "/DATA",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -640,7 +718,9 @@
       "F.Paste"
      ],
      "name": "12",
-     "net": "/GND"
+     "net": "/GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -654,7 +734,9 @@
       "F.Paste"
      ],
      "name": "13",
-     "net": "unconnected-(IC4-ROUT4-Pad13)"
+     "net": "unconnected-(IC4-ROUT4-Pad13)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -668,7 +750,9 @@
       "F.Paste"
      ],
      "name": "14",
-     "net": "unconnected-(IC4-RIN4+-Pad14)"
+     "net": "unconnected-(IC4-RIN4+-Pad14)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -682,7 +766,9 @@
       "F.Paste"
      ],
      "name": "15",
-     "net": "unconnected-(IC4-RIN4--Pad15)"
+     "net": "unconnected-(IC4-RIN4--Pad15)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -696,7 +782,9 @@
       "F.Paste"
      ],
      "name": "16",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -710,7 +798,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "/CLK+"
+     "net": "/CLK+",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -724,7 +814,9 @@
       "F.Paste"
      ],
      "name": "3",
-     "net": "/CLK"
+     "net": "/CLK",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -738,7 +830,9 @@
       "F.Paste"
      ],
      "name": "4",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -752,7 +846,9 @@
       "F.Paste"
      ],
      "name": "5",
-     "net": "/CLK_N"
+     "net": "/CLK_N",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -766,7 +862,9 @@
       "F.Paste"
      ],
      "name": "6",
-     "net": "/CLK-"
+     "net": "/CLK-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -780,7 +878,9 @@
       "F.Paste"
      ],
      "name": "7",
-     "net": "/CLK+"
+     "net": "/CLK+",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -794,7 +894,9 @@
       "F.Paste"
      ],
      "name": "8",
-     "net": "/GND"
+     "net": "/GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -808,7 +910,9 @@
       "F.Paste"
      ],
      "name": "9",
-     "net": "/DATA-"
+     "net": "/DATA-",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "IC4"
@@ -833,7 +937,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "/CLK-"
+     "net": "/CLK-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -846,7 +952,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "/CLK+"
+     "net": "/CLK+",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -859,7 +967,9 @@
       "*.Mask"
      ],
      "name": "3",
-     "net": "/GND"
+     "net": "/GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -872,7 +982,9 @@
       "*.Mask"
      ],
      "name": "4",
-     "net": "/DATA-"
+     "net": "/DATA-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -885,7 +997,9 @@
       "*.Mask"
      ],
      "name": "5",
-     "net": "/DATA+"
+     "net": "/DATA+",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -898,7 +1012,9 @@
       "*.Mask"
      ],
      "name": "6",
-     "net": "/GND"
+     "net": "/GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -911,7 +1027,9 @@
       "*.Mask"
      ],
      "name": "7",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -924,7 +1042,9 @@
       "*.Mask"
      ],
      "name": "8",
-     "net": "/GND"
+     "net": "/GND",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "J1"
@@ -949,7 +1069,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "/GND"
+     "net": "/GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -962,7 +1084,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "/VCC"
+     "net": "/VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -975,7 +1099,9 @@
       "*.Mask"
      ],
      "name": "3",
-     "net": "/Q1"
+     "net": "/Q1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -988,7 +1114,9 @@
       "*.Mask"
      ],
      "name": "4",
-     "net": "/OUT_B_R"
+     "net": "/OUT_B_R",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1001,7 +1129,9 @@
       "*.Mask"
      ],
      "name": "5",
-     "net": "/OUT_A_R"
+     "net": "/OUT_A_R",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1014,7 +1144,9 @@
       "*.Mask"
      ],
      "name": "6",
-     "net": "/CLK_N"
+     "net": "/CLK_N",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1027,7 +1159,9 @@
       "*.Mask"
      ],
      "name": "7",
-     "net": "/DATA"
+     "net": "/DATA",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1040,7 +1174,9 @@
       "*.Mask"
      ],
      "name": "8",
-     "net": "/CLK"
+     "net": "/CLK",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "J2"
@@ -1066,7 +1202,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "/OUT_B"
+     "net": "/OUT_B",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1080,7 +1218,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "/OUT_B_R"
+     "net": "/OUT_B_R",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R1"
@@ -1106,7 +1246,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "/OUT_A"
+     "net": "/OUT_A",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1120,7 +1262,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "/OUT_A_R"
+     "net": "/OUT_A_R",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R2"
@@ -1146,7 +1290,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "/CLK+"
+     "net": "/CLK+",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1160,7 +1306,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "/CLK-"
+     "net": "/CLK-",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R3"
@@ -1186,7 +1334,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "/DATA+"
+     "net": "/DATA+",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1200,12 +1350,15 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "/DATA-"
+     "net": "/DATA-",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R4"
   }
  ],
+ "generateds": [],
  "groups": [],
  "nets": [
   "/CLK",
@@ -1232,7 +1385,7 @@
   "unconnected-(IC4-ROUT4-Pad13)"
  ],
  "segments": [],
- "semantic_view_version": 1,
+ "semantic_view_version": 2,
  "vias": [],
  "zones": [
   {
@@ -1260,7 +1413,8 @@
      0.3,
      -0.3
     ]
-   ]
+   ],
+   "teardrop_type": null
   }
  ]
 }

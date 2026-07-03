@@ -21,7 +21,9 @@
       "F.Mask"
      ],
      "name": "1",
-     "net": ""
+     "net": "",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "P1"
@@ -46,7 +48,9 @@
       "F.Mask"
      ],
      "name": "1",
-     "net": ""
+     "net": "",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "P2"
@@ -72,7 +76,9 @@
       "F.Paste"
      ],
      "name": "Pad",
-     "net": ""
+     "net": "",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "P3"
@@ -99,7 +105,9 @@
       "F.Paste"
      ],
      "name": "Pad",
-     "net": ""
+     "net": "",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "P4"
@@ -123,7 +131,9 @@
       "F.Cu"
      ],
      "name": "2",
-     "net": ""
+     "net": "",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "P5"
@@ -148,7 +158,9 @@
       "F.Mask"
      ],
      "name": "1",
-     "net": ""
+     "net": "",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "P6"
@@ -173,7 +185,9 @@
       "F.Mask"
      ],
      "name": "1",
-     "net": ""
+     "net": "",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -186,19 +200,22 @@
       "F.Mask"
      ],
      "name": "2",
-     "net": ""
+     "net": "",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "SB1"
   }
  ],
+ "generateds": [],
  "groups": [],
  "nets": [
   "A",
   "B"
  ],
  "segments": [],
- "semantic_view_version": 1,
+ "semantic_view_version": 2,
  "vias": [
   {
    "at": [
@@ -211,7 +228,30 @@
     "F.Cu"
    ],
    "net": "",
-   "size": 0.6
+   "padstack": null,
+   "size": 0.6,
+   "teardrops": null,
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": false,
+    "covering": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "filling": false,
+    "front_post_machining": null,
+    "plugging": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "start_end_only": null,
+    "tenting": null,
+    "tertiary_drill": null
+   },
+   "type": "blind"
   },
   {
    "at": [
@@ -224,7 +264,30 @@
     "In4.Cu"
    ],
    "net": "",
-   "size": 0.6
+   "padstack": null,
+   "size": 0.6,
+   "teardrops": null,
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": false,
+    "covering": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "filling": false,
+    "front_post_machining": null,
+    "plugging": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "start_end_only": null,
+    "tenting": null,
+    "tertiary_drill": null
+   },
+   "type": "blind"
   },
   {
    "at": [
@@ -237,7 +300,30 @@
     "In3.Cu"
    ],
    "net": "",
-   "size": 0.6
+   "padstack": null,
+   "size": 0.6,
+   "teardrops": null,
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": false,
+    "covering": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "filling": false,
+    "front_post_machining": null,
+    "plugging": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "start_end_only": null,
+    "tenting": null,
+    "tertiary_drill": null
+   },
+   "type": "blind"
   },
   {
    "at": [
@@ -250,7 +336,30 @@
     "In3.Cu"
    ],
    "net": "",
-   "size": 0.6
+   "padstack": null,
+   "size": 0.6,
+   "teardrops": null,
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": false,
+    "covering": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "filling": false,
+    "front_post_machining": null,
+    "plugging": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "start_end_only": null,
+    "tenting": null,
+    "tertiary_drill": null
+   },
+   "type": "blind"
   },
   {
    "at": [
@@ -263,7 +372,30 @@
     "F.Cu"
    ],
    "net": "A",
-   "size": 0.6
+   "padstack": null,
+   "size": 0.6,
+   "teardrops": null,
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": false,
+    "covering": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "filling": false,
+    "front_post_machining": null,
+    "plugging": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "start_end_only": null,
+    "tenting": null,
+    "tertiary_drill": null
+   },
+   "type": null
   },
   {
    "at": [
@@ -276,7 +408,30 @@
     "F.Cu"
    ],
    "net": "A",
-   "size": 0.6
+   "padstack": null,
+   "size": 0.6,
+   "teardrops": null,
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": false,
+    "covering": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "filling": false,
+    "front_post_machining": null,
+    "plugging": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "start_end_only": null,
+    "tenting": null,
+    "tertiary_drill": null
+   },
+   "type": null
   },
   {
    "at": [
@@ -289,7 +444,11 @@
     "In4.Cu"
    ],
    "net": "A",
-   "size": 0.6
+   "padstack": null,
+   "size": 0.6,
+   "teardrops": null,
+   "treatments": null,
+   "type": "buried"
   },
   {
    "at": [
@@ -302,7 +461,11 @@
     "In1.Cu"
    ],
    "net": "A",
-   "size": 0.4
+   "padstack": null,
+   "size": 0.4,
+   "teardrops": null,
+   "treatments": null,
+   "type": "micro"
   },
   {
    "at": [
@@ -315,7 +478,22 @@
     "F.Cu"
    ],
    "net": "A",
-   "size": 0.8
+   "padstack": null,
+   "size": 0.8,
+   "teardrops": null,
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": null,
+    "covering": null,
+    "filling": null,
+    "front_post_machining": null,
+    "plugging": null,
+    "start_end_only": true,
+    "tenting": null,
+    "tertiary_drill": null
+   },
+   "type": null
   },
   {
    "at": [
@@ -328,7 +506,23 @@
     "F.Cu"
    ],
    "net": "A",
-   "size": 0.8
+   "padstack": {
+    "layers": [
+     {
+      "name": "B.Cu",
+      "size": 0.7
+     },
+     {
+      "name": "Inner",
+      "size": 0.6
+     }
+    ],
+    "mode": "front_inner_back"
+   },
+   "size": 0.8,
+   "teardrops": null,
+   "treatments": null,
+   "type": null
   },
   {
    "at": [
@@ -341,7 +535,35 @@
     "F.Cu"
    ],
    "net": "A",
-   "size": 0.8
+   "padstack": {
+    "layers": [
+     {
+      "name": "B.Cu",
+      "size": 0.6
+     },
+     {
+      "name": "In1.Cu",
+      "size": 0.55
+     },
+     {
+      "name": "In2.Cu",
+      "size": 0.65
+     },
+     {
+      "name": "In3.Cu",
+      "size": 0.75
+     },
+     {
+      "name": "In4.Cu",
+      "size": 0.7
+     }
+    ],
+    "mode": "custom"
+   },
+   "size": 0.8,
+   "teardrops": null,
+   "treatments": null,
+   "type": null
   },
   {
    "at": [
@@ -354,7 +576,21 @@
     "F.Cu"
    ],
    "net": "A",
-   "size": 0.8
+   "padstack": null,
+   "size": 0.8,
+   "teardrops": {
+    "allow_two_segments": true,
+    "best_length_ratio": 0.45,
+    "best_width_ratio": 0.95,
+    "curved_edges": true,
+    "enabled": true,
+    "filter_ratio": 0.85,
+    "max_length": 1.5,
+    "max_width": 2.5,
+    "prefer_zone_connections": false
+   },
+   "treatments": null,
+   "type": null
   },
   {
    "at": [
@@ -367,7 +603,30 @@
     "F.Cu"
    ],
    "net": "B",
-   "size": 0.6
+   "padstack": null,
+   "size": 0.6,
+   "teardrops": null,
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": false,
+    "covering": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "filling": false,
+    "front_post_machining": null,
+    "plugging": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "start_end_only": null,
+    "tenting": null,
+    "tertiary_drill": null
+   },
+   "type": null
   },
   {
    "at": [
@@ -380,7 +639,30 @@
     "F.Cu"
    ],
    "net": "B",
-   "size": 0.6
+   "padstack": null,
+   "size": 0.6,
+   "teardrops": null,
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": false,
+    "covering": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "filling": false,
+    "front_post_machining": null,
+    "plugging": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "start_end_only": null,
+    "tenting": null,
+    "tertiary_drill": null
+   },
+   "type": null
   },
   {
    "at": [
@@ -393,7 +675,44 @@
     "F.Cu"
    ],
    "net": "B",
-   "size": 0.7
+   "padstack": null,
+   "size": 0.7,
+   "teardrops": {
+    "allow_two_segments": false,
+    "best_length_ratio": 0.42,
+    "best_width_ratio": 1.01,
+    "curved_edges": false,
+    "enabled": true,
+    "filter_ratio": 0.85,
+    "max_length": 0.75,
+    "max_width": 2.3,
+    "prefer_zone_connections": true
+   },
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": false,
+    "covering": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "filling": false,
+    "front_post_machining": null,
+    "plugging": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "start_end_only": null,
+    "tenting": {
+     "back": true,
+     "front": true,
+     "none": false
+    },
+    "tertiary_drill": null
+   },
+   "type": null
   },
   {
    "at": [
@@ -406,7 +725,40 @@
     "F.Cu"
    ],
    "net": "B",
-   "size": 0.7
+   "padstack": null,
+   "size": 0.7,
+   "teardrops": {
+    "allow_two_segments": true,
+    "best_length_ratio": 0.2,
+    "best_width_ratio": 0.8,
+    "curved_edges": true,
+    "enabled": true,
+    "filter_ratio": 0.75,
+    "max_length": 0.0,
+    "max_width": 10.0,
+    "prefer_zone_connections": true
+   },
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": false,
+    "covering": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "filling": false,
+    "front_post_machining": null,
+    "plugging": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "start_end_only": null,
+    "tenting": null,
+    "tertiary_drill": null
+   },
+   "type": null
   },
   {
    "at": [
@@ -419,7 +771,44 @@
     "F.Cu"
    ],
    "net": "B",
-   "size": 0.7
+   "padstack": null,
+   "size": 0.7,
+   "teardrops": {
+    "allow_two_segments": true,
+    "best_length_ratio": 0.2,
+    "best_width_ratio": 0.8,
+    "curved_edges": true,
+    "enabled": true,
+    "filter_ratio": 0.75,
+    "max_length": 0.0,
+    "max_width": 10.0,
+    "prefer_zone_connections": true
+   },
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": false,
+    "covering": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "filling": false,
+    "front_post_machining": null,
+    "plugging": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "start_end_only": null,
+    "tenting": {
+     "back": null,
+     "front": true,
+     "none": false
+    },
+    "tertiary_drill": null
+   },
+   "type": null
   },
   {
    "at": [
@@ -432,7 +821,44 @@
     "F.Cu"
    ],
    "net": "B",
-   "size": 0.7
+   "padstack": null,
+   "size": 0.7,
+   "teardrops": {
+    "allow_two_segments": true,
+    "best_length_ratio": 0.2,
+    "best_width_ratio": 0.8,
+    "curved_edges": true,
+    "enabled": true,
+    "filter_ratio": 0.75,
+    "max_length": 0.0,
+    "max_width": 10.0,
+    "prefer_zone_connections": true
+   },
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": false,
+    "covering": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "filling": false,
+    "front_post_machining": null,
+    "plugging": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "start_end_only": null,
+    "tenting": {
+     "back": true,
+     "front": null,
+     "none": false
+    },
+    "tertiary_drill": null
+   },
+   "type": null
   },
   {
    "at": [
@@ -445,7 +871,30 @@
     "F.Cu"
    ],
    "net": "B",
-   "size": 0.2
+   "padstack": null,
+   "size": 0.2,
+   "teardrops": null,
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": false,
+    "covering": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "filling": false,
+    "front_post_machining": null,
+    "plugging": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "start_end_only": null,
+    "tenting": null,
+    "tertiary_drill": null
+   },
+   "type": "micro"
   },
   {
    "at": [
@@ -458,7 +907,30 @@
     "In4.Cu"
    ],
    "net": "B",
-   "size": 0.2
+   "padstack": null,
+   "size": 0.2,
+   "teardrops": null,
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": false,
+    "covering": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "filling": false,
+    "front_post_machining": null,
+    "plugging": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "start_end_only": null,
+    "tenting": null,
+    "tertiary_drill": null
+   },
+   "type": "micro"
   },
   {
    "at": [
@@ -471,7 +943,34 @@
     "F.Cu"
    ],
    "net": "B",
-   "size": 0.8
+   "padstack": null,
+   "size": 0.8,
+   "teardrops": null,
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": {
+     "layers": [
+      "B.Cu",
+      "In4.Cu"
+     ],
+     "size": 0.9
+    },
+    "capping": null,
+    "covering": null,
+    "filling": null,
+    "front_post_machining": null,
+    "plugging": null,
+    "start_end_only": null,
+    "tenting": null,
+    "tertiary_drill": {
+     "layers": [
+      "F.Cu",
+      "In1.Cu"
+     ],
+     "size": 1.0
+    }
+   },
+   "type": null
   },
   {
    "at": [
@@ -484,7 +983,30 @@
     "In4.Cu"
    ],
    "net": "B",
-   "size": 0.2
+   "padstack": null,
+   "size": 0.2,
+   "teardrops": null,
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": false,
+    "covering": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "filling": false,
+    "front_post_machining": null,
+    "plugging": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "start_end_only": null,
+    "tenting": null,
+    "tertiary_drill": null
+   },
+   "type": "micro"
   },
   {
    "at": [
@@ -497,7 +1019,32 @@
     "F.Cu"
    ],
    "net": "B",
-   "size": 0.8
+   "padstack": null,
+   "size": 0.8,
+   "teardrops": null,
+   "treatments": {
+    "back_post_machining": {
+     "angle": 90.0,
+     "depth": null,
+     "mode": "countersink",
+     "size": 1.1
+    },
+    "backdrill": null,
+    "capping": null,
+    "covering": null,
+    "filling": null,
+    "front_post_machining": {
+     "angle": null,
+     "depth": 0.3,
+     "mode": "counterbore",
+     "size": 1.2
+    },
+    "plugging": null,
+    "start_end_only": null,
+    "tenting": null,
+    "tertiary_drill": null
+   },
+   "type": null
   },
   {
    "at": [
@@ -510,7 +1057,30 @@
     "In3.Cu"
    ],
    "net": "B",
-   "size": 0.3
+   "padstack": null,
+   "size": 0.3,
+   "teardrops": null,
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": false,
+    "covering": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "filling": false,
+    "front_post_machining": null,
+    "plugging": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "start_end_only": null,
+    "tenting": null,
+    "tertiary_drill": null
+   },
+   "type": "micro"
   }
  ],
  "zones": []

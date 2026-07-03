@@ -21,7 +21,9 @@
       "B.Mask"
      ],
      "name": "1",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -34,7 +36,9 @@
       "B.Mask"
      ],
      "name": "10",
-     "net": "unconnected-(BUS1-GND-Pad10)"
+     "net": "unconnected-(BUS1-GND-Pad10)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -47,7 +51,9 @@
       "B.Mask"
      ],
      "name": "11",
-     "net": "unconnected-(BUS1-MEM-Pad11)"
+     "net": "unconnected-(BUS1-MEM-Pad11)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -60,7 +66,9 @@
       "B.Mask"
      ],
      "name": "12",
-     "net": "unconnected-(BUS1-MEM-Pad12)"
+     "net": "unconnected-(BUS1-MEM-Pad12)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -73,7 +81,9 @@
       "B.Mask"
      ],
      "name": "13",
-     "net": "/PC-IOW"
+     "net": "/PC-IOW",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -86,7 +96,9 @@
       "B.Mask"
      ],
      "name": "14",
-     "net": "/PC-IOR"
+     "net": "/PC-IOR",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -99,7 +111,9 @@
       "B.Mask"
      ],
      "name": "15",
-     "net": "unconnected-(BUS1-DACK3-Pad15)"
+     "net": "unconnected-(BUS1-DACK3-Pad15)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -112,7 +126,9 @@
       "B.Mask"
      ],
      "name": "16",
-     "net": "unconnected-(BUS1-DRQ3-Pad16)"
+     "net": "unconnected-(BUS1-DRQ3-Pad16)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -125,7 +141,9 @@
       "B.Mask"
      ],
      "name": "17",
-     "net": "unconnected-(BUS1-DACK1-Pad17)"
+     "net": "unconnected-(BUS1-DACK1-Pad17)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -138,7 +156,9 @@
       "B.Mask"
      ],
      "name": "18",
-     "net": "unconnected-(BUS1-DRQ1-Pad18)"
+     "net": "unconnected-(BUS1-DRQ1-Pad18)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -151,7 +171,9 @@
       "B.Mask"
      ],
      "name": "19",
-     "net": "unconnected-(BUS1-DACK0-Pad19)"
+     "net": "unconnected-(BUS1-DACK0-Pad19)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -164,7 +186,9 @@
       "B.Mask"
      ],
      "name": "2",
-     "net": "/PC-RST"
+     "net": "/PC-RST",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -177,7 +201,9 @@
       "B.Mask"
      ],
      "name": "20",
-     "net": "unconnected-(BUS1-CLK-Pad20)"
+     "net": "unconnected-(BUS1-CLK-Pad20)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -190,7 +216,9 @@
       "B.Mask"
      ],
      "name": "21",
-     "net": "unconnected-(BUS1-IRQ7-Pad21)"
+     "net": "unconnected-(BUS1-IRQ7-Pad21)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -203,7 +231,9 @@
       "B.Mask"
      ],
      "name": "22",
-     "net": "unconnected-(BUS1-IRQ6-Pad22)"
+     "net": "unconnected-(BUS1-IRQ6-Pad22)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -216,7 +246,9 @@
       "B.Mask"
      ],
      "name": "23",
-     "net": "unconnected-(BUS1-IRQ5-Pad23)"
+     "net": "unconnected-(BUS1-IRQ5-Pad23)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -229,7 +261,9 @@
       "B.Mask"
      ],
      "name": "24",
-     "net": "unconnected-(BUS1-IRQ4-Pad24)"
+     "net": "unconnected-(BUS1-IRQ4-Pad24)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -242,7 +276,9 @@
       "B.Mask"
      ],
      "name": "25",
-     "net": "unconnected-(BUS1-IRQ3-Pad25)"
+     "net": "unconnected-(BUS1-IRQ3-Pad25)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -255,7 +291,9 @@
       "B.Mask"
      ],
      "name": "26",
-     "net": "unconnected-(BUS1-DACK2-Pad26)"
+     "net": "unconnected-(BUS1-DACK2-Pad26)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -268,7 +306,9 @@
       "B.Mask"
      ],
      "name": "27",
-     "net": "unconnected-(BUS1-TC-Pad27)"
+     "net": "unconnected-(BUS1-TC-Pad27)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -281,7 +321,9 @@
       "B.Mask"
      ],
      "name": "28",
-     "net": "unconnected-(BUS1-ALE-Pad28)"
+     "net": "unconnected-(BUS1-ALE-Pad28)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -294,7 +336,9 @@
       "B.Mask"
      ],
      "name": "29",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -307,7 +351,9 @@
       "B.Mask"
      ],
      "name": "3",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -320,7 +366,9 @@
       "B.Mask"
      ],
      "name": "30",
-     "net": "unconnected-(BUS1-OSC-Pad30)"
+     "net": "unconnected-(BUS1-OSC-Pad30)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -333,7 +381,9 @@
       "B.Mask"
      ],
      "name": "31",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -346,7 +396,9 @@
       "F.Mask"
      ],
      "name": "32",
-     "net": "unconnected-(BUS1-IO-Pad32)"
+     "net": "unconnected-(BUS1-IO-Pad32)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -359,7 +411,9 @@
       "F.Mask"
      ],
      "name": "33",
-     "net": "/PC-DB7"
+     "net": "/PC-DB7",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -372,7 +426,9 @@
       "F.Mask"
      ],
      "name": "34",
-     "net": "/PC-DB6"
+     "net": "/PC-DB6",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -385,7 +441,9 @@
       "F.Mask"
      ],
      "name": "35",
-     "net": "/PC-DB5"
+     "net": "/PC-DB5",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -398,7 +456,9 @@
       "F.Mask"
      ],
      "name": "36",
-     "net": "/PC-DB4"
+     "net": "/PC-DB4",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -411,7 +471,9 @@
       "F.Mask"
      ],
      "name": "37",
-     "net": "/PC-DB3"
+     "net": "/PC-DB3",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -424,7 +486,9 @@
       "F.Mask"
      ],
      "name": "38",
-     "net": "/PC-DB2"
+     "net": "/PC-DB2",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -437,7 +501,9 @@
       "F.Mask"
      ],
      "name": "39",
-     "net": "/PC-DB1"
+     "net": "/PC-DB1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -450,7 +516,9 @@
       "B.Mask"
      ],
      "name": "4",
-     "net": "unconnected-(BUS1-INQ2-Pad4)"
+     "net": "unconnected-(BUS1-INQ2-Pad4)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -463,7 +531,9 @@
       "F.Mask"
      ],
      "name": "40",
-     "net": "/PC-DB0"
+     "net": "/PC-DB0",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -476,7 +546,9 @@
       "F.Mask"
      ],
      "name": "41",
-     "net": "unconnected-(BUS1-IO_READY-Pad41)"
+     "net": "unconnected-(BUS1-IO_READY-Pad41)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -489,7 +561,9 @@
       "F.Mask"
      ],
      "name": "42",
-     "net": "/PC-AEN"
+     "net": "/PC-AEN",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -502,7 +576,9 @@
       "F.Mask"
      ],
      "name": "43",
-     "net": "unconnected-(BUS1-BA19-Pad43)"
+     "net": "unconnected-(BUS1-BA19-Pad43)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -515,7 +591,9 @@
       "F.Mask"
      ],
      "name": "44",
-     "net": "unconnected-(BUS1-BA18-Pad44)"
+     "net": "unconnected-(BUS1-BA18-Pad44)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -528,7 +606,9 @@
       "F.Mask"
      ],
      "name": "45",
-     "net": "unconnected-(BUS1-BA17-Pad45)"
+     "net": "unconnected-(BUS1-BA17-Pad45)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -541,7 +621,9 @@
       "F.Mask"
      ],
      "name": "46",
-     "net": "unconnected-(BUS1-BA16-Pad46)"
+     "net": "unconnected-(BUS1-BA16-Pad46)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -554,7 +636,9 @@
       "F.Mask"
      ],
      "name": "47",
-     "net": "unconnected-(BUS1-BA15-Pad47)"
+     "net": "unconnected-(BUS1-BA15-Pad47)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -567,7 +651,9 @@
       "F.Mask"
      ],
      "name": "48",
-     "net": "unconnected-(BUS1-BA14-Pad48)"
+     "net": "unconnected-(BUS1-BA14-Pad48)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -580,7 +666,9 @@
       "F.Mask"
      ],
      "name": "49",
-     "net": "unconnected-(BUS1-BA13-Pad49)"
+     "net": "unconnected-(BUS1-BA13-Pad49)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -593,7 +681,9 @@
       "B.Mask"
      ],
      "name": "5",
-     "net": "unconnected-(BUS1--5V-Pad5)"
+     "net": "unconnected-(BUS1--5V-Pad5)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -606,7 +696,9 @@
       "F.Mask"
      ],
      "name": "50",
-     "net": "unconnected-(BUS1-BA12-Pad50)"
+     "net": "unconnected-(BUS1-BA12-Pad50)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -619,7 +711,9 @@
       "F.Mask"
      ],
      "name": "51",
-     "net": "/PC-A11"
+     "net": "/PC-A11",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -632,7 +726,9 @@
       "F.Mask"
      ],
      "name": "52",
-     "net": "/PC-A10"
+     "net": "/PC-A10",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -645,7 +741,9 @@
       "F.Mask"
      ],
      "name": "53",
-     "net": "/PC-A9"
+     "net": "/PC-A9",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -658,7 +756,9 @@
       "F.Mask"
      ],
      "name": "54",
-     "net": "/PC-A8"
+     "net": "/PC-A8",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -671,7 +771,9 @@
       "F.Mask"
      ],
      "name": "55",
-     "net": "/PC-A7"
+     "net": "/PC-A7",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -684,7 +786,9 @@
       "F.Mask"
      ],
      "name": "56",
-     "net": "/PC-A6"
+     "net": "/PC-A6",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -697,7 +801,9 @@
       "F.Mask"
      ],
      "name": "57",
-     "net": "/PC-A5"
+     "net": "/PC-A5",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -710,7 +816,9 @@
       "F.Mask"
      ],
      "name": "58",
-     "net": "/PC-A4"
+     "net": "/PC-A4",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -723,7 +831,9 @@
       "F.Mask"
      ],
      "name": "59",
-     "net": "/PC-A3"
+     "net": "/PC-A3",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -736,7 +846,9 @@
       "B.Mask"
      ],
      "name": "6",
-     "net": "unconnected-(BUS1-DRQ2-Pad6)"
+     "net": "unconnected-(BUS1-DRQ2-Pad6)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -749,7 +861,9 @@
       "F.Mask"
      ],
      "name": "60",
-     "net": "/PC-A2"
+     "net": "/PC-A2",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -762,7 +876,9 @@
       "F.Mask"
      ],
      "name": "61",
-     "net": "/PC-A1"
+     "net": "/PC-A1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -775,7 +891,9 @@
       "F.Mask"
      ],
      "name": "62",
-     "net": "/PC-A0"
+     "net": "/PC-A0",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -788,7 +906,9 @@
       "B.Mask"
      ],
      "name": "7",
-     "net": "unconnected-(BUS1--12V-Pad7)"
+     "net": "unconnected-(BUS1--12V-Pad7)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -801,7 +921,9 @@
       "B.Mask"
      ],
      "name": "8",
-     "net": "unconnected-(BUS1-UNUSED-Pad8)"
+     "net": "unconnected-(BUS1-UNUSED-Pad8)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -814,7 +936,9 @@
       "B.Mask"
      ],
      "name": "9",
-     "net": "unconnected-(BUS1-+12V-Pad9)"
+     "net": "unconnected-(BUS1-+12V-Pad9)",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "BUS1"
@@ -839,7 +963,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -852,7 +978,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "C1"
@@ -877,7 +1005,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "Net-(U9-P{slash}A3)"
+     "net": "Net-(U9-P{slash}A3)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -890,7 +1020,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "C2"
@@ -915,7 +1047,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "Net-(C3-Pad1)"
+     "net": "Net-(C3-Pad1)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -928,7 +1062,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "C3"
@@ -953,7 +1089,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -966,7 +1104,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "C4"
@@ -991,7 +1131,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1004,7 +1146,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "C5"
@@ -1029,7 +1173,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1042,7 +1188,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "C6"
@@ -1067,7 +1215,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1080,7 +1230,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "Net-(D1-A)"
+     "net": "Net-(D1-A)",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "D1"
@@ -1105,7 +1257,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1118,7 +1272,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "Net-(D2-A)"
+     "net": "Net-(D2-A)",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "D2"
@@ -1154,7 +1310,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1167,7 +1325,9 @@
       "*.Mask"
      ],
      "name": "10",
-     "net": "/REF6"
+     "net": "/REF6",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1180,7 +1340,9 @@
       "*.Mask"
      ],
      "name": "11",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1193,7 +1355,9 @@
       "*.Mask"
      ],
      "name": "12",
-     "net": "/REF8"
+     "net": "/REF8",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1206,7 +1370,9 @@
       "*.Mask"
      ],
      "name": "13",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1219,7 +1385,9 @@
       "*.Mask"
      ],
      "name": "14",
-     "net": "/REF4"
+     "net": "/REF4",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1232,7 +1400,9 @@
       "*.Mask"
      ],
      "name": "15",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1245,7 +1415,9 @@
       "*.Mask"
      ],
      "name": "16",
-     "net": "/REF5"
+     "net": "/REF5",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1258,7 +1430,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "/REF10"
+     "net": "/REF10",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1271,7 +1445,9 @@
       "*.Mask"
      ],
      "name": "3",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1284,7 +1460,9 @@
       "*.Mask"
      ],
      "name": "4",
-     "net": "/REF11"
+     "net": "/REF11",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1297,7 +1475,9 @@
       "*.Mask"
      ],
      "name": "5",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1310,7 +1490,9 @@
       "*.Mask"
      ],
      "name": "6",
-     "net": "/REF7"
+     "net": "/REF7",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1323,7 +1505,9 @@
       "*.Mask"
      ],
      "name": "7",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1336,7 +1520,9 @@
       "*.Mask"
      ],
      "name": "8",
-     "net": "/REF9"
+     "net": "/REF9",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1349,7 +1535,9 @@
       "*.Mask"
      ],
      "name": "9",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "JP1"
@@ -1374,7 +1562,9 @@
       "*.Mask"
      ],
      "name": "0",
-     "net": ""
+     "net": "",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1387,7 +1577,9 @@
       "*.Mask"
      ],
      "name": "0",
-     "net": ""
+     "net": "",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1400,7 +1592,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "/STROBE"
+     "net": "/STROBE",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1413,7 +1607,9 @@
       "*.Mask"
      ],
      "name": "10",
-     "net": "/ACK"
+     "net": "/ACK",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1426,7 +1622,9 @@
       "*.Mask"
      ],
      "name": "11",
-     "net": "/BUST+"
+     "net": "/BUST+",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1439,7 +1637,9 @@
       "*.Mask"
      ],
      "name": "12",
-     "net": "/PE+"
+     "net": "/PE+",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1452,7 +1652,9 @@
       "*.Mask"
      ],
      "name": "13",
-     "net": "/SLCT+"
+     "net": "/SLCT+",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1465,7 +1667,9 @@
       "*.Mask"
      ],
      "name": "14",
-     "net": "/AUTOFD-"
+     "net": "/AUTOFD-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1478,7 +1682,9 @@
       "*.Mask"
      ],
      "name": "15",
-     "net": "/ERROR-"
+     "net": "/ERROR-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1491,7 +1697,9 @@
       "*.Mask"
      ],
      "name": "16",
-     "net": "/INIT-"
+     "net": "/INIT-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1504,7 +1712,9 @@
       "*.Mask"
      ],
      "name": "17",
-     "net": "/SLCTIN-"
+     "net": "/SLCTIN-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1517,7 +1727,9 @@
       "*.Mask"
      ],
      "name": "18",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1530,7 +1742,9 @@
       "*.Mask"
      ],
      "name": "19",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1543,7 +1757,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "/BIT0"
+     "net": "/BIT0",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1556,7 +1772,9 @@
       "*.Mask"
      ],
      "name": "20",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1569,7 +1787,9 @@
       "*.Mask"
      ],
      "name": "21",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1582,7 +1802,9 @@
       "*.Mask"
      ],
      "name": "22",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1595,7 +1817,9 @@
       "*.Mask"
      ],
      "name": "23",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1608,7 +1832,9 @@
       "*.Mask"
      ],
      "name": "24",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1621,7 +1847,9 @@
       "*.Mask"
      ],
      "name": "25",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1634,7 +1862,9 @@
       "*.Mask"
      ],
      "name": "3",
-     "net": "/BIT1"
+     "net": "/BIT1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1647,7 +1877,9 @@
       "*.Mask"
      ],
      "name": "4",
-     "net": "/BIT2"
+     "net": "/BIT2",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1660,7 +1892,9 @@
       "*.Mask"
      ],
      "name": "5",
-     "net": "/BIT3"
+     "net": "/BIT3",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1673,7 +1907,9 @@
       "*.Mask"
      ],
      "name": "6",
-     "net": "/BIT4"
+     "net": "/BIT4",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1686,7 +1922,9 @@
       "*.Mask"
      ],
      "name": "7",
-     "net": "/BIT5"
+     "net": "/BIT5",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1699,7 +1937,9 @@
       "*.Mask"
      ],
      "name": "8",
-     "net": "/BIT6"
+     "net": "/BIT6",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1712,7 +1952,9 @@
       "*.Mask"
      ],
      "name": "9",
-     "net": "/BIT7"
+     "net": "/BIT7",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "P1"
@@ -1737,7 +1979,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "Net-(C3-Pad1)"
+     "net": "Net-(C3-Pad1)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1750,7 +1994,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "Net-(U9-P{slash}A3)"
+     "net": "Net-(U9-P{slash}A3)",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R1"
@@ -1775,7 +2021,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "/8MH-OUT"
+     "net": "/8MH-OUT",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1788,7 +2036,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "Net-(C3-Pad1)"
+     "net": "Net-(C3-Pad1)",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R2"
@@ -1813,7 +2063,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "Net-(U5-CS2)"
+     "net": "Net-(U5-CS2)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1826,7 +2078,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R3"
@@ -1851,7 +2105,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "Net-(D1-A)"
+     "net": "Net-(D1-A)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1864,7 +2120,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "/LED1"
+     "net": "/LED1",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R4"
@@ -1889,7 +2147,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "Net-(D2-A)"
+     "net": "Net-(D2-A)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1902,7 +2162,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "/LED2"
+     "net": "/LED2",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R5"
@@ -1927,7 +2189,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1940,7 +2204,9 @@
       "*.Mask"
      ],
      "name": "10",
-     "net": "unconnected-(RR1-Pad10)"
+     "net": "unconnected-(RR1-Pad10)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1953,7 +2219,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "/REF5"
+     "net": "/REF5",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1966,7 +2234,9 @@
       "*.Mask"
      ],
      "name": "3",
-     "net": "/REF4"
+     "net": "/REF4",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1979,7 +2249,9 @@
       "*.Mask"
      ],
      "name": "4",
-     "net": "/REF8"
+     "net": "/REF8",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -1992,7 +2264,9 @@
       "*.Mask"
      ],
      "name": "5",
-     "net": "/REF6"
+     "net": "/REF6",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2005,7 +2279,9 @@
       "*.Mask"
      ],
      "name": "6",
-     "net": "/REF9"
+     "net": "/REF9",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2018,7 +2294,9 @@
       "*.Mask"
      ],
      "name": "7",
-     "net": "/REF7"
+     "net": "/REF7",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2031,7 +2309,9 @@
       "*.Mask"
      ],
      "name": "8",
-     "net": "/REF11"
+     "net": "/REF11",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2044,7 +2324,9 @@
       "*.Mask"
      ],
      "name": "9",
-     "net": "/REF10"
+     "net": "/REF10",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "RR1"
@@ -2069,7 +2351,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "/DIR"
+     "net": "/DIR",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2082,7 +2366,9 @@
       "*.Mask"
      ],
      "name": "10",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2095,7 +2381,9 @@
       "*.Mask"
      ],
      "name": "11",
-     "net": "/D7"
+     "net": "/D7",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2108,7 +2396,9 @@
       "*.Mask"
      ],
      "name": "12",
-     "net": "/D6"
+     "net": "/D6",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2121,7 +2411,9 @@
       "*.Mask"
      ],
      "name": "13",
-     "net": "/D5"
+     "net": "/D5",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2134,7 +2426,9 @@
       "*.Mask"
      ],
      "name": "14",
-     "net": "/D4"
+     "net": "/D4",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2147,7 +2441,9 @@
       "*.Mask"
      ],
      "name": "15",
-     "net": "/D3"
+     "net": "/D3",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2160,7 +2456,9 @@
       "*.Mask"
      ],
      "name": "16",
-     "net": "/D2"
+     "net": "/D2",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2173,7 +2471,9 @@
       "*.Mask"
      ],
      "name": "17",
-     "net": "/D1"
+     "net": "/D1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2186,7 +2486,9 @@
       "*.Mask"
      ],
      "name": "18",
-     "net": "/D0"
+     "net": "/D0",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2199,7 +2501,9 @@
       "*.Mask"
      ],
      "name": "19",
-     "net": "/ENBBUF"
+     "net": "/ENBBUF",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2212,7 +2516,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "/PC-DB0"
+     "net": "/PC-DB0",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2225,7 +2531,9 @@
       "*.Mask"
      ],
      "name": "20",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2238,7 +2546,9 @@
       "*.Mask"
      ],
      "name": "3",
-     "net": "/PC-DB1"
+     "net": "/PC-DB1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2251,7 +2561,9 @@
       "*.Mask"
      ],
      "name": "4",
-     "net": "/PC-DB2"
+     "net": "/PC-DB2",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2264,7 +2576,9 @@
       "*.Mask"
      ],
      "name": "5",
-     "net": "/PC-DB3"
+     "net": "/PC-DB3",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2277,7 +2591,9 @@
       "*.Mask"
      ],
      "name": "6",
-     "net": "/PC-DB4"
+     "net": "/PC-DB4",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2290,7 +2606,9 @@
       "*.Mask"
      ],
      "name": "7",
-     "net": "/PC-DB5"
+     "net": "/PC-DB5",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2303,7 +2621,9 @@
       "*.Mask"
      ],
      "name": "8",
-     "net": "/PC-DB6"
+     "net": "/PC-DB6",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2316,7 +2636,9 @@
       "*.Mask"
      ],
      "name": "9",
-     "net": "/PC-DB7"
+     "net": "/PC-DB7",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "U1"
@@ -2341,7 +2663,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "/PC-AEN"
+     "net": "/PC-AEN",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2354,7 +2678,9 @@
       "*.Mask"
      ],
      "name": "10",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2367,7 +2693,9 @@
       "*.Mask"
      ],
      "name": "11",
-     "net": "/PC-A10"
+     "net": "/PC-A10",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2380,7 +2708,9 @@
       "*.Mask"
      ],
      "name": "12",
-     "net": "/REF10"
+     "net": "/REF10",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2393,7 +2723,9 @@
       "*.Mask"
      ],
      "name": "13",
-     "net": "/PC-A7"
+     "net": "/PC-A7",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2406,7 +2738,9 @@
       "*.Mask"
      ],
      "name": "14",
-     "net": "/REF7"
+     "net": "/REF7",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2419,7 +2753,9 @@
       "*.Mask"
      ],
      "name": "15",
-     "net": "/PC-A6"
+     "net": "/PC-A6",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2432,7 +2768,9 @@
       "*.Mask"
      ],
      "name": "16",
-     "net": "/REF6"
+     "net": "/REF6",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2445,7 +2783,9 @@
       "*.Mask"
      ],
      "name": "17",
-     "net": "/PC-A4"
+     "net": "/PC-A4",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2458,7 +2798,9 @@
       "*.Mask"
      ],
      "name": "18",
-     "net": "/REF4"
+     "net": "/REF4",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2471,7 +2813,9 @@
       "*.Mask"
      ],
      "name": "19",
-     "net": "/MATCHL"
+     "net": "/MATCHL",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2484,7 +2828,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "/PC-A5"
+     "net": "/PC-A5",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2497,7 +2843,9 @@
       "*.Mask"
      ],
      "name": "20",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2510,7 +2858,9 @@
       "*.Mask"
      ],
      "name": "3",
-     "net": "/REF5"
+     "net": "/REF5",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2523,7 +2873,9 @@
       "*.Mask"
      ],
      "name": "4",
-     "net": "/PC-A8"
+     "net": "/PC-A8",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2536,7 +2888,9 @@
       "*.Mask"
      ],
      "name": "5",
-     "net": "/REF8"
+     "net": "/REF8",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2549,7 +2903,9 @@
       "*.Mask"
      ],
      "name": "6",
-     "net": "/PC-A9"
+     "net": "/PC-A9",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2562,7 +2918,9 @@
       "*.Mask"
      ],
      "name": "7",
-     "net": "/REF9"
+     "net": "/REF9",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2575,7 +2933,9 @@
       "*.Mask"
      ],
      "name": "8",
-     "net": "/PC-A11"
+     "net": "/PC-A11",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2588,7 +2948,9 @@
       "*.Mask"
      ],
      "name": "9",
-     "net": "/REF11"
+     "net": "/REF11",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "U2"
@@ -2613,7 +2975,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2626,7 +2990,9 @@
       "*.Mask"
      ],
      "name": "10",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2639,7 +3005,9 @@
       "*.Mask"
      ],
      "name": "11",
-     "net": "unconnected-(U3-Y7-Pad11)"
+     "net": "unconnected-(U3-Y7-Pad11)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2652,7 +3020,9 @@
       "*.Mask"
      ],
      "name": "12",
-     "net": "/RSTL"
+     "net": "/RSTL",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2665,7 +3035,9 @@
       "*.Mask"
      ],
      "name": "13",
-     "net": "/PC-RD"
+     "net": "/PC-RD",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2678,7 +3050,9 @@
       "*.Mask"
      ],
      "name": "14",
-     "net": "/PC-WR"
+     "net": "/PC-WR",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2691,7 +3065,9 @@
       "*.Mask"
      ],
      "name": "15",
-     "net": "Net-(U3-Y3)"
+     "net": "Net-(U3-Y3)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2704,7 +3080,9 @@
       "*.Mask"
      ],
      "name": "16",
-     "net": "Net-(U3-Y2)"
+     "net": "Net-(U3-Y2)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2717,7 +3095,9 @@
       "*.Mask"
      ],
      "name": "17",
-     "net": "Net-(U3-Y1)"
+     "net": "Net-(U3-Y1)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2730,7 +3110,9 @@
       "*.Mask"
      ],
      "name": "18",
-     "net": "Net-(U3-Y0)"
+     "net": "Net-(U3-Y0)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2743,7 +3125,9 @@
       "*.Mask"
      ],
      "name": "19",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2756,7 +3140,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "/PC-A1"
+     "net": "/PC-A1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2769,7 +3155,9 @@
       "*.Mask"
      ],
      "name": "20",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2782,7 +3170,9 @@
       "*.Mask"
      ],
      "name": "3",
-     "net": "/PC-A0"
+     "net": "/PC-A0",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2795,7 +3185,9 @@
       "*.Mask"
      ],
      "name": "4",
-     "net": "/PC-A2"
+     "net": "/PC-A2",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2808,7 +3200,9 @@
       "*.Mask"
      ],
      "name": "5",
-     "net": "/PC-A3"
+     "net": "/PC-A3",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2821,7 +3215,9 @@
       "*.Mask"
      ],
      "name": "6",
-     "net": "/PC-IOW"
+     "net": "/PC-IOW",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2834,7 +3230,9 @@
       "*.Mask"
      ],
      "name": "7",
-     "net": "/PC-IOR"
+     "net": "/PC-IOR",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2847,7 +3245,9 @@
       "*.Mask"
      ],
      "name": "8",
-     "net": "/PC-RST"
+     "net": "/PC-RST",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2860,7 +3260,9 @@
       "*.Mask"
      ],
      "name": "9",
-     "net": "/PC-RST"
+     "net": "/PC-RST",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "U3"
@@ -2885,7 +3287,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": ""
+     "net": "",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2898,7 +3302,9 @@
       "*.Mask"
      ],
      "name": "10",
-     "net": "/MA2"
+     "net": "/MA2",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2911,7 +3317,9 @@
       "*.Mask"
      ],
      "name": "11",
-     "net": "/MA1"
+     "net": "/MA1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2924,7 +3332,9 @@
       "*.Mask"
      ],
      "name": "12",
-     "net": "/MA0"
+     "net": "/MA0",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2937,7 +3347,9 @@
       "*.Mask"
      ],
      "name": "13",
-     "net": "/MD0"
+     "net": "/MD0",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2950,7 +3362,9 @@
       "*.Mask"
      ],
      "name": "14",
-     "net": "/MD1"
+     "net": "/MD1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2963,7 +3377,9 @@
       "*.Mask"
      ],
      "name": "15",
-     "net": "/MD2"
+     "net": "/MD2",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2976,7 +3392,9 @@
       "*.Mask"
      ],
      "name": "16",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -2989,7 +3407,9 @@
       "*.Mask"
      ],
      "name": "17",
-     "net": "/MD3"
+     "net": "/MD3",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3002,7 +3422,9 @@
       "*.Mask"
      ],
      "name": "18",
-     "net": "/MD4"
+     "net": "/MD4",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3015,7 +3437,9 @@
       "*.Mask"
      ],
      "name": "19",
-     "net": "/MD5"
+     "net": "/MD5",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3028,7 +3452,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "/MA16"
+     "net": "/MA16",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3041,7 +3467,9 @@
       "*.Mask"
      ],
      "name": "20",
-     "net": "/MD6"
+     "net": "/MD6",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3054,7 +3482,9 @@
       "*.Mask"
      ],
      "name": "21",
-     "net": "/MD7"
+     "net": "/MD7",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3067,7 +3497,9 @@
       "*.Mask"
      ],
      "name": "22",
-     "net": "/CS1-"
+     "net": "/CS1-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3080,7 +3512,9 @@
       "*.Mask"
      ],
      "name": "23",
-     "net": "/MA10"
+     "net": "/MA10",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3093,7 +3527,9 @@
       "*.Mask"
      ],
      "name": "24",
-     "net": "/OE-"
+     "net": "/OE-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3106,7 +3542,9 @@
       "*.Mask"
      ],
      "name": "25",
-     "net": "/MA11"
+     "net": "/MA11",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3119,7 +3557,9 @@
       "*.Mask"
      ],
      "name": "26",
-     "net": "/MA9"
+     "net": "/MA9",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3132,7 +3572,9 @@
       "*.Mask"
      ],
      "name": "27",
-     "net": "/MA8"
+     "net": "/MA8",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3145,7 +3587,9 @@
       "*.Mask"
      ],
      "name": "28",
-     "net": "/MA13"
+     "net": "/MA13",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3158,7 +3602,9 @@
       "*.Mask"
      ],
      "name": "29",
-     "net": "/WR-"
+     "net": "/WR-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3171,7 +3617,9 @@
       "*.Mask"
      ],
      "name": "3",
-     "net": "/MA14"
+     "net": "/MA14",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3184,7 +3632,9 @@
       "*.Mask"
      ],
      "name": "30",
-     "net": "Net-(U5-CS2)"
+     "net": "Net-(U5-CS2)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3197,7 +3647,9 @@
       "*.Mask"
      ],
      "name": "31",
-     "net": "/MA15"
+     "net": "/MA15",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3210,7 +3662,9 @@
       "*.Mask"
      ],
      "name": "32",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3223,7 +3677,9 @@
       "*.Mask"
      ],
      "name": "4",
-     "net": "/MA12"
+     "net": "/MA12",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3236,7 +3692,9 @@
       "*.Mask"
      ],
      "name": "5",
-     "net": "/MA7"
+     "net": "/MA7",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3249,7 +3707,9 @@
       "*.Mask"
      ],
      "name": "6",
-     "net": "/MA6"
+     "net": "/MA6",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3262,7 +3722,9 @@
       "*.Mask"
      ],
      "name": "7",
-     "net": "/MA5"
+     "net": "/MA5",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3275,7 +3737,9 @@
       "*.Mask"
      ],
      "name": "8",
-     "net": "/MA4"
+     "net": "/MA4",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3288,7 +3752,9 @@
       "*.Mask"
      ],
      "name": "9",
-     "net": "/MA3"
+     "net": "/MA3",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "U5"
@@ -3313,7 +3779,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3326,7 +3794,9 @@
       "*.Mask"
      ],
      "name": "10",
-     "net": "unconnected-(U8-I{slash}O10-Pad10)"
+     "net": "unconnected-(U8-I{slash}O10-Pad10)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3339,7 +3809,9 @@
       "*.Mask"
      ],
      "name": "11",
-     "net": "/RSTL"
+     "net": "/RSTL",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3352,7 +3824,9 @@
       "*.Mask"
      ],
      "name": "12",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3365,7 +3839,9 @@
       "*.Mask"
      ],
      "name": "13",
-     "net": "/WR_REG"
+     "net": "/WR_REG",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3378,7 +3854,9 @@
       "*.Mask"
      ],
      "name": "14",
-     "net": "/PC-RD"
+     "net": "/PC-RD",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3391,7 +3869,9 @@
       "*.Mask"
      ],
      "name": "15",
-     "net": "/WR_REG"
+     "net": "/WR_REG",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3404,7 +3884,9 @@
       "*.Mask"
      ],
      "name": "16",
-     "net": "/CLKLCA"
+     "net": "/CLKLCA",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3417,7 +3899,9 @@
       "*.Mask"
      ],
      "name": "17",
-     "net": "/DIR"
+     "net": "/DIR",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3430,7 +3914,9 @@
       "*.Mask"
      ],
      "name": "18",
-     "net": "/SEL_LPT"
+     "net": "/SEL_LPT",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3443,7 +3929,9 @@
       "*.Mask"
      ],
      "name": "19",
-     "net": "/PROG-"
+     "net": "/PROG-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3456,7 +3944,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "/MATCHL"
+     "net": "/MATCHL",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3469,7 +3959,9 @@
       "*.Mask"
      ],
      "name": "20",
-     "net": "/DONE"
+     "net": "/DONE",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3482,7 +3974,9 @@
       "*.Mask"
      ],
      "name": "21",
-     "net": "/D0"
+     "net": "/D0",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3495,7 +3989,9 @@
       "*.Mask"
      ],
      "name": "22",
-     "net": "/ENBBUF"
+     "net": "/ENBBUF",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3508,7 +4004,9 @@
       "*.Mask"
      ],
      "name": "23",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3521,7 +4019,9 @@
       "*.Mask"
      ],
      "name": "24",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3534,7 +4034,9 @@
       "*.Mask"
      ],
      "name": "3",
-     "net": "Net-(U3-Y0)"
+     "net": "Net-(U3-Y0)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3547,7 +4049,9 @@
       "*.Mask"
      ],
      "name": "4",
-     "net": "Net-(U3-Y1)"
+     "net": "Net-(U3-Y1)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3560,7 +4064,9 @@
       "*.Mask"
      ],
      "name": "5",
-     "net": "Net-(U3-Y2)"
+     "net": "Net-(U3-Y2)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3573,7 +4079,9 @@
       "*.Mask"
      ],
      "name": "6",
-     "net": "Net-(U3-Y3)"
+     "net": "Net-(U3-Y3)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3586,7 +4094,9 @@
       "*.Mask"
      ],
      "name": "7",
-     "net": "/PC-WR"
+     "net": "/PC-WR",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3599,7 +4109,9 @@
       "*.Mask"
      ],
      "name": "8",
-     "net": "unconnected-(U8-I{slash}O8-Pad8)"
+     "net": "unconnected-(U8-I{slash}O8-Pad8)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3612,7 +4124,9 @@
       "*.Mask"
      ],
      "name": "9",
-     "net": "unconnected-(U8-I{slash}O9-Pad9)"
+     "net": "unconnected-(U8-I{slash}O9-Pad9)",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "U8"
@@ -3637,7 +4151,9 @@
       "*.Mask"
      ],
      "name": "A1",
-     "net": "unconnected-(U9-NC-PadA1)"
+     "net": "unconnected-(U9-NC-PadA1)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3650,7 +4166,9 @@
       "*.Mask"
      ],
      "name": "A10",
-     "net": "/CS1-"
+     "net": "/CS1-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3663,7 +4181,9 @@
       "*.Mask"
      ],
      "name": "A11",
-     "net": "/MA0"
+     "net": "/MA0",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3676,7 +4196,9 @@
       "*.Mask"
      ],
      "name": "A12",
-     "net": "/STROBE"
+     "net": "/STROBE",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3689,7 +4211,9 @@
       "*.Mask"
      ],
      "name": "A13",
-     "net": "/WR-"
+     "net": "/WR-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3702,7 +4226,9 @@
       "*.Mask"
      ],
      "name": "A2",
-     "net": "unconnected-(U9-NC-PadA2)"
+     "net": "unconnected-(U9-NC-PadA2)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3715,7 +4241,9 @@
       "*.Mask"
      ],
      "name": "A3",
-     "net": "unconnected-(U9-NC-PadA3)"
+     "net": "unconnected-(U9-NC-PadA3)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3728,7 +4256,9 @@
       "*.Mask"
      ],
      "name": "A4",
-     "net": "/MA9"
+     "net": "/MA9",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3741,7 +4271,9 @@
       "*.Mask"
      ],
      "name": "A5",
-     "net": "/MD1"
+     "net": "/MD1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3754,7 +4286,9 @@
       "*.Mask"
      ],
      "name": "A6",
-     "net": "/MD3"
+     "net": "/MD3",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3767,7 +4301,9 @@
       "*.Mask"
      ],
      "name": "A7",
-     "net": "/MD4"
+     "net": "/MD4",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3780,7 +4316,9 @@
       "*.Mask"
      ],
      "name": "A8",
-     "net": "/MD5"
+     "net": "/MD5",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3793,7 +4331,9 @@
       "*.Mask"
      ],
      "name": "A9",
-     "net": "/MD6"
+     "net": "/MD6",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3806,7 +4346,9 @@
       "*.Mask"
      ],
      "name": "B1",
-     "net": "unconnected-(U9-NC-PadB1)"
+     "net": "unconnected-(U9-NC-PadB1)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3819,7 +4361,9 @@
       "*.Mask"
      ],
      "name": "B10",
-     "net": "unconnected-(U9-NC-PadB10)"
+     "net": "unconnected-(U9-NC-PadB10)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3832,7 +4376,9 @@
       "*.Mask"
      ],
      "name": "B11",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3845,7 +4391,9 @@
       "*.Mask"
      ],
      "name": "B12",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3858,7 +4406,9 @@
       "*.Mask"
      ],
      "name": "B13",
-     "net": "unconnected-(U9-NC-PadB13)"
+     "net": "unconnected-(U9-NC-PadB13)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3871,7 +4421,9 @@
       "*.Mask"
      ],
      "name": "B2",
-     "net": "/MA1"
+     "net": "/MA1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3884,7 +4436,9 @@
       "*.Mask"
      ],
      "name": "B3",
-     "net": "/MA7"
+     "net": "/MA7",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3897,7 +4451,9 @@
       "*.Mask"
      ],
      "name": "B4",
-     "net": "unconnected-(U9-TCK-PadB4)"
+     "net": "unconnected-(U9-TCK-PadB4)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3910,7 +4466,9 @@
       "*.Mask"
      ],
      "name": "B5",
-     "net": "unconnected-(U9-TMS-PadB5)"
+     "net": "unconnected-(U9-TMS-PadB5)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3923,7 +4481,9 @@
       "*.Mask"
      ],
      "name": "B6",
-     "net": "/MD2"
+     "net": "/MD2",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3936,7 +4496,9 @@
       "*.Mask"
      ],
      "name": "B7",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3949,7 +4511,9 @@
       "*.Mask"
      ],
      "name": "B8",
-     "net": "/MD7"
+     "net": "/MD7",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3962,7 +4526,9 @@
       "*.Mask"
      ],
      "name": "B9",
-     "net": "/OE-"
+     "net": "/OE-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3975,7 +4541,9 @@
       "*.Mask"
      ],
      "name": "C1",
-     "net": "/MA13"
+     "net": "/MA13",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -3988,7 +4556,9 @@
       "*.Mask"
      ],
      "name": "C10",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4001,7 +4571,9 @@
       "*.Mask"
      ],
      "name": "C11",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4014,7 +4586,9 @@
       "*.Mask"
      ],
      "name": "C12",
-     "net": "/AUTOFD-"
+     "net": "/AUTOFD-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4027,7 +4601,9 @@
       "*.Mask"
      ],
      "name": "C13",
-     "net": "/MA5"
+     "net": "/MA5",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4040,7 +4616,9 @@
       "*.Mask"
      ],
      "name": "C2",
-     "net": "/MA3"
+     "net": "/MA3",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4053,7 +4631,9 @@
       "*.Mask"
      ],
      "name": "C3",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4066,7 +4646,9 @@
       "*.Mask"
      ],
      "name": "C4",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4079,7 +4661,9 @@
       "*.Mask"
      ],
      "name": "C5",
-     "net": "unconnected-(U9-TDI-PadC5)"
+     "net": "unconnected-(U9-TDI-PadC5)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4092,7 +4676,9 @@
       "*.Mask"
      ],
      "name": "C6",
-     "net": "/MD0"
+     "net": "/MD0",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4105,7 +4691,9 @@
       "*.Mask"
      ],
      "name": "C7",
-     "net": ""
+     "net": "",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4118,7 +4706,9 @@
       "*.Mask"
      ],
      "name": "C8",
-     "net": "/MA16"
+     "net": "/MA16",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4131,7 +4721,9 @@
       "*.Mask"
      ],
      "name": "C9",
-     "net": "/MA10"
+     "net": "/MA10",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4144,7 +4736,9 @@
       "*.Mask"
      ],
      "name": "D1",
-     "net": "/MA14"
+     "net": "/MA14",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4157,7 +4751,9 @@
       "*.Mask"
      ],
      "name": "D11",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4170,7 +4766,9 @@
       "*.Mask"
      ],
      "name": "D12",
-     "net": "/BIT0"
+     "net": "/BIT0",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4183,7 +4781,9 @@
       "*.Mask"
      ],
      "name": "D13",
-     "net": "/ERROR-"
+     "net": "/ERROR-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4196,7 +4796,9 @@
       "*.Mask"
      ],
      "name": "D2",
-     "net": "/MA11"
+     "net": "/MA11",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4209,7 +4811,9 @@
       "*.Mask"
      ],
      "name": "D3",
-     "net": "/MA2"
+     "net": "/MA2",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4222,7 +4826,9 @@
       "*.Mask"
      ],
      "name": "E1",
-     "net": "/MA4"
+     "net": "/MA4",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4235,7 +4841,9 @@
       "*.Mask"
      ],
      "name": "E11",
-     "net": "unconnected-(U9-NC-PadE11)"
+     "net": "unconnected-(U9-NC-PadE11)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4248,7 +4856,9 @@
       "*.Mask"
      ],
      "name": "E12",
-     "net": "/INIT-"
+     "net": "/INIT-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4261,7 +4871,9 @@
       "*.Mask"
      ],
      "name": "E13",
-     "net": "/BIT1"
+     "net": "/BIT1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4274,7 +4886,9 @@
       "*.Mask"
      ],
      "name": "E2",
-     "net": "unconnected-(U9-NC-PadE2)"
+     "net": "unconnected-(U9-NC-PadE2)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4287,7 +4901,9 @@
       "*.Mask"
      ],
      "name": "E3",
-     "net": "unconnected-(U9-NC-PadE3)"
+     "net": "unconnected-(U9-NC-PadE3)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4300,7 +4916,9 @@
       "*.Mask"
      ],
      "name": "F1",
-     "net": "/MA15"
+     "net": "/MA15",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4313,7 +4931,9 @@
       "*.Mask"
      ],
      "name": "F11",
-     "net": "/SLCTIN-"
+     "net": "/SLCTIN-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4326,7 +4946,9 @@
       "*.Mask"
      ],
      "name": "F12",
-     "net": "/BIT2"
+     "net": "/BIT2",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4339,7 +4961,9 @@
       "*.Mask"
      ],
      "name": "F13",
-     "net": "/LED2"
+     "net": "/LED2",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4352,7 +4976,9 @@
       "*.Mask"
      ],
      "name": "F2",
-     "net": "/MA6"
+     "net": "/MA6",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4365,7 +4991,9 @@
       "*.Mask"
      ],
      "name": "F3",
-     "net": "/MA12"
+     "net": "/MA12",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4378,7 +5006,9 @@
       "*.Mask"
      ],
      "name": "G1",
-     "net": "/MA8"
+     "net": "/MA8",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4391,7 +5021,9 @@
       "*.Mask"
      ],
      "name": "G11",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4404,7 +5036,9 @@
       "*.Mask"
      ],
      "name": "G12",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4417,7 +5051,9 @@
       "*.Mask"
      ],
      "name": "G13",
-     "net": "/BIT3"
+     "net": "/BIT3",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4430,7 +5066,9 @@
       "*.Mask"
      ],
      "name": "G2",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4443,7 +5081,9 @@
       "*.Mask"
      ],
      "name": "G3",
-     "net": ""
+     "net": "",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4456,7 +5096,9 @@
       "*.Mask"
      ],
      "name": "H1",
-     "net": "/PC-A8"
+     "net": "/PC-A8",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4469,7 +5111,9 @@
       "*.Mask"
      ],
      "name": "H11",
-     "net": "/BIT7"
+     "net": "/BIT7",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4482,7 +5126,9 @@
       "*.Mask"
      ],
      "name": "H12",
-     "net": "/BIT5"
+     "net": "/BIT5",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4495,7 +5141,9 @@
       "*.Mask"
      ],
      "name": "H13",
-     "net": "/BIT4"
+     "net": "/BIT4",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4508,7 +5156,9 @@
       "*.Mask"
      ],
      "name": "H2",
-     "net": "/PC-A7"
+     "net": "/PC-A7",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4521,7 +5171,9 @@
       "*.Mask"
      ],
      "name": "H3",
-     "net": "/PC-A4"
+     "net": "/PC-A4",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4534,7 +5186,9 @@
       "*.Mask"
      ],
      "name": "J1",
-     "net": "/PC-A6"
+     "net": "/PC-A6",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4547,7 +5201,9 @@
       "*.Mask"
      ],
      "name": "J11",
-     "net": "unconnected-(U9-NC-PadJ11)"
+     "net": "unconnected-(U9-NC-PadJ11)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4560,7 +5216,9 @@
       "*.Mask"
      ],
      "name": "J12",
-     "net": "/BUST+"
+     "net": "/BUST+",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4573,7 +5231,9 @@
       "*.Mask"
      ],
      "name": "J13",
-     "net": "/BIT6"
+     "net": "/BIT6",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4586,7 +5246,9 @@
       "*.Mask"
      ],
      "name": "J2",
-     "net": "/PC-A5"
+     "net": "/PC-A5",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4599,7 +5261,9 @@
       "*.Mask"
      ],
      "name": "J3",
-     "net": "unconnected-(U9-NC-PadJ3)"
+     "net": "unconnected-(U9-NC-PadJ3)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4612,7 +5276,9 @@
       "*.Mask"
      ],
      "name": "K1",
-     "net": "/8MH-OUT"
+     "net": "/8MH-OUT",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4625,7 +5291,9 @@
       "*.Mask"
      ],
      "name": "K11",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4638,7 +5306,9 @@
       "*.Mask"
      ],
      "name": "K12",
-     "net": "unconnected-(U9-NC-PadK12)"
+     "net": "unconnected-(U9-NC-PadK12)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4651,7 +5321,9 @@
       "*.Mask"
      ],
      "name": "K13",
-     "net": "/ACK"
+     "net": "/ACK",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4664,7 +5336,9 @@
       "*.Mask"
      ],
      "name": "K2",
-     "net": "/PC-A3"
+     "net": "/PC-A3",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4677,7 +5351,9 @@
       "*.Mask"
      ],
      "name": "K3",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4690,7 +5366,9 @@
       "*.Mask"
      ],
      "name": "L1",
-     "net": "Net-(U9-P{slash}A3)"
+     "net": "Net-(U9-P{slash}A3)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4703,7 +5381,9 @@
       "*.Mask"
      ],
      "name": "L10",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4716,7 +5396,9 @@
       "*.Mask"
      ],
      "name": "L11",
-     "net": "/DONE"
+     "net": "/DONE",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4729,7 +5411,9 @@
       "*.Mask"
      ],
      "name": "L12",
-     "net": "/D7"
+     "net": "/D7",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4742,7 +5426,9 @@
       "*.Mask"
      ],
      "name": "L13",
-     "net": "/PE+"
+     "net": "/PE+",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4755,7 +5441,9 @@
       "*.Mask"
      ],
      "name": "L2",
-     "net": "/SEL_LPT"
+     "net": "/SEL_LPT",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4768,7 +5456,9 @@
       "*.Mask"
      ],
      "name": "L3",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4781,7 +5471,9 @@
       "*.Mask"
      ],
      "name": "L4",
-     "net": "/CLKLCA"
+     "net": "/CLKLCA",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4794,7 +5486,9 @@
       "*.Mask"
      ],
      "name": "L5",
-     "net": "unconnected-(U9-NC-PadL5)"
+     "net": "unconnected-(U9-NC-PadL5)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4807,7 +5501,9 @@
       "*.Mask"
      ],
      "name": "L6",
-     "net": "unconnected-(U9-P{slash}D2-PadL6)"
+     "net": "unconnected-(U9-P{slash}D2-PadL6)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4820,7 +5516,9 @@
       "*.Mask"
      ],
      "name": "L7",
-     "net": "GND"
+     "net": "GND",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4833,7 +5531,9 @@
       "*.Mask"
      ],
      "name": "L8",
-     "net": "/PC-A10"
+     "net": "/PC-A10",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4846,7 +5546,9 @@
       "*.Mask"
      ],
      "name": "L9",
-     "net": "unconnected-(U9-NC-PadL9)"
+     "net": "unconnected-(U9-NC-PadL9)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4859,7 +5561,9 @@
       "*.Mask"
      ],
      "name": "M1",
-     "net": "unconnected-(U9-NC-PadM1)"
+     "net": "unconnected-(U9-NC-PadM1)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4872,7 +5576,9 @@
       "*.Mask"
      ],
      "name": "M10",
-     "net": "/D4"
+     "net": "/D4",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4885,7 +5591,9 @@
       "*.Mask"
      ],
      "name": "M11",
-     "net": "/D6"
+     "net": "/D6",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4898,7 +5606,9 @@
       "*.Mask"
      ],
      "name": "M12",
-     "net": "/PROG-"
+     "net": "/PROG-",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4911,7 +5621,9 @@
       "*.Mask"
      ],
      "name": "M13",
-     "net": ""
+     "net": "",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4924,7 +5636,9 @@
       "*.Mask"
      ],
      "name": "M2",
-     "net": "unconnected-(U9-TDO-PadM2)"
+     "net": "unconnected-(U9-TDO-PadM2)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4937,7 +5651,9 @@
       "*.Mask"
      ],
      "name": "M3",
-     "net": "/LED1"
+     "net": "/LED1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4950,7 +5666,9 @@
       "*.Mask"
      ],
      "name": "M4",
-     "net": "/CLKLCA"
+     "net": "/CLKLCA",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4963,7 +5681,9 @@
       "*.Mask"
      ],
      "name": "M5",
-     "net": "/PC-A2"
+     "net": "/PC-A2",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4976,7 +5696,9 @@
       "*.Mask"
      ],
      "name": "M6",
-     "net": "/PC-A0"
+     "net": "/PC-A0",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -4989,7 +5711,9 @@
       "*.Mask"
      ],
      "name": "M7",
-     "net": "VCC"
+     "net": "VCC",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -5002,7 +5726,9 @@
       "*.Mask"
      ],
      "name": "M8",
-     "net": "/PC-RD"
+     "net": "/PC-RD",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -5015,7 +5741,9 @@
       "*.Mask"
      ],
      "name": "M9",
-     "net": "/D3"
+     "net": "/D3",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -5028,7 +5756,9 @@
       "*.Mask"
      ],
      "name": "N1",
-     "net": "unconnected-(U9-PGCK4{slash}A1-PadN1)"
+     "net": "unconnected-(U9-PGCK4{slash}A1-PadN1)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -5041,7 +5771,9 @@
       "*.Mask"
      ],
      "name": "N10",
-     "net": "/PC-AEN"
+     "net": "/PC-AEN",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -5054,7 +5786,9 @@
       "*.Mask"
      ],
      "name": "N11",
-     "net": "/D5"
+     "net": "/D5",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -5067,7 +5801,9 @@
       "*.Mask"
      ],
      "name": "N12",
-     "net": "unconnected-(U9-NC-PadN12)"
+     "net": "unconnected-(U9-NC-PadN12)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -5080,7 +5816,9 @@
       "*.Mask"
      ],
      "name": "N13",
-     "net": "/SLCT+"
+     "net": "/SLCT+",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -5093,7 +5831,9 @@
       "*.Mask"
      ],
      "name": "N2",
-     "net": "/D0"
+     "net": "/D0",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -5106,7 +5846,9 @@
       "*.Mask"
      ],
      "name": "N3",
-     "net": "unconnected-(U9-P{slash}RCLK{slash}BSY{slash}RDY-PadN3)"
+     "net": "unconnected-(U9-P{slash}RCLK{slash}BSY{slash}RDY-PadN3)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -5119,7 +5861,9 @@
       "*.Mask"
      ],
      "name": "N4",
-     "net": "/PC-A1"
+     "net": "/PC-A1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -5132,7 +5876,9 @@
       "*.Mask"
      ],
      "name": "N5",
-     "net": "unconnected-(U9-P-PadN5)"
+     "net": "unconnected-(U9-P-PadN5)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -5145,7 +5891,9 @@
       "*.Mask"
      ],
      "name": "N6",
-     "net": "/PC-WR"
+     "net": "/PC-WR",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -5158,7 +5906,9 @@
       "*.Mask"
      ],
      "name": "N7",
-     "net": "/PC-A9"
+     "net": "/PC-A9",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -5171,7 +5921,9 @@
       "*.Mask"
      ],
      "name": "N8",
-     "net": "/D1"
+     "net": "/D1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -5184,7 +5936,9 @@
       "*.Mask"
      ],
      "name": "N9",
-     "net": "/D2"
+     "net": "/D2",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "U9"
@@ -5209,7 +5963,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "Net-(U9-P{slash}A3)"
+     "net": "Net-(U9-P{slash}A3)",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -5222,12 +5978,15 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "Net-(C3-Pad1)"
+     "net": "Net-(C3-Pad1)",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "X1"
   }
  ],
+ "generateds": [],
  "groups": [],
  "nets": [
   "/8MH-OUT",
@@ -5405,7 +6164,7 @@
   "unconnected-(U9-TMS-PadB5)"
  ],
  "segments": [],
- "semantic_view_version": 1,
+ "semantic_view_version": 2,
  "vias": [],
  "zones": []
 }

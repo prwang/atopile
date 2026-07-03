@@ -22,7 +22,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "unnamed[0]"
+     "net": "unnamed[0]",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -36,7 +38,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "sub_chains[0]-unnamed[0]"
+     "net": "sub_chains[0]-unnamed[0]",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R1"
@@ -62,7 +66,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "sub_chains[0]-unnamed[0]"
+     "net": "sub_chains[0]-unnamed[0]",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -76,7 +82,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "sub_chains[0]-unnamed[0]-1"
+     "net": "sub_chains[0]-unnamed[0]-1",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R2"
@@ -102,7 +110,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "sub_chains[0]-unnamed[0]-1"
+     "net": "sub_chains[0]-unnamed[0]-1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -116,7 +126,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "unnamed[0]-1"
+     "net": "unnamed[0]-1",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R3"
@@ -142,7 +154,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "unnamed[0]-1"
+     "net": "unnamed[0]-1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -156,7 +170,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "sub_chains[1]-unnamed[0]"
+     "net": "sub_chains[1]-unnamed[0]",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R4"
@@ -182,7 +198,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "sub_chains[1]-unnamed[0]"
+     "net": "sub_chains[1]-unnamed[0]",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -196,7 +214,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "sub_chains[1]-unnamed[0]-1"
+     "net": "sub_chains[1]-unnamed[0]-1",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R5"
@@ -222,7 +242,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "sub_chains[1]-unnamed[0]-1"
+     "net": "sub_chains[1]-unnamed[0]-1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -236,7 +258,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "unnamed[0]-2"
+     "net": "unnamed[0]-2",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R6"
@@ -262,7 +286,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "unnamed[0]-2"
+     "net": "unnamed[0]-2",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -276,7 +302,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "sub_chains[2]-unnamed[0]"
+     "net": "sub_chains[2]-unnamed[0]",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R7"
@@ -302,7 +330,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "sub_chains[2]-unnamed[0]"
+     "net": "sub_chains[2]-unnamed[0]",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -316,7 +346,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "sub_chains[2]-unnamed[0]-1"
+     "net": "sub_chains[2]-unnamed[0]-1",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R8"
@@ -342,7 +374,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "sub_chains[2]-unnamed[0]-1"
+     "net": "sub_chains[2]-unnamed[0]-1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -356,12 +390,15 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "unnamed[0]"
+     "net": "unnamed[0]",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R9"
   }
  ],
+ "generateds": [],
  "groups": [
   {
    "members": [
@@ -504,7 +541,7 @@
    "width": 0.2
   }
  ],
- "semantic_view_version": 1,
+ "semantic_view_version": 2,
  "vias": [],
  "zones": [
   {
@@ -543,7 +580,8 @@
      90.0,
      120.0
     ]
-   ]
+   ],
+   "teardrop_type": null
   }
  ]
 }

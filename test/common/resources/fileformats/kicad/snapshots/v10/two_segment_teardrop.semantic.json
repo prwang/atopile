@@ -1,6 +1,7 @@
 {
  "arcs": [],
  "footprints": [],
+ "generateds": [],
  "groups": [],
  "nets": [
   "/TX"
@@ -33,7 +34,7 @@
    "width": 0.1
   }
  ],
- "semantic_view_version": 1,
+ "semantic_view_version": 2,
  "vias": [
   {
    "at": [
@@ -46,7 +47,40 @@
     "F.Cu"
    ],
    "net": "/TX",
-   "size": 0.45
+   "padstack": null,
+   "size": 0.45,
+   "teardrops": {
+    "allow_two_segments": true,
+    "best_length_ratio": 0.5,
+    "best_width_ratio": 1.0,
+    "curved_edges": true,
+    "enabled": true,
+    "filter_ratio": 0.9,
+    "max_length": 1.0,
+    "max_width": 2.0,
+    "prefer_zone_connections": true
+   },
+   "treatments": {
+    "back_post_machining": null,
+    "backdrill": null,
+    "capping": false,
+    "covering": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "filling": false,
+    "front_post_machining": null,
+    "plugging": {
+     "back": false,
+     "front": false,
+     "none": false
+    },
+    "start_end_only": null,
+    "tenting": null,
+    "tertiary_drill": null
+   },
+   "type": null
   }
  ],
  "zones": [
@@ -111,7 +145,8 @@
      131.68552,
      85.695231
     ]
-   ]
+   ],
+   "teardrop_type": "padvia"
   }
  ]
 }

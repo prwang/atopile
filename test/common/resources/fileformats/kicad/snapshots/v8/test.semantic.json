@@ -21,7 +21,9 @@
       "*.Mask"
      ],
      "name": "1",
-     "net": "B1-1-R1-2"
+     "net": "B1-1-R1-2",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -34,7 +36,9 @@
       "*.Mask"
      ],
      "name": "2",
-     "net": "B1-2-D1-2"
+     "net": "B1-2-D1-2",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "B1"
@@ -60,7 +64,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "D1-1-R1-1"
+     "net": "D1-1-R1-1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -74,7 +80,9 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "B1-2-D1-2"
+     "net": "B1-2-D1-2",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "D1"
@@ -111,7 +119,9 @@
       "F.Paste"
      ],
      "name": "1",
-     "net": "D1-1-R1-1"
+     "net": "D1-1-R1-1",
+     "padstack": null,
+     "teardrops": null
     },
     {
      "at": [
@@ -125,12 +135,15 @@
       "F.Paste"
      ],
      "name": "2",
-     "net": "B1-1-R1-2"
+     "net": "B1-1-R1-2",
+     "padstack": null,
+     "teardrops": null
     }
    ],
    "reference": "R1"
   }
  ],
+ "generateds": [],
  "groups": [],
  "nets": [
   "B1-1-R1-2",
@@ -139,7 +152,7 @@
   "GND"
  ],
  "segments": [],
- "semantic_view_version": 1,
+ "semantic_view_version": 2,
  "vias": [],
  "zones": [
   {
@@ -173,7 +186,8 @@
      23.0,
      35.0
     ]
-   ]
+   ],
+   "teardrop_type": null
   },
   {
    "keepout": null,
@@ -203,7 +217,8 @@
      40.0,
      76.0
     ]
-   ]
+   ],
+   "teardrop_type": null
   }
  ]
 }

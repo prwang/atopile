@@ -16,15 +16,23 @@ through the managed PcbManager path persists AND every other construct (groups,
 zones, nets, the untouched footprints, every pad's net) stays intact AND the
 rewritten board is still a v10 file KiCad-cli can run DRC on. Edit ≠ re-save.
 
-The fidelity set under test = the minimal set decided 2026-06-13: footprints,
-manually-named groups, zones (the base is an input corpus sample with 6
-footprints, 2 zones and a via; the manual user group is created by the test rig,
-not baked into a committed generated board — see the work_board fixture). The
-teardrop / via padstack / generated meander constructs have since graduated to
-the fidelity set (schema-complete: test_padstack_dialect.py,
-test_generated_dialect.py); the warning mechanism itself stays load-bearing for
-future/unknown keys — the last test pins that an unmodeled key inside such a
-construct is reported loudly (no silent failure) rather than dropped.
+The fidelity set under test: footprints, manually-named groups, zones,
+segments, vias with teardrops + per-layer padstacks, pad-level teardrop
+overrides, and generated tuning patterns (with real member segments). The base
+is an input corpus sample with 6 footprints, 2 zones and ZERO of the
+GUI-authored constructs; every construct under test is created by the work_board
+rig via the fileformats API, not baked into a committed board, so provenance is
+unambiguous and the rig owns it. Coverage is carried by semantic_view (which
+projects teardrops/padstack/treatments/generateds since SEMANTIC_VIEW_VERSION
+2): the move→save→reload equality assertions below see the new constructs
+field-by-field.
+
+The warning set is no longer a list of named constructs — it is, by
+construction, every future/unknown key the schema does not model (KiCad's
+grammar keeps growing; generator properties are an open map). The S5a loudness
+mechanism stays load-bearing for exactly that residual: the last test pins that
+an unmodeled key inside a modeled construct is reported loudly (no silent
+failure) rather than dropped.
 """
 
 import json
@@ -70,13 +78,38 @@ def _refs(view: dict) -> set[tuple[str, str]]:
     return {(fp["reference"], fp["name"]) for fp in view["footprints"]}
 
 
+def _pads_by_ref(view: dict) -> dict[str, list[dict]]:
+    """Every footprint's full pad projection (net, geometry, teardrops,
+    padstack), keyed by reference — pad `at` is footprint-relative, so a
+    footprint move must leave this map untouched."""
+    return {fp["reference"]: fp["pads"] for fp in view["footprints"]}
+
+
+def _teardrop_block() -> "kicad.pcb.Teardrop":
+    return kicad.pcb.Teardrop(
+        best_length_ratio=0.5,
+        max_length=1.0,
+        best_width_ratio=1.0,
+        max_width=2.0,
+        curved_edges=True,
+        filter_ratio=0.9,
+        enabled=True,
+        allow_two_segments=True,
+        prefer_zone_connections=False,
+    )
+
+
 @pytest.fixture
 def work_board(tmp_path) -> Path:
     """A board the test fully controls and can regenerate: the input corpus sample
-    copied to tmp, into which the RIG creates a manual user group via the
-    fileformats API (the KiCad-GUI manual-grouping action, which kicad-cli cannot
-    perform). The group is the test's own construct — nothing relies on a frozen,
-    baked-in group in a committed generated board."""
+    copied to tmp, into which the RIG creates — via the fileformats API — every
+    GUI-authored construct in the fidelity set that kicad-cli cannot create:
+      - a manual user group (the KiCad-GUI manual-grouping action);
+      - a via carrying a full teardrops block AND a per-layer padstack;
+      - a pad-level teardrops override on a real pad;
+      - a generated tuning pattern whose members are two real GND segments.
+    All of them are the test's own constructs — nothing relies on frozen,
+    baked-in content in a committed generated board."""
     work = tmp_path / "board.kicad_pcb"
     shutil.copy2(BASE_SAMPLE, work)
 
@@ -90,6 +123,108 @@ def work_board(tmp_path) -> Path:
             locked=False,
         )
     )
+
+    gnd = next(n.number for n in pcb.nets if n.name == "GND")
+
+    # a teardropped + padstacked via (GUI 'Via Properties' edit)
+    pcb.vias.append(
+        kicad.pcb.Via(
+            type=None,
+            at=kicad.pcb.Xy(x=25.0, y=50.0),
+            size=0.8,
+            drill=0.4,
+            backdrill=None,
+            tertiary_drill=None,
+            front_post_machining=None,
+            back_post_machining=None,
+            layers=["F.Cu", "B.Cu"],
+            remove_unused_layers=None,
+            keep_end_layers=None,
+            start_end_only=None,
+            locked=None,
+            free=None,
+            zone_layer_connections=None,
+            tenting=None,
+            capping=None,
+            covering=None,
+            plugging=None,
+            filling=None,
+            padstack=kicad.pcb.ViaPadstack(
+                mode="front_inner_back",
+                layers=[kicad.pcb.ViaLayer(name="Inner", size=0.5)],
+            ),
+            teardrops=_teardrop_block(),
+            net=gnd,
+            uuid=kicad.gen_uuid(),
+        )
+    )
+
+    # a pad-level teardrops override (GUI 'Pad Properties' edit)
+    pad_owner = next(fp for fp in pcb.footprints if fp.pads)
+    pad_owner.pads[0].teardrops = _teardrop_block()
+
+    # a tuning-pattern generated over two real member segments (GUI 'Tune
+    # length' action). Members must be real board items: KiCad drops a
+    # memberless generated as a ghost pattern.
+    members = []
+    for start, end in [((20.0, 52.0), (24.0, 52.0)), ((24.0, 52.0), (28.0, 52.0))]:
+        seg = kicad.pcb.Segment(
+            start=kicad.pcb.Xy(x=start[0], y=start[1]),
+            end=kicad.pcb.Xy(x=end[0], y=end[1]),
+            width=0.2,
+            layer="F.Cu",
+            net=gnd,
+            uuid=kicad.gen_uuid(),
+        )
+        pcb.segments.append(seg)
+        members.append(seg.uuid)
+    pcb.generateds.append(
+        kicad.pcb.Generated(
+            uuid=kicad.gen_uuid(),
+            type="tuning_pattern",
+            name="Tuning Pattern",
+            layer="F.Cu",
+            locked=None,
+            base_line=kicad.pcb.GeneratedPts(
+                pts=kicad.pcb.Pts(
+                    xys=[
+                        kicad.pcb.Xy(x=20.0, y=52.0),
+                        kicad.pcb.Xy(x=28.0, y=52.0),
+                    ],
+                    arcs=[],
+                )
+            ),
+            base_line_coupled=None,
+            corner_radius_percent=100.0,
+            end=kicad.pcb.GeneratedXy(xy=kicad.pcb.Xy(x=28.0, y=52.0)),
+            initial_side="left",
+            is_time_domain=False,
+            last_diff_pair_gap=None,
+            last_netname="GND",
+            last_status="too_short",
+            last_track_width=0.2,
+            last_tuning_length=8.0,
+            max_amplitude=2.0,
+            min_amplitude=0.2,
+            min_spacing=0.6,
+            origin=kicad.pcb.GeneratedXy(xy=kicad.pcb.Xy(x=20.0, y=52.0)),
+            override_custom_rules=False,
+            rounded=True,
+            single_sided=False,
+            target_delay=None,
+            target_delay_max=None,
+            target_delay_min=None,
+            target_length=42.0,
+            target_length_max=42.1,
+            target_length_min=41.9,
+            target_skew=None,
+            target_skew_max=None,
+            target_skew_min=None,
+            tuning_mode="single",
+            members=members,
+        )
+    )
+
     work.write_text(kicad.dumps(bf))
     return work
 
@@ -98,6 +233,19 @@ def test_managed_move_persists_and_loses_nothing(work_board: Path):
     mgr = PcbManager()
     mgr.load(work_board)
     before = semantic_view(mgr.pcb)
+
+    # vacuity guard: the rig-injected fidelity-set constructs must be VISIBLE in
+    # the view, otherwise the equality assertions below prove nothing about them
+    assert any(v["teardrops"] is not None for v in before["vias"])
+    assert any(v["padstack"] is not None for v in before["vias"])
+    assert any(
+        pad["teardrops"] is not None
+        for pads in _pads_by_ref(before).values()
+        for pad in pads
+    )
+    assert [g["type"] for g in before["generateds"]] == ["tuning_pattern"]
+    assert before["generateds"][0]["target_length"] == 42.0
+    assert len(before["generateds"][0]["members"]) == 2
 
     target = mgr.get_footprints()[0]
     new_x, new_y = target.x + 5.0, target.y + 7.0
@@ -122,9 +270,13 @@ def test_managed_move_persists_and_loses_nothing(work_board: Path):
     assert after["groups"] == before["groups"]  # incl. the rig-created user group
     assert after["zones"] == before["zones"]
     assert after["nets"] == before["nets"]
-    assert after["segments"] == before["segments"]
+    assert after["segments"] == before["segments"]  # incl. the tuning members
     assert after["arcs"] == before["arcs"]
-    assert after["vias"] == before["vias"]
+    assert after["vias"] == before["vias"]  # incl. teardrops + padstack
+    assert after["generateds"] == before["generateds"]  # the tuning pattern
+    # pad-level teardrops/padstacks (pad `at` is footprint-relative: the move
+    # must not change any pad projection)
+    assert _pads_by_ref(after) == _pads_by_ref(before)
 
     # 3. no footprint dropped, no copper disconnected by the edit
     assert _refs(after) == _refs(before)
@@ -177,10 +329,12 @@ def test_managed_edit_keeps_board_drc_runnable(work_board: Path):
     json.loads(report.read_text())
 
 
-# A v10 via carrying a teardrops block with one key the schema does not model —
-# stands in for a v10 shape variation of a warning-set construct. The contract
-# (P0.2 S5a, BACKLOG no-silent-failure decision) is that such a key is reported
-# loudly, never dropped without trace.
+# A v10 via carrying a teardrops block with one key the schema does not model.
+# Teardrops themselves are fidelity-set (schema-complete) since BACKLOG §G — the
+# synthetic key below is deliberately NOT a real KiCad key and so stays unknown
+# forever: this test is the permanent S5a backstop pinning that any FUTURE key
+# KiCad adds inside a modeled construct is reported loudly (P0.2 S5a, BACKLOG
+# no-silent-failure decision), never dropped without trace.
 _V10_VIA_WITH_UNMODELED_TEARDROP_KEY = """(kicad_pcb
 \t(version 20260206)
 \t(generator "pcbnew")
