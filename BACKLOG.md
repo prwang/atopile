@@ -550,6 +550,21 @@ and H3 (sidecar constraints) properly address.
     same-pid re-acquire now raises instead of `assert`. `sqlite.py` adds `PRAGMA busy_timeout=30000` (WAL already
     on). Tests `test/libs/test_concurrency.py` (torn-read, crash-leaves-original, cross-process mutual exclusion);
     both load-bearing guards mutation-verified. 197 kicad/util tests green; real build writes the board atomically.
+- **H5 — partial place & route (place what you can, report the rest)**: a global solve/pick is not always
+  feasible, so an incomplete design must still yield a board for the resolvable subset while surfacing the rest.
+  - [x] **H5 report core** [✅ 2026-07-03]: `libs/app/partial.py::collect_unresolved_modules` — every designated
+    part (`has_designator_prefix`) lacking a footprint (so absent from the board), sorted, with reason
+    `no-standard-footprint` (has a package but no KiCad std footprint) or `deferred-pick` (no footprint, no
+    package — resolve via `ato bom`). `pick_parts` writes it to a deterministic `<output_base>.unresolved.json`
+    (atomic) + a loud summary. Closes the loud-or-nothing gap where a footprint-less deferred part was silently
+    missing from the board with only a soft warning (picker.py:574-576's intended-but-nonexistent loud path).
+    Tests `test_partial.py` (2: reports+clears-on-attach, deferred-pick reason), guard mutation-verified. e2e:
+    a `--no-pick` build with an unshipped-package r2 completes with r1 placed and r2 in unresolved.json.
+  - [ ] **H5 remaining**: `apply_placements` (placement.py) tolerating a `layout.yaml`-named deferred module
+    (return it in `unresolved`, do NOT raise; a typo address still raises); route-subset guard (a route stage
+    whose net has no endpoints on the subset board degrades to a counted failure, not a crash) + test; feed
+    unresolved into `diagnostics.json` findings (UNRESOLVED-COMPONENT) so the closed loop can act; optional
+    `ingest_footprint` catch-and-continue for a missing atomic .kicad_mod, gated behind partial mode only.
   - [ ] **H4 partition + snapshot lock** (remaining): route OWNS copper (writes only under `<output_base>.route/`);
     bom/finalize OWNS picks (writes `.bom.*` + the H3 sidecar, must NOT re-enter `update_pcb`/write `paths.layout`
     or `.kicad_pro`). `ato route` should acquire `global_lock` only to snapshot `paths.layout` into its workdir

@@ -677,6 +677,25 @@ def pick_parts(ctx: BuildStepContext) -> None:
         if n:
             logger.info(f"Attached {n} package footprint(s) (deferred BOM)")
 
+    # Partial P&R: report every designated part that has no footprint (it will be
+    # absent from the board) as a deterministic artifact + loud summary, so the
+    # subset that IS placeable proceeds while "the rest" is surfaced, never
+    # silently dropped (H-partial).
+    from faebryk.libs.app.partial import collect_unresolved_modules
+    from faebryk.libs.util import atomic_write_text
+
+    unresolved = collect_unresolved_modules(app)
+    atomic_write_text(
+        config.build.paths.output_base.with_suffix(".unresolved.json"),
+        json.dumps([{"address": u.address, "reason": u.reason} for u in unresolved]),
+    )
+    if unresolved:
+        logger.warning(
+            f"{len(unresolved)} component(s) unresolved (no footprint); the board "
+            f"is built without them. Resolve with `ato bom` or pin a footprint: "
+            + ", ".join(f"{u.address} ({u.reason})" for u in unresolved)
+        )
+
     save_part_info_to_pcb(app)
 
 

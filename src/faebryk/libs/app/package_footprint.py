@@ -79,7 +79,7 @@ def attach_package_footprint(module: fabll.Node) -> bool:
     if resolved is None:
         logger.warning(
             f"No KiCad standard footprint for {module.get_full_name()} "
-            f"(package {prefix}{size.name}); pin an explicit footprint or `ato bom`."
+            f"(package {size.name}); pin an explicit footprint or `ato bom`."
         )
         return False
     identifier, fp_path = resolved
