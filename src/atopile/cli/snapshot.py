@@ -32,10 +32,12 @@ Loud-or-nothing: a missing board, a failing kicad-cli, or a missing rasterizer
 is a hard error with the install hint — never a silently absent picture.
 """
 
+import contextlib
 import json
 import logging
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Annotated
 
@@ -69,13 +71,19 @@ def board_copper_layers(board: Path) -> list[str]:
 
 def run_drc(board: Path, out_json: Path) -> dict:
     """kicad-cli DRC → parsed report dict (written to out_json). Uses mm and all
-    severities; honors the project's .kicad_pro / .kicad_dru next to the board."""
+    severities; honors the project's .kicad_pro / .kicad_dru next to the board.
+    `--refill-zones`: build-authored pours are `(fill yes)` zones WITHOUT
+    stored fill polygons (board_features.py) and the router round-trips them
+    verbatim — judging the stored (empty) fill falsely reports every
+    plane-only-connected pad as unconnected. Connectivity is judged on the
+    refilled state; the board file itself is not touched (no --save-board)."""
     _run(
         [
             "kicad-cli", "pcb", "drc",
             "--format", "json",
             "--severity-all",
             "--units", "mm",
+            "--refill-zones",
             "-o", str(out_json),
             str(board),
         ],
@@ -233,6 +241,35 @@ def write_board_lengths(board: Path, out_base: Path) -> dict:
     return report
 
 
+@contextlib.contextmanager
+def _refilled_render_source(board: Path):
+    """Yield the board to RENDER: if it carries `(fill yes)` zones, a temp
+    copy with the fills actually computed and saved (kicad-cli drc
+    --refill-zones --save-board — there is no standalone fill command), else
+    the board itself. The eyes must show the copper DRC judged (run_drc
+    judges the refilled state), but the input board is never mutated — raw
+    mode may point at a user's hand-authored file, and --save-board would
+    also silently rewrite/upgrade it with kicad-cli's formatter."""
+    if "(fill yes" not in board.read_text(encoding="utf-8", errors="replace"):
+        yield board
+        return
+    with tempfile.TemporaryDirectory() as tmpdir:
+        copy = Path(tmpdir) / board.name
+        shutil.copyfile(board, copy)
+        _run(
+            [
+                "kicad-cli", "pcb", "drc",
+                "--format", "json",
+                "--refill-zones",
+                "--save-board",
+                "-o", str(Path(tmpdir) / "refill_drc.json"),
+                str(copy),
+            ],
+            "kicad-cli pcb drc (zone refill for render)",
+        )
+        yield copy
+
+
 def _stage_project_sidecars(board: Path, project_src: Path | None) -> None:
     """kicad-cli DRC only honors design rules from `<board>.kicad_pro` /
     `<board>.kicad_dru` SITTING NEXT TO the board. A routed board lives in the
@@ -290,7 +327,10 @@ def snapshot_board(
         for line in lengths_table_lines(lengths):
             log.info(line)
     marks = drc_violation_marks(drc)
-    png = render_board_png(board, Path(f"{out_base}.png"), ppmm=ppmm, marks=marks)
+    with _refilled_render_source(board) as render_src:
+        png = render_board_png(
+            render_src, Path(f"{out_base}.png"), ppmm=ppmm, marks=marks
+        )
     n_v = len(drc.get("violations", []))
     n_u = len(drc.get("unconnected_items", []))
     log.info(f"snapshot: {png}")
