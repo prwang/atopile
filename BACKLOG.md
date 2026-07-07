@@ -584,9 +584,12 @@ touching diff pairs, no board outline, and relic copper, and nothing looked. Lan
   Rules fill stage/lane geometry defaults (track_width/clearance/diff_pair_width/diff_pair_gap; fills marked set so
   `exclude_unset` forwarding carries them) and enforce board minimums at parse (clearance floor, intra-pair gap ≥ clearance,
   trunk spacing ≥ inter_pair_clearance). "5mil"/"mm" strings accepted. DRC judges the same numbers: rules → `.kicad_pro`
-  Default net class + generated `.kicad_dru` (clearance floor / courtyard component spacing / diff-pair max uncoupled —
-  ALL empirically honored by kicad-cli DRC, incl. uncoupled on our net names). `layout_plan.py DesignRules` +
-  `board_rules.generate_dru_rules` + `test_design_rules_contract.py` (21).
+  Default net class + generated `.kicad_dru` (clearance floor / courtyard component spacing / diff-pair max uncoupled /
+  F1 matched-length: `rules.intra_pair_skew_max` = board-wide `inDiffPair('*')`+`within_diff_pairs` skew, per-NetClass
+  `skew_max`/`intra_pair_skew_max`/`length_min`/`length_max` scoped `hasNetclass('<name>')` — ALL empirically honored by
+  kicad-cli DRC on our net names, violation types `skew_out_of_range`/`length_out_of_range` pinned live).
+  `layout_plan.py DesignRules`+`NetClass` + `board_rules.generate_dru_rules` + `test_design_rules_contract.py` (21) +
+  `test_matched_length_rules_contract.py` (18).
 - [x] **I3 `ato snapshot` (headless eyes)**: headless board PNG + DRC so the loop can SEE shorts without a human in the GUI.
   kicad-cli export svg page-size-mode 1 (absolute origin ⇒ DRC mm → px = pure scaling) → `rsvg-convert` (**ImageMagick's
   builtin SVG renderer silently DROPS KiCad tracks** — pads render, copper gone; librsvg is faithful) → PIL numbered circle

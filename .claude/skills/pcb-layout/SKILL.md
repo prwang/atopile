@@ -97,8 +97,9 @@ Write this FIRST, before any stage. It plays three roles at once:
 3. **DRC authority** — the build writes the same numbers into the
    `.kicad_pro` Default net class and a generated `.kicad_dru`
    (clearance floor, `courtyard_clearance` = component spacing,
-   `diff_pair_uncoupled` max). kicad-cli DRC honors all three — empirically
-   including uncoupled-length on atopile's net names.
+   `diff_pair_uncoupled` max, and the board-wide intra-pair skew rule
+   below). kicad-cli DRC honors all of them — empirically including
+   uncoupled-length and skew on atopile's net names.
 ```yaml
 rules:
   clearance: 5mil            # copper-copper minimum (the short-circuit rule)
@@ -108,7 +109,12 @@ rules:
   inter_pair_clearance: 20mil
   component_spacing: 20mil   # courtyard-to-courtyard (DRC courtyard_clearance)
   uncoupled_max_length: 200mil   # see §5.6 for how to pick this honestly
+  intra_pair_skew_max: 20mil # P vs N length delta budget, EVERY _P/_N pair
 ```
+`intra_pair_skew_max` becomes one `.kicad_dru` rule conditioned on
+`A.inDiffPair('*')` with `(constraint skew (max ..) (within_diff_pairs))` —
+kicad-cli flags a breach as `skew_out_of_range` (per-class matched-length
+rules live on `net_classes`, §2.3).
 Lengths accept mm numbers or `"<n>mil"` / `"<n>mm"` strings. `extra='forbid'`.
 **Change-propagation rule:** `ato route` re-parses `layout.yaml`, so a rules edit
 reaches the *copper* with route alone — but the `.kicad_pro`/`.kicad_dru` DRC
@@ -208,9 +214,20 @@ board:
       via_drill: 0.4
       diff_pair_gap: 0.2         # optional
       diff_pair_width: 0.2       # optional
+      # matched-length rules (F1) — these CANNOT live in .kicad_pro; they are
+      # emitted as .kicad_dru rules scoped (condition "A.hasNetclass('PWR')"):
+      skew_max: 1.0              # group skew: each class net vs the group's LONGEST
+      intra_pair_skew_max: 20mil # within each _P/_N pair only (within_diff_pairs)
+      length_min: 40             # absolute per-net length window — emit only the
+      length_max: 60             # bounds you set (mm numbers or mil/mm strings)
       nets: [top.pwr, top.gnd]   # ato addresses (resolved via bridge②)
 ```
-Loud at parse: duplicate class name, or a net in two classes.
+kicad-cli fires `skew_out_of_range` / `length_out_of_range` on breach; KiCad
+measures track+arc+via length and pad-to-die (live pins:
+`test_matched_length_rules_contract.py`). Loud at parse: duplicate class name, a
+net in two classes, a matched-length field on a class with an EMPTY `nets` list
+(it could never bite), or a quote in the class name (unrepresentable in the dru
+condition string).
 
 #### pours / keepouts / silk — §F6/F7/F8  (`Pour` / `Keepout` / `SilkText`)
 ```yaml
@@ -561,10 +578,11 @@ overwrite it.
 - `src/faebryk/exporters/pcb/layout/bundle_geometry.py` — the pinned cross-section
   convention (edge gap, pair envelope); `test_bundle_contract.py` oracles.
 - `src/faebryk/exporters/pcb/layout/board_rules.py` — rules → `.kicad_pro` Default
-  class + `generate_dru_rules` (`.kicad_dru`) + D5 component-class membership
-  (static footprint stamp = headless authority, `.kicad_pro` mirror);
-  `test_design_rules_contract.py`, `test_rule_area_contract.py` (D5.*),
-  `test_board_rules_contract.py`.
+  class + `generate_dru_rules` (`.kicad_dru`, incl. the F1 matched-length rules)
+  + D5 component-class membership (static footprint stamp = headless authority,
+  `.kicad_pro` mirror); `test_design_rules_contract.py`,
+  `test_rule_area_contract.py` (D5.*), `test_board_rules_contract.py`,
+  `test_matched_length_rules_contract.py`.
 - GUI-construct fidelity oracles — `src/faebryk/libs/kicad/semantic_view.py` (v3:
   teardrops/padstacks/treatments/generateds/placement-source/pts chains) +
   `test/libs/kicad/test_{padstack,generated}_dialect.py`, `test_pts_interleave.py`,

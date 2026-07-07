@@ -194,6 +194,9 @@ class DesignRules(BaseModel):
     inter_pair_clearance: RuleLen | None = Field(default=None, gt=0)  # pair-to-pair
     component_spacing: RuleLen | None = Field(default=None, gt=0)  # courtyard-courtyard
     uncoupled_max_length: RuleLen | None = Field(default=None, gt=0)  # per diff pair
+    # board-wide intra-pair skew budget: ONE dru rule over every suffix-convention
+    # pair (`A.inDiffPair('*')` + `(within_diff_pairs)`), P vs N length delta.
+    intra_pair_skew_max: RuleLen | None = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def _validate_coherence(self) -> "DesignRules":
@@ -742,7 +745,22 @@ class NetClass(BaseModel):
     `nets` are the ato signal ADDRESSES assigned to this class (resolved to kicad
     net names through bridge② at emit time, like everywhere else). Textualizing
     these makes DRC reflect DESIGN INTENT instead of silently eating KiCad's
-    defaults (the F-drc-rules goal)."""
+    defaults (the F-drc-rules goal).
+
+    The MATCHED-LENGTH fields (F1) cannot live in `.kicad_pro` net_settings —
+    they become `.kicad_dru` custom rules scoped `A.hasNetclass('<name>')`
+    (board_rules.generate_dru_rules):
+
+      * `skew_max` — group/inter-pair skew: kicad-cli buckets ALL class nets and
+        judges each against the LONGEST net of the group;
+      * `intra_pair_skew_max` — the `(within_diff_pairs)` variant: P vs N only;
+      * `length_min` / `length_max` — absolute per-net length window.
+
+    Coherence: a class setting any of them with an empty `nets` list is a
+    constraint that can never bite — a lie, rejected at parse; the class name is
+    embedded in the dru condition string, so a name containing a quote is
+    unrepresentable and rejected (only when a matched-length field forces it
+    into that string)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -753,7 +771,34 @@ class NetClass(BaseModel):
     via_drill: float | None = Field(default=None, gt=0)
     diff_pair_gap: float | None = Field(default=None, gt=0)
     diff_pair_width: float | None = Field(default=None, gt=0)
+    # matched-length rules (dru-emitted, see docstring)
+    skew_max: RuleLen | None = Field(default=None, gt=0)
+    intra_pair_skew_max: RuleLen | None = Field(default=None, gt=0)
+    length_min: RuleLen | None = Field(default=None, gt=0)
+    length_max: RuleLen | None = Field(default=None, gt=0)
     nets: list[str] = Field(default_factory=list)  # ato signal addresses
+
+    @model_validator(mode="after")
+    def _validate_matched_length(self) -> "NetClass":
+        set_fields = [
+            f
+            for f in ("skew_max", "intra_pair_skew_max", "length_min", "length_max")
+            if getattr(self, f) is not None
+        ]
+        if not set_fields:
+            return self
+        if not self.nets:
+            raise ValueError(
+                f"net class {self.name!r} sets {set_fields} but assigns no nets — "
+                "a matched-length constraint over an empty class can never bite"
+            )
+        if "'" in self.name or '"' in self.name:
+            raise ValueError(
+                f"net class name {self.name!r} contains a quote — it is embedded "
+                "in the .kicad_dru condition string A.hasNetclass('<name>') and "
+                "cannot be escaped there"
+            )
+        return self
 
 
 class Pour(BaseModel):

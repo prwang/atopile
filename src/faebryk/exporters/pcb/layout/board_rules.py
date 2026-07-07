@@ -21,8 +21,9 @@ The `rules:` header (DesignRules) is ALSO authored here: it becomes the Default
 net class (clearance/track_width/diff pair geometry), and `generate_dru_rules`
 emits the `<project>.kicad_dru` custom rules a net class cannot express
 (component courtyard spacing, diff-pair max uncoupled length, the board-wide
-clearance floor) — so kicad-cli DRC judges the same numbers the router started
-from.
+clearance floor, the F1 matched-length rules: board-wide intra-pair skew + the
+per-class skew/length constraints) — so kicad-cli DRC judges the same numbers
+the router started from.
 
 Loud-or-nothing (S5a): a class net that does not resolve through bridge② is a
 hard error (LayoutPlanError) — never a silently-dropped assignment. Duplicate
@@ -287,31 +288,88 @@ def generate_component_class_membership(
 
 
 def generate_dru_rules(plan: LayoutPlan) -> str | None:
-    """The `.kicad_dru` custom-rules text from the plan's `rules:` header, or None
-    when the plan has none.
+    """The `.kicad_dru` custom-rules text from the plan's `rules:` header + the
+    net classes' matched-length fields (F1), or None when neither authors any.
 
     Net-class settings (the function above) cover clearance/width per class; the
     dru carries the rules a net class CANNOT express: the courtyard-to-courtyard
-    component spacing and the diff-pair max uncoupled length. The board-wide
-    copper clearance is ALSO emitted here as a hard floor — a dru min beats any
-    accidentally-looser class. kicad-cli pcb drc loads `<project>.kicad_dru`
-    automatically when it sits next to the project file."""
+    component spacing, the diff-pair max uncoupled length, and the
+    matched-length constraints. The board-wide copper clearance is ALSO emitted
+    here as a hard floor — a dru min beats any accidentally-looser class.
+    kicad-cli pcb drc loads `<project>.kicad_dru` automatically when it sits
+    next to the project file.
+
+    Matched-length emission (violation types empirically pinned on kicad-cli
+    10.0.3, test_matched_length_rules_contract.py):
+
+      * `rules.intra_pair_skew_max` → ONE board-wide rule over every
+        suffix-convention pair: `(condition "A.inDiffPair('*')")` +
+        `(constraint skew (max ..) (within_diff_pairs))`
+        → "skew_out_of_range" within each _P/_N pair;
+      * per class (scoped `(condition "A.hasNetclass('<name>')")` — the class
+        itself reaches KiCad via the .kicad_pro written by
+        `generate_project_rules`, always emitted alongside):
+        `skew_max` → plain skew (group match: every class net judged against
+        the group's LONGEST net), `intra_pair_skew_max` → the
+        `(within_diff_pairs)` variant, `length_min`/`length_max` → one
+        `(constraint length ...)` carrying only the authored bounds
+        → "length_out_of_range".
+
+    Class-name representability (no quotes) and the never-bites empty-nets case
+    are rejected at parse (NetClass validator) — this emitter never sees them."""
+    lines: list[str] = []
     r = plan.rules
-    if r is None:
+    if r is not None:
+        lines.append(
+            f'(rule "board-min-clearance"\n'
+            f"  (constraint clearance (min {r.clearance}mm)))"
+        )
+        if r.component_spacing is not None:
+            lines.append(
+                f'(rule "board-component-spacing"\n'
+                f"  (constraint courtyard_clearance (min {r.component_spacing}mm)))"
+            )
+        if r.uncoupled_max_length is not None:
+            lines.append(
+                f'(rule "board-diffpair-uncoupled-max"\n'
+                f"  (constraint diff_pair_uncoupled (max {r.uncoupled_max_length}mm)))"
+            )
+        if r.intra_pair_skew_max is not None:
+            lines.append(
+                f'(rule "board-diffpair-intra-skew"\n'
+                f'  (condition "A.inDiffPair(\'*\')")\n'
+                f"  (constraint skew (max {r.intra_pair_skew_max}mm)"
+                f" (within_diff_pairs)))"
+            )
+
+    net_classes = plan.board.net_classes if plan.board is not None else []
+    for nc in net_classes:
+        condition = f'  (condition "A.hasNetclass(\'{nc.name}\')")\n'
+        if nc.skew_max is not None:
+            lines.append(
+                f'(rule "class-{nc.name}-skew"\n'
+                f"{condition}"
+                f"  (constraint skew (max {nc.skew_max}mm)))"
+            )
+        if nc.intra_pair_skew_max is not None:
+            lines.append(
+                f'(rule "class-{nc.name}-intra-skew"\n'
+                f"{condition}"
+                f"  (constraint skew (max {nc.intra_pair_skew_max}mm)"
+                f" (within_diff_pairs)))"
+            )
+        if nc.length_min is not None or nc.length_max is not None:
+            bounds = "".join(
+                f" ({kind} {value}mm)"
+                for kind, value in (("min", nc.length_min), ("max", nc.length_max))
+                if value is not None
+            )
+            lines.append(
+                f'(rule "class-{nc.name}-length"\n'
+                f"{condition}"
+                f"  (constraint length{bounds}))"
+            )
+
+    if not lines:
         return None
-    lines = ["(version 1)"]
-    lines.append(
-        f'(rule "board-min-clearance"\n'
-        f"  (constraint clearance (min {r.clearance}mm)))"
-    )
-    if r.component_spacing is not None:
-        lines.append(
-            f'(rule "board-component-spacing"\n'
-            f"  (constraint courtyard_clearance (min {r.component_spacing}mm)))"
-        )
-    if r.uncoupled_max_length is not None:
-        lines.append(
-            f'(rule "board-diffpair-uncoupled-max"\n'
-            f"  (constraint diff_pair_uncoupled (max {r.uncoupled_max_length}mm)))"
-        )
-    return "\n".join(lines) + "\n"
+    return "\n".join(["(version 1)"] + lines) + "\n"
