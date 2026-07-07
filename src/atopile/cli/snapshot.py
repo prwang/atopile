@@ -63,9 +63,17 @@ def _run(cmd: list[str], what: str) -> subprocess.CompletedProcess:
 
 
 def board_copper_layers(board: Path) -> list[str]:
-    """The copper layers present in the board's layer table, in stack order.
-    Text-scan of the `(layers ...)` header — cheap and dialect-stable."""
+    """The copper layers present in the board's layer TABLE, in stack order.
+    Scans only the top-level `(layers ...)` header block — a whole-file scan
+    false-positives on the `(stackup ...)` section, which names inner layers
+    even on a 2-layer board (seen live: a 2-layer fixture rendered as 4-layer,
+    and kicad-cli silently exports NOTHING for a nonexistent layer)."""
     text = board.read_text(encoding="utf-8", errors="replace")
+    start = text.find("\n\t(layers\n")
+    if start != -1:
+        end = text.find("\n\t)", start)
+        if end != -1:
+            text = text[start:end]
     return [name for name in _COPPER_ORDER if f'"{name}"' in text]
 
 
@@ -126,29 +134,13 @@ def summarize_drc(drc: dict) -> list[str]:
     return lines
 
 
-def render_board_png(
-    board: Path,
-    out_png: Path,
-    *,
-    layers: list[str] | None = None,
-    ppmm: float = 20.0,
-    marks: list[tuple[float, float, str]] | None = None,
-    crop_margin_mm: float = 3.0,
-) -> Path:
-    """Render the board to a cropped PNG with DRC marks; see module docstring."""
+def _rasterize_layers(
+    board: Path, layers: list[str], out_png: Path, ppmm: float
+) -> float:
+    """kicad-cli SVG (single-mode, absolute page origin) → transparent-background
+    RGBA PNG for one layer group. Returns the page width in mm (the mm→px
+    authority, parsed from the SVG header — loud if the header changes)."""
     import re
-
-    from PIL import Image, ImageChops, ImageDraw
-
-    if not board.exists():
-        raise UserResourceException(f"missing board {board} — run `ato build` first")
-    if shutil.which("rsvg-convert") is None:
-        raise UserResourceException(
-            "rsvg-convert not found — install librsvg2-bin (ImageMagick's builtin "
-            "SVG renderer silently drops KiCad tracks, so it is not a fallback)"
-        )
-    if layers is None:
-        layers = board_copper_layers(board) + ["Edge.Cuts"]
 
     svg_path = out_png.with_suffix(".svg")
     _run(
@@ -163,8 +155,12 @@ def render_board_png(
         ],
         "kicad-cli pcb export svg",
     )
-
-    # the SVG header carries the page size in mm — the mm→px authority.
+    if not svg_path.exists():
+        raise UserResourceException(
+            f"kicad-cli export svg produced no file for layers {layers} — it "
+            "silently no-ops (rc=0) when a requested layer does not exist on "
+            "the board (loud-or-nothing)"
+        )
     head = svg_path.read_text(encoding="utf-8", errors="replace")[:2000]
     m = re.search(r'width="([0-9.]+)mm" height="([0-9.]+)mm"', head)
     if not m:
@@ -172,22 +168,77 @@ def render_board_png(
             f"cannot parse page size from {svg_path} — kicad-cli SVG header "
             "changed; the mm→px mapping would be a guess (loud-or-nothing)"
         )
-    page_w_mm = float(m.group(1))
-
     _run(
         [
             "rsvg-convert",
             "--dpi-x", str(ppmm * 25.4),
             "--dpi-y", str(ppmm * 25.4),
-            "--background-color", _BACKGROUND,
             "-o", str(out_png),
             str(svg_path),
         ],
         "rsvg-convert",
     )
     svg_path.unlink()  # the SVG is an intermediate, not a deliverable
+    return float(m.group(1))
 
-    im = Image.open(out_png).convert("RGB")
+
+_INNER_LAYER_ALPHA = 0.45  # inner (plane) copper dimming in the composite
+
+
+def render_board_png(
+    board: Path,
+    out_png: Path,
+    *,
+    layers: list[str] | None = None,
+    ppmm: float = 20.0,
+    marks: list[tuple[float, float, str]] | None = None,
+    crop_margin_mm: float = 3.0,
+) -> Path:
+    """Render the board to a cropped PNG with DRC marks; see module docstring.
+
+    Default compositing (layers=None): INNER copper layers are drawn first and
+    DIMMED (alpha 0.45), then B.Cu, F.Cu and Edge.Cuts opaque on top — the
+    eyes exist to show SIGNALS; a full-board plane fill painted opaque over
+    the outer layers hid every track (seen live on a 4-layer pour board).
+    kicad-cli paints --layers in list order with no translucency, so the
+    grouping is done here. NB the z-order is presentation, not physics: B.Cu
+    is drawn above the planes (and below F.Cu). An explicit `layers` list
+    bypasses grouping entirely (single pass, listed order)."""
+    from PIL import Image, ImageChops, ImageDraw
+
+    if not board.exists():
+        raise UserResourceException(f"missing board {board} — run `ato build` first")
+    if shutil.which("rsvg-convert") is None:
+        raise UserResourceException(
+            "rsvg-convert not found — install librsvg2-bin (ImageMagick's builtin "
+            "SVG renderer silently drops KiCad tracks, so it is not a fallback)"
+        )
+    if layers is None:
+        copper = board_copper_layers(board)
+        inner = [name for name in copper if name not in ("F.Cu", "B.Cu")]
+        outer = [name for name in ("B.Cu", "F.Cu") if name in copper]
+        groups: list[tuple[list[str], float]] = []
+        if inner:
+            groups.append((inner, _INNER_LAYER_ALPHA))
+        groups.append((outer + ["Edge.Cuts"], 1.0))
+    else:
+        groups = [(layers, 1.0)]
+
+    page_w_mm = 0.0
+    composite: "Image.Image | None" = None
+    for i, (group, alpha) in enumerate(groups):
+        group_png = Path(f"{out_png}.layer{i}.png")
+        page_w_mm = _rasterize_layers(board, group, group_png, ppmm)
+        layer_im = Image.open(group_png).convert("RGBA")
+        group_png.unlink()
+        if alpha < 1.0:
+            a = layer_im.getchannel("A").point(lambda v: int(v * alpha))
+            layer_im.putalpha(a)
+        if composite is None:
+            composite = Image.new("RGBA", layer_im.size, _BACKGROUND)
+        composite.alpha_composite(layer_im)
+    assert composite is not None  # ≥ 1 group by construction
+    im = composite.convert("RGB")
     scale = im.size[0] / page_w_mm  # px per mm (uniform: same dpi both axes)
 
     draw = ImageDraw.Draw(im)

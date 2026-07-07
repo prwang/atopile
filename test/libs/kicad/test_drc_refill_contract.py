@@ -182,3 +182,106 @@ def test_snapshot_png_shows_zone_fill_without_mutating_board(tmp_path):
         f"snapshot PNG does not show the zone fill: filled fraction "
         f"{filled_frac:.3f} vs raw (unfilled) {raw_frac:.3f}"
     )
+
+
+def _four_layer_plane_board(tmp_path: Path) -> Path:
+    """4-layer board: an In1.Cu GND zone ((fill yes), unfilled on disk) spanning
+    the board, one fat F.Cu track and one fat B.Cu track crossing it, two TH
+    GND pads. Render answer fixed by construction: after refill the plane is a
+    large solid area; the F.Cu and B.Cu tracks must remain VISIBLE on top of
+    it in the composite (the eyes exist to show signals, not to paint planes
+    over them — pre-fix, layer paint order hid every track under the fill)."""
+    board = tmp_path / "plane4.kicad_pcb"
+    board.write_text(
+        "(kicad_pcb\n"
+        "\t(version 20241229)\n"
+        '\t(generator "pcbnew")\n'
+        '\t(generator_version "9.0")\n'
+        "\t(general\n\t\t(thickness 1.6)\n\t\t(legacy_teardrops no)\n\t)\n"
+        '\t(paper "A4")\n'
+        "\t(layers\n"
+        '\t\t(0 "F.Cu" signal)\n'
+        '\t\t(1 "In1.Cu" signal)\n'
+        '\t\t(2 "In2.Cu" signal)\n'
+        '\t\t(3 "B.Cu" signal)\n'
+        '\t\t(25 "Edge.Cuts" user)\n'
+        "\t)\n"
+        "\t(setup\n\t\t(pad_to_mask_clearance 0)\n\t)\n"
+        '\t(net 0 "")\n'
+        '\t(net 1 "GND")\n'
+        f"{_pad_fp('P1', 100)}\n"
+        f"{_pad_fp('P2', 110)}\n"
+        '\t(segment (start 97 102) (end 113 102) (width 0.6) (layer "F.Cu") (net 1))\n'
+        '\t(segment (start 97 103.5) (end 113 103.5) (width 0.6) (layer "B.Cu") (net 1))\n'
+        "\t(zone\n"
+        "\t\t(net 1)\n"
+        '\t\t(net_name "GND")\n'
+        '\t\t(layer "In1.Cu")\n'
+        '\t\t(name "gndpour")\n'
+        "\t\t(hatch edge 0.5)\n"
+        "\t\t(connect_pads (clearance 0.2))\n"
+        "\t\t(min_thickness 0.25)\n"
+        "\t\t(filled_areas_thickness no)\n"
+        "\t\t(fill yes (thermal_gap 0.5) (thermal_bridge_width 0.5))\n"
+        "\t\t(polygon\n"
+        "\t\t\t(pts (xy 95 95) (xy 115 95) (xy 115 105) (xy 95 105))\n"
+        "\t\t)\n"
+        "\t)\n"
+        "\t(gr_rect (start 94 94) (end 116 106)\n"
+        '\t\t(stroke (width 0.1) (type default)) (layer "Edge.Cuts"))\n'
+        ")\n"
+    )
+    return board
+
+
+@needs_kicad_cli
+@pytest.mark.skipif(
+    shutil.which("rsvg-convert") is None, reason="rsvg-convert absent"
+)
+@pytest.mark.slow
+def test_render_keeps_signal_layers_visible_over_plane_fill(tmp_path):
+    """Compositing contract: inner-layer (plane) copper renders BENEATH the
+    outer signal layers — an F.Cu track and a B.Cu track crossing a filled
+    In1.Cu plane stay visible in the default render, and the plane itself is
+    visible where no signal covers it. Sampled at construction-fixed points;
+    the F.Cu sample must match a control render of F.Cu+Edge.Cuts alone
+    (same crop anchor), proving the track is drawn on TOP, undimmed."""
+    from PIL import Image
+
+    from atopile.cli.snapshot import _refilled_render_source, render_board_png
+
+    board = _four_layer_plane_board(tmp_path)
+    ppmm = 20.0
+
+    def sample(png: Path, x_mm: float, y_mm: float):
+        im = Image.open(png).convert("RGB")
+        # crop_margin_mm=0: crop anchor == content bbox corner == the edge
+        # rect at (94, 94) (stroke 0.05 halo)
+        px = (x_mm - 93.95) * ppmm, (y_mm - 93.95) * ppmm
+        return im.getpixel((int(px[0]), int(px[1])))
+
+    with _refilled_render_source(board) as src:
+        full = render_board_png(
+            src, tmp_path / "full.png", ppmm=ppmm, crop_margin_mm=0.0
+        )
+        control = render_board_png(
+            src,
+            tmp_path / "fcu.png",
+            layers=["F.Cu", "Edge.Cuts"],
+            ppmm=ppmm,
+            crop_margin_mm=0.0,
+        )
+
+    bg = sample(full, 94.5, 94.4)  # inside edge, outside zone: background
+    plane = sample(full, 105, 96.5)  # plane only
+    f_track = sample(full, 105, 102)  # F.Cu track over the plane
+    b_track = sample(full, 105, 103.5)  # B.Cu track over the plane
+
+    assert plane != bg, "plane fill invisible in the composite"
+    assert f_track == sample(control, 105, 102), (
+        f"F.Cu track not on top / dimmed: composite {f_track} vs control "
+        f"{sample(control, 105, 102)}"
+    )
+    assert b_track != plane and b_track != bg, (
+        f"B.Cu track hidden under the plane fill: {b_track} vs plane {plane}"
+    )

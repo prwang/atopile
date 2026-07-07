@@ -195,3 +195,29 @@ def test_snapshot_survives_length_report_error(tmp_path, caplog):
     assert isinstance(drc, dict)
     assert not (tmp_path / "shot.lengths.json").exists()
     assert any("length report" in r.message for r in caplog.records)
+
+
+def test_board_copper_layers_ignores_stackup_mentions(tmp_path):
+    """A 2-layer board whose (stackup ...) section names inner layers must NOT
+    report them: the layer TABLE is the authority. (Live bug: the whole-file
+    text scan saw In1.Cu in the stackup of a 2-layer fixture, and kicad-cli
+    silently exports nothing for a nonexistent layer — blank render group.)"""
+    board = tmp_path / "two_layer_with_stackup.kicad_pcb"
+    board.write_text(
+        "(kicad_pcb\n"
+        "\t(version 20241229)\n"
+        '\t(generator "pcbnew")\n'
+        "\t(layers\n"
+        '\t\t(0 "F.Cu" signal)\n'
+        '\t\t(2 "B.Cu" signal)\n'
+        '\t\t(25 "Edge.Cuts" user)\n'
+        "\t)\n"
+        "\t(setup\n"
+        "\t\t(stackup\n"
+        '\t\t\t(layer "In1.Cu" (type "copper"))\n'
+        '\t\t\t(layer "In2.Cu" (type "copper"))\n'
+        "\t\t)\n"
+        "\t)\n"
+        ")\n"
+    )
+    assert board_copper_layers(board) == ["F.Cu", "B.Cu"]
