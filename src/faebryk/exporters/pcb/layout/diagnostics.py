@@ -484,7 +484,8 @@ def build_diagnostics(
                         "The runner defaults fix_polarity to false (netlist "
                         "is authoritative); this stage opted in with "
                         "fix_polarity: true — remove it to force a physical "
-                        "uncross, or document the accepted swap."
+                        "crossover (staggered layer-transition via pair), or "
+                        "document the accepted swap."
                     ),
                 )
             )

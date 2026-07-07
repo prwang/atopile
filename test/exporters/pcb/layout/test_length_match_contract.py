@@ -39,8 +39,9 @@ at all. This module pins the repaired contract:
      segment_count inflated (a meander physically happened).
    * a diff pair with `diff_pair_intra_match` + a numeric
      `diff_pair_intra_match_tolerance` ⇒ pair skew shrinks below it (a
-     synthetic crossed-polarity 2-pad fixture: skew fixed by construction AND
-     the router's length metric == the board's track_mm).
+     synthetic 2-pad fixture with the target P pad staggered ~2mm along the
+     route axis: skew fixed by construction AND the router's length metric ==
+     the board's track_mm).
    * a MULTIPOINT pair ⇒ the intra meanders physically reach the written board
      (pins the `_sync_matched_results_into_write_list` repair: leg merging
      breaks dict identity between routed_results and the write list, which
@@ -589,13 +590,17 @@ def test_e2e_single_group_matches_within_tolerance(tmp_path):
 
 # A minimal synthetic diff-pair board whose intra skew is FIXED BY CONSTRUCTION
 # (CLAUDE.md test discipline: the adversarial fixture's answer must be built in,
-# not discovered): the target pads have CROSSED polarity and the stage routes
-# with fix_polarity=False, so one net must physically uncross around the other —
-# a genuine ~1.5mm copper skew (empirically 1.488mm), far above _INTRA_TOL. A
-# 2-pad pair on an empty board also keeps the router's internal length metric
-# identical to the board's track_mm (no multipoint legs, no stubs, no swap
-# accounting), so the authored tolerance is judged on the same number the F2
-# length_report measures.
+# not discovered): the target P pad is STAGGERED ~2mm along the route axis
+# past the N pad, so any legal P route is ~2mm longer than the N route —
+# a genuine copper skew far above _INTRA_TOL, independent of the polarity
+# machinery (a crossed-polarity fixture stopped working as a skew source when
+# the router learned the physical via crossover, whose joint is length-
+# symmetric; the crossover itself is pinned in
+# test_diff_pair_polarity_crossover_contract.py). A 2-pad pair on an empty
+# board also keeps the router's internal length metric identical to the
+# board's track_mm (no multipoint legs, no stubs, no swap accounting), so the
+# authored tolerance is judged on the same number the F2 length_report
+# measures.
 _SYNTH_DIFF_BOARD = """(kicad_pcb
 \t(version 20241229)
 \t(generator "pcbnew")
@@ -633,8 +638,8 @@ _SYNTH_DIFF_BOARD = """(kicad_pcb
 \t\t\t(effects (font (size 1 1) (thickness 0.15))))
 \t\t(property "Value" "DST" (at 0 2 0) (layer "F.Fab")
 \t\t\t(effects (font (size 1 1) (thickness 0.15))))
-\t\t(pad "1" smd rect (at 0 0.65) (size 0.5 0.5) (layers "F.Cu") (net 1 "/D_P"))
-\t\t(pad "2" smd rect (at 0 0) (size 0.5 0.5) (layers "F.Cu") (net 2 "/D_N"))
+\t\t(pad "1" smd rect (at 2 0) (size 0.5 0.5) (layers "F.Cu") (net 1 "/D_P"))
+\t\t(pad "2" smd rect (at 0 0.65) (size 0.5 0.5) (layers "F.Cu") (net 2 "/D_N"))
 \t)
 \t(gr_rect (start 90 90) (end 130 120)
 \t\t(stroke (width 0.1) (type default)) (layer "Edge.Cuts"))
@@ -670,7 +675,7 @@ def test_e2e_diff_intra_match_tolerance_shrinks_skew(tmp_path):
     )
     skew0 = base["pairs"]["/D"]["skew_mm"]
     assert skew0 > _INTRA_TOL, (
-        f"premise broken: the crossed-polarity fixture's natural skew "
+        f"premise broken: the staggered-target fixture's natural skew "
         f"{skew0:.3f}mm is already within {_INTRA_TOL}mm — the intra-match "
         "assertion would prove nothing"
     )

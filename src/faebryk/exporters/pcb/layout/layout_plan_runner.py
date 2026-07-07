@@ -283,7 +283,10 @@ def build_invocations(
         # default (True) rewrites target pad nets to avoid a physical P/N
         # twist, silently making the board implement a different netlist than
         # bridge② (the .ato netlist is authoritative under atopile; a swap is
-        # an explicit opt-in, and diagnose surfaces it either way).
+        # an explicit opt-in, and diagnose surfaces it either way). Under
+        # False the router resolves an inversion PHYSICALLY: a staggered
+        # layer-transition via pair at which the P/N lateral order swaps
+        # (summary.polarity_crossover_pairs), netlist honored end to end.
         kwargs = stage.config.model_dump(exclude_unset=True)
         if stage_type == "diff":
             kwargs.setdefault("fix_polarity", False)

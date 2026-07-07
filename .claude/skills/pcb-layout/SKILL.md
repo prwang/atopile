@@ -536,10 +536,25 @@ routed board then implements a different netlist than the `.ato` source — a
 real miswire on fixed-pinout connectors (SATA, USB, ...), invisible to KiCad
 DRC because the labels move with the copper. The runner therefore passes
 `fix_polarity: false` to every diff stage unless the stage explicitly sets
-`fix_polarity: true` (accepting the swap deliberately). Any swap the router
-performs is surfaced by `ato diagnose` as a warning-severity
-`ROUTE-POLARITY-SWAPPED` finding (and counted in `summary.polarity_swaps`) —
-never a silent netlist mutation.
+`fix_polarity: true` (accepting the swap deliberately). Under
+`fix_polarity: false` an inverted pair (e.g. a 180°-rotated target connector)
+routes with a PHYSICAL crossover, the way interactive tools do it: both nets
+change layers through a via pair staggered along the centerline, and the P/N
+lateral order swaps at that transition — one crossover per inversion. A pair
+that needed no layer change gets a short down-and-back window onto another
+routing layer (expect +2 vias per net); a pair that already swapped layers
+crosses at its existing transition (no extra vias). The joint is
+length-symmetric (adds no P/N skew by itself) but runs uncoupled for a few mm
+— it counts against a `diff_pair_uncoupled` custom rule, and residual pair
+skew is exactly what `diff_pair_intra_match` then absorbs (meander
+regeneration rebuilds the crossover, never flattens it back into crossed
+copper). Crossovers are reported in `summary.polarity_crossover_pairs`; only
+when no crossover corridor exists at all does the pair fail honestly
+(`polarity_skip` ROUTE-FAIL — crossed copper is never written). With
+`fix_polarity: true` the pad swap stays the primary mechanism and every swap
+is surfaced by `ato diagnose` as a warning-severity `ROUTE-POLARITY-SWAPPED`
+finding (and counted in `summary.polarity_swaps`) — never a silent netlist
+mutation.
 
 **`impedance` on a diff stage that may layer-swap — honest limitation:** the
 router computes a per-copper-layer width for the target Z but keeps the pair
