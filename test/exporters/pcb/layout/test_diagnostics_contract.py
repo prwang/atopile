@@ -272,3 +272,33 @@ def test_diagnostics_has_summary_totals():
     assert s["route_failures"] == 1
     assert s["drc_violations"] == 1
     assert s["total_findings"] == len(diag["findings"]) == 2
+
+
+# --- F2 lane: the board-side net-length metrology section -------------------
+_LENGTHS = {
+    "nets": {"/CLK": {"track_mm": 12.5, "via_count": 1, "segment_count": 3}},
+    "pairs": {"/D": {"p_net": "/D_P", "n_net": "/D_N", "p_track_mm": 10.0,
+                     "n_track_mm": 10.4, "skew_mm": 0.4}},
+    "classes": {},
+}
+
+
+@needs_f4
+def test_lengths_section_is_included_verbatim():
+    """The CLI computes the length report (length_report.py) from the routed
+    board and hands it in; the builder includes it as the top-level `lengths`
+    section, untouched — numbers must survive to diagnostics.json exactly."""
+    diag = build_diagnostics(route_report=_route_report(), drc_violations=[],
+                             ir=_ir(), room_polygons=_RINGS, lengths=_LENGTHS)
+    assert diag["lengths"] == _LENGTHS
+    assert diag["lengths"]["nets"]["/CLK"]["track_mm"] == 12.5
+    assert diag["lengths"]["pairs"]["/D"]["skew_mm"] == 0.4
+
+
+@needs_f4
+def test_lengths_section_has_stable_empty_shape_when_absent():
+    """No lengths supplied → the section is still present with the empty shape
+    (stable schema: a consumer reads diag["lengths"]["pairs"] without KeyError)."""
+    diag = build_diagnostics(route_report=_route_report(), drc_violations=[],
+                             ir=_ir(), room_polygons=_RINGS)
+    assert diag["lengths"] == {"nets": {}, "pairs": {}, "classes": {}}

@@ -20,6 +20,13 @@ Pipeline (all headless, empirically verified):
     printed with its description + position.
   * crop to the content bounding box (plus margin) AFTER marking, so the marks
     survive and the picture is actually zoomed on the board, not an A4 page.
+  * the F2-lane net-length report (`libs.kicad.length_report`) is written as
+    `<out_base>.lengths.json` (per-net track_mm / via_count / segment_count,
+    pair skews, netclass spread from the staged .kicad_pro) and each pair is
+    logged as a compact table — the numbers an agent tuning routed lengths
+    reads INSIDE the snapshot loop. track_mm is routed copper centerline only
+    (KiCad DRC length rules additionally count via Z-length and pad-to-die;
+    DRC remains the authority).
 
 Loud-or-nothing: a missing board, a failing kicad-cli, or a missing rasterizer
 is a hard error with the install hint — never a silently absent picture.
@@ -198,6 +205,34 @@ def render_board_png(
     return out_png
 
 
+def lengths_table_lines(report: dict) -> list[str]:
+    """The compact per-pair table (net names, track_mm, skew) logged with every
+    snapshot — pairs are where length symmetry actually matters, so they are
+    surfaced in the loop's log, not only in the JSON artifact."""
+    lines: list[str] = []
+    for base in sorted(report.get("pairs", {})):
+        pair = report["pairs"][base]
+        lines.append(
+            f"  pair {base}: P({pair['p_net']}) {pair['p_track_mm']:.3f}mm / "
+            f"N({pair['n_net']}) {pair['n_track_mm']:.3f}mm "
+            f"skew {pair['skew_mm']:.3f}mm"
+        )
+    return lines
+
+
+def write_board_lengths(board: Path, out_base: Path) -> dict:
+    """Compute the F2-lane net-length report for `board` and write it as
+    `<out_base>.lengths.json` (next to the PNG); returns the report. Netclass
+    aggregation rides on the `.kicad_pro` staged next to the board."""
+    from faebryk.libs.kicad.length_report import length_report_for_board
+
+    report = length_report_for_board(board)
+    Path(f"{out_base}.lengths.json").write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n"
+    )
+    return report
+
+
 def _stage_project_sidecars(board: Path, project_src: Path | None) -> None:
     """kicad-cli DRC only honors design rules from `<board>.kicad_pro` /
     `<board>.kicad_dru` SITTING NEXT TO the board. A routed board lives in the
@@ -225,15 +260,24 @@ def snapshot_board(
     ppmm: float = 20.0,
     project_src: Path | None = None,
 ) -> dict:
-    """DRC + annotated render for one board. Returns the DRC report; writes
-    `<out_base>.drc.json` and `<out_base>.png`. `project_src` is the BUILT
-    board path whose .kicad_pro/.kicad_dru carry the authored rules (staged
-    next to `board` so DRC judges design intent, not KiCad defaults)."""
+    """DRC + annotated render + net-length report for one board. Returns the
+    DRC report; writes `<out_base>.drc.json`, `<out_base>.lengths.json` and
+    `<out_base>.png`. `project_src` is the BUILT board path whose
+    .kicad_pro/.kicad_dru carry the authored rules (staged next to `board` so
+    DRC judges design intent, not KiCad defaults — and so the length report's
+    netclass aggregation sees the authored classes)."""
     out_base.parent.mkdir(parents=True, exist_ok=True)
     _stage_project_sidecars(board, project_src)
     # append, never with_suffix: out_base may carry dots ("top.snapshot.routed")
     # and with_suffix would silently eat the last segment.
     drc = run_drc(board, Path(f"{out_base}.drc.json"))
+    lengths = write_board_lengths(board, out_base)
+    log.info(
+        f"lengths: {len(lengths['nets'])} net(s), {len(lengths['pairs'])} "
+        f"pair(s) → {out_base}.lengths.json"
+    )
+    for line in lengths_table_lines(lengths):
+        log.info(line)
     marks = drc_violation_marks(drc)
     png = render_board_png(board, Path(f"{out_base}.png"), ppmm=ppmm, marks=marks)
     n_v = len(drc.get("violations", []))

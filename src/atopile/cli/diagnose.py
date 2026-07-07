@@ -4,15 +4,19 @@
 The closing command of the diagnostics loop: build → route → **diagnose**. It
 reads the build's `route_report.json` (route failures + F2 blocking cause) and
 the `.layout_ir.json` (bridge②), runs `kicad-cli pcb drc` on the routed board,
-rereads the board for the true via/geometry totals (G3) and the room rings, and
-emits an ato-address-indexed `diagnostics.json` the PCB-layout SKILL consumes.
+rereads the board for the true via/geometry totals (G3) and the room rings,
+computes the F2-lane net-length report (`libs.kicad.length_report`: per-net
+track_mm / via_count / segment_count, pair skews, netclass spread — the
+`lengths` section), and emits an ato-address-indexed `diagnostics.json` the
+PCB-layout SKILL consumes.
 
 A SHELL: all aggregation/correlation/schema lives in the pure
 `diagnostics.build_diagnostics` (F4); this module only loads artifacts and runs
-the real DRC + board reread. Those two impure steps are injectable
-(`drc_runner` / `board_reader`) so the loud-path + aggregation contract is
-unit-testable without kicad-cli or a real board. Missing artifacts are loud
-(UserResourceException) — you diagnose a ROUTED build, not a missing one.
+the real DRC + board reread + length computation. Those impure steps are
+injectable (`drc_runner` / `board_reader` / `lengths_builder`) so the loud-path
++ aggregation contract is unit-testable without kicad-cli or a real board.
+Missing artifacts are loud (UserResourceException) — you diagnose a ROUTED
+build, not a missing one.
 """
 
 import json
@@ -70,6 +74,15 @@ def _default_board_reader(board_path: Path) -> tuple[dict, dict]:
     return room_polygons, board_totals
 
 
+def _default_lengths_builder(board_path: Path) -> dict:
+    """The F2-lane net-length report from the routed board (per-net track_mm /
+    via_count / segment_count, pair skews, netclass spread when a .kicad_pro
+    sits next to the board — the snapshot staging layout)."""
+    from faebryk.libs.kicad.length_report import length_report_for_board
+
+    return length_report_for_board(Path(board_path))
+
+
 def run_diagnose_for_build(
     *,
     route_report_path: Path,
@@ -79,6 +92,7 @@ def run_diagnose_for_build(
     baseline_board_path: Path | None = None,
     drc_runner: Callable | None = None,
     board_reader: Callable | None = None,
+    lengths_builder: Callable | None = None,
 ) -> dict:
     """Build diagnostics.json for one build from its artifacts; return the dict.
 
@@ -115,9 +129,12 @@ def run_diagnose_for_build(
         drc_runner = _default_drc_runner
     if board_reader is None:
         board_reader = _default_board_reader
+    if lengths_builder is None:
+        lengths_builder = _default_lengths_builder
 
     room_polygons, board_totals = board_reader(Path(board_path))
     violations = drc_runner(Path(board_path))
+    lengths = lengths_builder(Path(board_path))
 
     baseline_keys = None
     if baseline_board_path is not None:
@@ -140,6 +157,7 @@ def run_diagnose_for_build(
         room_polygons=room_polygons,
         baseline_drc_keys=baseline_keys,
         board_totals=board_totals,
+        lengths=lengths,
     )
     Path(out_path).write_text(json.dumps(diag, indent=2, sort_keys=True) + "\n")
     return diag

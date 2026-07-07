@@ -19,7 +19,11 @@ F3):
      new-vs-existing against a pre-route baseline (Ki-Stack: only routing-
      introduced DRC is freshly actionable);
   3. (the CLI also rereads the routed board for the true via/geometry totals — G3
-     — and folds them into the summary).
+     — and folds them into the summary);
+  4. the F2-lane net-length report (`libs.kicad.length_report`, computed by the
+     CLI from the routed board) — included verbatim as the top-level `lengths`
+     section ({nets, pairs, classes}) so an agent tuning routed lengths is not
+     blind.
 
 The finding SCHEMA is adapted from kicad-happy's `make_finding`
 (rule_id / severity / confidence / report_context) — that repo is a sandbox
@@ -358,12 +362,23 @@ def build_diagnostics(
     room_polygons: dict | None = None,
     baseline_drc_keys: set | None = None,
     board_totals: dict | None = None,
+    lengths: dict | None = None,
 ) -> dict:
     """Aggregate a route run + DRC into the ato-indexed diagnostics document.
 
     Pure: every input is canned data (a route_report dict, DRC violation dicts, an
-    IR, optional room rings + a DRC baseline + reread board totals). Returns
-    `{findings, summary, totals}` with findings deterministically ordered."""
+    IR, optional room rings + a DRC baseline + reread board totals + the F2-lane
+    length report). Returns `{findings, summary, totals, lengths}` with findings
+    deterministically ordered.
+
+    `lengths` is the board-side net-length report (`length_report.
+    build_length_report`: {nets, pairs, classes} — track_mm / via_count /
+    segment_count per net, pair skews, netclass spread), included verbatim as
+    the top-level `lengths` section; omitted → the stable empty shape (a
+    consumer reads diag["lengths"]["pairs"] without KeyError). NB the honesty
+    contract lives in length_report.py: track_mm is routed track centerline
+    only — KiCad DRC length rules additionally count via Z-length and
+    pad-to-die; DRC remains the authority."""
     resolver = LayoutResolver(ir, room_polygons=room_polygons)
     addr_room = _addr_room_index(ir)
     # designator (ref) → ato address, for multipoint failed_pads (which carry a
@@ -425,4 +440,7 @@ def build_diagnostics(
             "new_drc": sum(1 for f in findings if f.get("is_new") is True),
         },
         "totals": {**route_report.get("totals", {}), **(board_totals or {})},
+        "lengths": lengths
+        if lengths is not None
+        else {"nets": {}, "pairs": {}, "classes": {}},
     }

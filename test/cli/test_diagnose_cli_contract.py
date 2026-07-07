@@ -3,12 +3,14 @@
 """§F / F4 contract — `ato diagnose`, the diagnostics-loop CLI.
 
 The CLI shell over the F4 builder. The testable core (`run_diagnose_for_build`)
-takes explicit paths + an injectable `drc_runner` and `board_reader` so the
-aggregation/loud-path contract is unit-testable WITHOUT kicad-cli or a real
-board; the Typer command bootstraps config and supplies the real runners.
+takes explicit paths + an injectable `drc_runner`, `board_reader` and
+`lengths_builder` so the aggregation/loud-path contract is unit-testable
+WITHOUT kicad-cli or a real board; the Typer command bootstraps config and
+supplies the real runners.
 
 Pins: the `diagnose` command is registered; the core loads route_report.json +
-the IR, runs DRC, rereads the board for room rings + via totals (G3), builds
+the IR, runs DRC, rereads the board for room rings + via totals (G3), computes
+the F2-lane net-length report from the routed board (`lengths` section), builds
 `diagnostics.json` (round-trips to the return value); a pre-route baseline marks
 existing DRC as not-new; missing artifacts are loud (S5a).
 """
@@ -67,6 +69,13 @@ _VIOLATION = {
 }
 
 
+_LENGTHS = {
+    "nets": {"/CLK": {"track_mm": 42.0, "via_count": 2, "segment_count": 5}},
+    "pairs": {},
+    "classes": {},
+}
+
+
 def _artifacts(tmp_path: Path) -> dict:
     rr = tmp_path / "out.route_report.json"
     rr.write_text(json.dumps(_ROUTE_REPORT))
@@ -79,6 +88,9 @@ def _artifacts(tmp_path: Path) -> dict:
         "ir_path": ir,
         "board_path": board,
         "out_path": tmp_path / "out.diagnostics.json",
+        # injectable like drc_runner/board_reader: the default builder parses
+        # the real routed board, which this fake board is not.
+        "lengths_builder": lambda _path: dict(_LENGTHS),
     }
 
 
@@ -127,6 +139,10 @@ def test_core_aggregates_and_writes_diagnostics(tmp_path):
     assert "top.u1" in drc["components"] and drc["room"] == "top.u1"
     # G3 reread totals folded in.
     assert diag["totals"]["board_vias"] == 7
+    # F2 lane: the board-side length report lands as the top-level `lengths`
+    # section (computed by the injectable lengths_builder from the routed board).
+    assert diag["lengths"] == _LENGTHS
+    assert on_disk["lengths"]["nets"]["/CLK"]["track_mm"] == 42.0
 
 
 @needs_f4cli

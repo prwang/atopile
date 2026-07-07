@@ -321,8 +321,9 @@ ato snapshot              # headless PNG + DRC of the routed board, violations m
 ato diagnose              # aggregates route report + KiCad DRC → diagnostics.json
 ```
 Artifacts under `build/builds/<target>/`: `*.layout_ir.json`, `*.layout_plan.json`,
-`*.route_report.json`, `*.snapshot.*.png` + `*.snapshot.*.drc.json`,
-`*.diagnostics.json`. Boards: authored = `layout/<target>/<target>.kicad_pcb`;
+`*.route_report.json`, `*.snapshot.*.png` + `*.snapshot.*.drc.json` +
+`*.snapshot.*.lengths.json`, `*.diagnostics.json`. Boards: authored =
+`layout/<target>/<target>.kicad_pcb`;
 routed = `build/builds/<target>/<target>.route/<laststage>.kicad_pcb`.
 
 ### 3.1 `ato snapshot` — look before you conclude  (cli/snapshot.py)
@@ -339,6 +340,25 @@ ato snapshot --ppmm 40          # higher resolution
 It stages the built board's `.kicad_pro` / `.kicad_dru` / `fp-lib-table` next to
 the routed board first — kicad-cli DRC only honors rule files **sitting beside
 the board**; without staging it silently judges KiCad defaults.
+
+Every snapshot also writes **`<base>.lengths.json`** next to the PNG (the F2
+net-length metrology, `libs/kicad/length_report.py`) and logs a compact per-pair
+table (`pair <base>: P(...) <mm> / N(...) <mm> skew <mm>`) — the numbers to read
+when tuning routed lengths, without leaving the snapshot loop:
+```jsonc
+{
+  "nets":    { "<net>": { "track_mm": 25.708, "via_count": 1, "segment_count": 3 } },
+  "pairs":   { "<base>": { "p_net": .., "n_net": .., "p_track_mm": .., "n_track_mm": .., "skew_mm": .. } },
+  "classes": { "<netclass>": { "longest": {"net", "track_mm"}, "shortest": {..}, "spread_mm": .. } }
+}
+```
+Pairs are detected by the router's suffix conventions (`_P`/`_N`, bare `P`/`N`
+after a digit/underscore, `+`/`-`; a net pairs only within one convention);
+`classes` comes from the staged `.kicad_pro`'s netclass patterns (empty without
+one). **Honesty**: `track_mm` is routed track *centerline* length only — KiCad's
+DRC length/skew rules additionally count via Z-length and pad-to-die, so DRC
+(§`rules` / net-class `length_min`/`skew_max`) remains the authority; this
+report is iteration guidance.
 
 **The diagnosis discipline that saves time: never theorize past one hypothesis —
 zoom instead.** Violation positions are absolute board mm; render high-res and
@@ -367,11 +387,19 @@ Shape (`build_diagnostics`, diagnostics.py):
 {
   "findings": [ /* sorted, deterministic */ ],
   "summary":  { "route_failures": N, "route_failures_unaccounted": M, ... },
-  "totals":   { "successful": .., "failed": .., "board_vias": .., "board_segments": .. }
+  "totals":   { "successful": .., "failed": .., "board_vias": .., "board_segments": .. },
+  "lengths":  { "nets": {..}, "pairs": {..}, "classes": {..} }
 }
 ```
 `route_failures_unaccounted > 0` means the route report claimed more failures than
 were turned into findings — a residual **honesty guard**, never a silent drop.
+
+`lengths` is the same net-length report `ato snapshot` writes as
+`*.lengths.json` (see §3.1 for the shape and the track_mm-vs-DRC honesty note),
+computed from the routed board: per-net `track_mm`/`via_count`/`segment_count`,
+per-differential-pair skew, per-netclass length spread (`classes` is populated
+when a `.kicad_pro` sits next to the routed board — e.g. after a snapshot has
+staged it).
 
 **Each finding** (`make_finding`): `rule_id`, `severity` (error|warning|info),
 `confidence` (deterministic|heuristic), `ato_path`, `room`, `stage`, `reason`,
@@ -589,8 +617,11 @@ overwrite it.
   `test_construct_corruption.py`, `test/layout_server/test_gui_edit_roundtrip.py`.
 - `src/faebryk/exporters/pcb/layout/placement.py` — pose authority + placed-room
   copper invalidation; `test_placement_apply_contract.py`.
-- `src/atopile/cli/snapshot.py` — the headless eyes (render + DRC + marks);
-  `test/cli/test_snapshot_contract.py`.
+- `src/atopile/cli/snapshot.py` — the headless eyes (render + DRC + marks +
+  lengths.json); `test/cli/test_snapshot_contract.py`.
+- `src/faebryk/libs/kicad/length_report.py` — the F2 net-length metrology
+  (per-net track_mm/via_count/segment_count, pair skew, netclass spread);
+  `test/libs/kicad/test_length_report.py`.
 - `vendor/2d_fields/` — the field solver (`cli.js`, `RESULTS.md`, `VENDOR.md`).
 - `src/faebryk/exporters/pcb/layout/layout_plan_runner.py` — how stages dispatch to
   the router (`build_invocations`, `run_route_stages`).
