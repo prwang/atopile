@@ -233,3 +233,150 @@ def test_no_declared_outline_leaves_existing_edges_untouched():
     before = len(_edge_lines(pcb))
     generate_board_features(pcb, load_layout_plan(_YAML), _IR)  # no outline key
     assert len(_edge_lines(pcb)) == before
+
+
+# ===========================================================================
+# board.stackup → setup.stackup (the PHYSICAL stackup AUTHORITY):
+#   * the declared copper/dielectric stack replaces the board's electrical
+#     stackup core (was: only the layer TABLE was derived from board.stackup —
+#     the physical `(stackup ...)` section stayed the KiCad 2-layer default, so
+#     the router's impedance mode computed geometry against a 1.51 mm core and
+#     laid ~0.76 mm-wide "100Ω" pairs that shorted P to N; found live on F4);
+#   * cosmetic outer entries (silk/paste/mask) and copper_finish are preserved
+#     (declared stackups carry no cosmetic facts); a copper_finish is always
+#     present after stamping — the router's stackup parser anchors on it;
+#   * dielectrics are canonically renamed "dielectric N" (KiCad's own naming),
+#     typed prepreg/core from the declared material;
+#   * no declared stackup ⇒ the board's own section is untouched (reuse case);
+#   * re-emit is idempotent (replace, never accrete).
+# ===========================================================================
+_STACKUP_YAML = """\
+board:
+  stackup:
+    layers:
+      - {name: F.Cu, type: copper, thickness: 0.017}
+      - {name: p1, type: dielectric, thickness: 0.176, material: 7628 prepreg, epsilon_r: 4.6}
+      - {name: In1.Cu, type: copper, thickness: 0.017}
+      - {name: core, type: dielectric, thickness: 1.1, material: FR4 core, epsilon_r: 4.6}
+      - {name: In2.Cu, type: copper, thickness: 0.017}
+      - {name: p2, type: dielectric, thickness: 0.176, material: 7628 prepreg, epsilon_r: 4.6}
+      - {name: B.Cu, type: copper, thickness: 0.017}
+route_stages: []
+"""
+
+
+def _stackup_entries(pcb) -> list[tuple]:
+    st = pcb.setup.stackup
+    assert st is not None
+    return [
+        (
+            layer.name,
+            layer.type,
+            layer.thickness.thickness if layer.thickness is not None else None,
+            layer.material,
+            layer.epsilon_r,
+        )
+        for layer in st.layers
+    ]
+
+
+@needs_f68
+def test_stackup_is_stamped_into_setup_physical_section():
+    pcb = _pcb()
+    counts = generate_board_features(pcb, load_layout_plan(_STACKUP_YAML), _IR)
+    assert counts["stackup_layers"] == 7
+    entries = _stackup_entries(pcb)
+    electrical = [e for e in entries if e[1] in ("copper", "prepreg", "core")]
+    assert electrical == [
+        ("F.Cu", "copper", 0.017, None, None),
+        ("dielectric 1", "prepreg", 0.176, "7628 prepreg", 4.6),
+        ("In1.Cu", "copper", 0.017, None, None),
+        ("dielectric 2", "core", 1.1, "FR4 core", 4.6),
+        ("In2.Cu", "copper", 0.017, None, None),
+        ("dielectric 3", "prepreg", 0.176, "7628 prepreg", 4.6),
+        ("B.Cu", "copper", 0.017, None, None),
+    ]
+    # cosmetic outer entries survive around the electrical core
+    names = [e[0] for e in entries]
+    assert names.index("F.Cu") > 0, names  # something (silk/mask) above top copper
+    assert names.index("B.Cu") < len(names) - 1, names
+    # the router's stackup parser anchors on copper_finish — must be present
+    assert pcb.setup.stackup.copper_finish is not None
+
+
+@needs_f68
+def test_stackup_reemit_is_idempotent():
+    pcb = _pcb()
+    plan = load_layout_plan(_STACKUP_YAML)
+    generate_board_features(pcb, plan, _IR)
+    first = _stackup_entries(pcb)
+    generate_board_features(pcb, plan, _IR)
+    assert _stackup_entries(pcb) == first
+
+
+@needs_f68
+def test_no_declared_stackup_leaves_physical_section_untouched():
+    pcb = _pcb()
+    before = _stackup_entries(pcb) if pcb.setup.stackup is not None else None
+    yaml = "board:\n  silk:\n    - {text: X, at: [1, 1]}\nroute_stages: []\n"
+    generate_board_features(pcb, load_layout_plan(yaml), _IR)
+    after = _stackup_entries(pcb) if pcb.setup.stackup is not None else None
+    assert after == before
+
+
+@needs_f68
+@pytest.mark.slow
+@pytest.mark.skipif(not _HAS_KICAD_CLI, reason="requires kicad-cli")
+def test_stamped_stackup_round_trips_and_router_reads_it(tmp_path):
+    """The consumer oracle, both directions: the stamped physical stackup
+    survives `kicad-cli pcb upgrade` rc=0 AND the vendored router's own parser
+    reads back the declared dielectric facts — the exact numbers its impedance
+    mode uses. (This is the contract whose absence produced the 0.76 mm 'wide
+    100Ω pair' short: the router silently computed against the default core.)"""
+    import json
+    import subprocess
+
+    from faebryk.exporters.pcb.layout.layout_plan_runner import _system_python3
+
+    pf = kicad.loads(kicad.pcb.PcbFile, _BOARD.read_text())
+    generate_board_features(pf.kicad_pcb, load_layout_plan(_STACKUP_YAML), _IR)
+    out = tmp_path / "stack.kicad_pcb"
+    kicad.dumps(pf, out)
+
+    proc = subprocess.run(
+        ["kicad-cli", "pcb", "upgrade", str(out), "--force"],
+        capture_output=True, text=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+
+    router_root = repo_root() / "vendor" / "KiCadRoutingTools"
+    probe = subprocess.run(
+        [
+            str(_system_python3()), "-c",
+            "import sys; sys.path.insert(0, sys.argv[1])\n"
+            "import json\n"
+            "from kicad_parser import parse_kicad_pcb\n"
+            "pcb = parse_kicad_pcb(sys.argv[2])\n"
+            "print('JSON_OUT:' + json.dumps([\n"
+            "    [layer.name, layer.layer_type, layer.thickness, layer.epsilon_r]\n"
+            "    for layer in pcb.board_info.stackup\n"
+            "    if layer.layer_type in ('copper', 'prepreg', 'core')\n"
+            "]))",
+            str(router_root), str(out),
+        ],
+        capture_output=True, text=True, cwd=str(router_root), timeout=120,
+    )
+    if probe.returncode != 0:
+        pytest.skip(f"system python3 cannot run the router parser: {probe.stderr[-300:]}")
+    line = next(
+        line for line in probe.stdout.splitlines() if line.startswith("JSON_OUT:")
+    )
+    got = json.loads(line.removeprefix("JSON_OUT:"))
+    assert ["dielectric 1", "prepreg", 0.176, 4.6] in got, got
+    assert ["dielectric 2", "core", 1.1, 4.6] in got, got
+    assert [g for g in got if g[1] == "copper"] == [
+        ["F.Cu", "copper", 0.017, 0.0],
+        ["In1.Cu", "copper", 0.017, 0.0],
+        ["In2.Cu", "copper", 0.017, 0.0],
+        ["B.Cu", "copper", 0.017, 0.0],
+    ], got

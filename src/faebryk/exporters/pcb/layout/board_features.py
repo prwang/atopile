@@ -55,6 +55,71 @@ def _net_number(pcb, net_name: str) -> int:
     )
 
 
+_ELECTRICAL_STACKUP_TYPES = ("copper", "prepreg", "core")
+
+
+def _stamp_stackup(pcb, stackup) -> int:
+    """Replace the electrical core of `pcb.setup.stackup` with the declared
+    layout.yaml `board.stackup` (see the authority note in
+    `generate_board_features`). Returns the number of stamped layers.
+
+    Mapping: plan `copper` → KiCad `copper` (+ thickness when declared); plan
+    `dielectric` → KiCad `prepreg` when the declared material mentions prepreg,
+    else `core`, renamed canonically "dielectric N" and carrying the declared
+    thickness/material/Er (all three are guaranteed by the Stackup model).
+    Cosmetic entries of an existing section (everything above the first / below
+    the last electrical entry: silk, paste, mask) are preserved verbatim."""
+    existing = pcb.setup.stackup
+    head: list = []
+    tail: list = []
+    finish = None
+    if existing is not None:
+        entries = list(existing.layers)
+        electrical_idx = [
+            i for i, e in enumerate(entries) if e.type in _ELECTRICAL_STACKUP_TYPES
+        ]
+        if electrical_idx:
+            head = entries[: electrical_idx[0]]
+            tail = entries[electrical_idx[-1] + 1 :]
+        else:
+            head = entries
+        finish = existing.copper_finish
+
+    stamped: list = []
+    dielectric_n = 0
+    for layer in stackup.layers:
+        if layer.type == "copper":
+            stamped.append(
+                _P.StackupLayer(
+                    name=layer.name,
+                    type="copper",
+                    thickness=(
+                        _P.Thickness(thickness=layer.thickness)
+                        if layer.thickness is not None
+                        else None
+                    ),
+                )
+            )
+        else:
+            dielectric_n += 1
+            kind = "prepreg" if "prepreg" in (layer.material or "").lower() else "core"
+            stamped.append(
+                _P.StackupLayer(
+                    name=f"dielectric {dielectric_n}",
+                    type=kind,
+                    thickness=_P.Thickness(thickness=layer.thickness),
+                    material=layer.material,
+                    epsilon_r=layer.epsilon_r,
+                )
+            )
+
+    pcb.setup.stackup = _P.Stackup(
+        layers=[*head, *stamped, *tail],
+        copper_finish=finish if finish is not None else _P.E_copper_finish.ENIG,
+    )
+    return len(stamped)
+
+
 def generate_board_features(
     pcb, plan: LayoutPlan, ir: dict[str, Any]
 ) -> dict[str, int]:
@@ -65,6 +130,25 @@ def generate_board_features(
         return {"pours": 0, "keepouts": 0, "silk": 0}
 
     signal_nets: dict[str, str] = ir.get("signal_nets", {})
+
+    # --- physical stackup (setup.stackup) ------------------------------------
+    # `board.stackup` was previously only the layer-TABLE authority (layer count,
+    # TS-AUTH-A/B) — the PHYSICAL `(stackup ...)` section stayed whatever the
+    # board carried (a fresh board: KiCad's 2-layer 1.51 mm-core default). Every
+    # consumer of dielectric geometry then silently read the WRONG board: the
+    # router's impedance mode computed 100Ω pair width against the default core
+    # and laid ~0.76 mm traces that shorted P to N (found live on F4). A declared
+    # stackup is now the physical-section authority too: the electrical core
+    # (copper + dielectrics) is replaced; cosmetic outer entries (silk/paste/
+    # mask) and copper_finish are preserved — a declared stackup carries no
+    # cosmetic facts. Dielectrics are canonically named "dielectric N" (KiCad's
+    # own naming) and typed prepreg/core from the declared material. A
+    # copper_finish is always present after stamping (the router's stackup
+    # parser anchors its section scan on it). No declared stackup ⇒ untouched
+    # (the reuse case).
+    stackup_stamped = 0
+    if board.stackup is not None:
+        stackup_stamped = _stamp_stackup(pcb, board.stackup)
 
     # --- board outline (Edge.Cuts) -------------------------------------------
     # `board.outline` was previously validated but NEVER DRAWN — the board went
@@ -207,4 +291,5 @@ def generate_board_features(
         "keepouts": len(board.keepouts),
         "silk": len(board.silk),
         "outline_edges": outline_drawn,
+        "stackup_layers": stackup_stamped,
     }

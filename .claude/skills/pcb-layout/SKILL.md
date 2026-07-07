@@ -200,6 +200,13 @@ Invariants: a stage asking for `impedance` **requires** a stackup (hard-checked)
 the router's layer list is derived from the stackup alone (single authority —
 never set `config.layers` per stage, it is loud). A 4-layer board is just 4
 copper entries with dielectrics between (see `examples/sata_bundle/layout.yaml`).
+The declared stackup is also **stamped into the board's physical
+`(stackup ...)` section** (board_features `_stamp_stackup`; cosmetic silk/mask
+entries and copper_finish preserved) — so anything that reads dielectric
+geometry off the board (the router's `impedance` mode, KiCad's own tools) sees
+the declared numbers, never the KiCad 2-layer 1.51 mm-core default. *(Found
+live: without the stamp, `impedance: 100` computed a 0.76 mm-wide "100Ω" pair
+against the default core and shorted P to N.)*
 
 #### net_classes — F-drc-rules (§F5): make DRC judge *intent*  (`NetClass`)
 Emitted into `<target>.kicad_pro`; KiCad DRC honors them (proven: a wide clearance
@@ -501,7 +508,7 @@ If the net *routes* but the geometry is ugly/wrong, tune the stage `config`
 |---|---|---|
 | `track_width`, `clearance` | both | fit tighter channels / enforce spacing |
 | `via_size`, `via_drill` | both | via geometry |
-| `impedance` | both | controlled-Z (requires stackup) |
+| `impedance` | both | controlled-Z (requires stackup; see caution below) |
 | `keepout_enabled`, `keepout_layer` | both | route-avoid a layer region |
 | `length_match_groups`, `length_match_tolerance`, `meander_amplitude` | both | equal-length groups (meandered — see below) |
 | `guide_corridor_*` | single | (prefer the `corridor:` polyline over raw knobs) |
@@ -510,6 +517,17 @@ If the net *routes* but the geometry is ugly/wrong, tune the stage `config`
 | `diff_pair_intra_match`, `diff_pair_intra_match_tolerance` | diff | P-vs-N skew tuning (see below) |
 
 A knob valid only for the other mode is loud at parse (wrong-mode guard).
+
+**`impedance` on a diff stage that may layer-swap — honest limitation:** the
+router computes a per-copper-layer width for the target Z but keeps the pair
+PITCH from the entry layer, so a swap segment on a deeper layer (wider W, same
+pitch) closes the P–N gap — empirically a `clearance`/`diff_pair_gap` violation
+cluster exactly at the swap. On a multi-layer diff stage prefer fixed geometry:
+put the field-solver W/S in `rules.diff_pair_width/gap` (§2.6) and omit
+`impedance` from the stage config; the short off-reference swap segment is
+uncontrolled either way. Also `gnd_via_enabled: false` unless a real gnd pour
+exists — shield vias with no plane to catch them dangle (`via_dangling` +
+`unconnected_items`).
 
 **Length tuning is numerically authorable** (F3). `length_match_groups` is a
 list of GROUPS — `[[a, b], [c, d]]`; a flat `[a, b]` is shorthand for one
