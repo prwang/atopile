@@ -312,3 +312,79 @@ def test_lengths_section_has_stable_empty_shape_when_absent():
     diag = build_diagnostics(route_report=_route_report(), drc_violations=[],
                              ir=_ir(), room_polygons=_RINGS)
     assert diag["lengths"] == {"nets": {}, "pairs": {}, "classes": {}}
+
+
+@needs_f4
+def test_polarity_swap_is_surfaced_as_a_warning_finding():
+    """A router polarity swap REWRITES pad net assignments — the board no
+    longer implements the .ato netlist (bridge② and the copper disagree on
+    pad→net). route_report records it (`polarity_swapped_pairs`) but nothing
+    downstream read it: a silently miswired board sailed through diagnose with
+    zero findings. Every swapped pair now yields a warning-severity
+    ROUTE-POLARITY-SWAPPED finding naming the pair and the stage, and the
+    summary counts them."""
+    report = {
+        "stages": [
+            {
+                "stage_name": "pair_a", "stage_type": "diff",
+                "successful": 2, "failed": 0, "total_vias": 0,
+                "summary": {"successful": 2, "failed": 0,
+                            "polarity_swapped_pairs": ["A"]},
+                "diag": [],
+            },
+            {
+                "stage_name": "pair_b", "stage_type": "diff",
+                "successful": 2, "failed": 0, "total_vias": 0,
+                "summary": {"successful": 2, "failed": 0,
+                            "polarity_swapped_pairs": []},
+                "diag": [],
+            },
+        ],
+        "totals": {"successful": 4, "failed": 0, "total_vias": 0},
+        "by_type": {}, "up_to": None, "final_board": "out.kicad_pcb",
+    }
+    diag = build_diagnostics(route_report=report, drc_violations=[], ir=_ir(),
+                             room_polygons=_RINGS)
+    swaps = [f for f in diag["findings"]
+             if f["rule_id"] == "ROUTE-POLARITY-SWAPPED"]
+    assert len(swaps) == 1
+    f = swaps[0]
+    assert f["severity"] == "warning"
+    assert f["stage"] == "pair_a"
+    assert "A" in f["summary"]
+    assert "fix_polarity" in f["recommendation"]
+    assert diag["summary"]["polarity_swaps"] == 1
+
+
+@needs_f4
+def test_drc_finding_extracts_nets_from_item_descriptions():
+    """kicad-cli names the offending net only in free text: `Track [B_N] on
+    In1.Cu` items and `(from A_P)` in skew/length descriptions. The old
+    extractor matched only '/'-prefixed tokens — dead on every atopile board
+    (net-name overrides like A_P/B_N carry no slash), so skew findings shipped
+    `nets: []`. Bracketed item tokens and the `(from X)` source net are now
+    extracted, filtered against the board's real net names (honesty: free-text
+    tokens that are not nets stay out)."""
+    ir = _ir()
+    ir["nets"]["B_N"] = ["top.u1.4"]
+    ir["nets"]["A_P"] = ["top.u1.5"]
+    violation = {
+        "type": "skew_out_of_range",
+        "severity": "error",
+        "description": (
+            "Skew between traces out of range (max skew 0.2000 mm; actual "
+            "-0.5000 mm; target net length 56.0263 mm (from A_P); actual "
+            "55.5000 mm)"
+        ),
+        "items": [
+            {"uuid": "via-1", "x": 1.0, "y": 1.0,
+             "description": "Via [B_N] on F.Cu - B.Cu"},
+            {"uuid": "trk-1", "x": 2.0, "y": 1.0,
+             "description": "Track [NOTANET] on In1.Cu"},
+        ],
+    }
+    diag = build_diagnostics(route_report={"stages": [], "totals": {}},
+                             drc_violations=[violation], ir=ir)
+    f = next(x for x in diag["findings"]
+             if x["rule_id"] == "DRC-skew_out_of_range")
+    assert f["nets"] == ["A_P", "B_N"]

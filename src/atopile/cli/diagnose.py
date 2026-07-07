@@ -134,7 +134,19 @@ def run_diagnose_for_build(
 
     room_polygons, board_totals = board_reader(Path(board_path))
     violations = drc_runner(Path(board_path))
-    lengths = lengths_builder(Path(board_path))
+    # CONTAINMENT: the lengths lane is optional metrology — a board it cannot
+    # honestly measure (LengthReportError) must not cost the loop its
+    # diagnostics.json. The cause surfaces as a warning-severity
+    # LENGTH-REPORT-FAILED finding (build_diagnostics `lengths_error`).
+    from faebryk.libs.kicad.length_report import LengthReportError
+
+    lengths = None
+    lengths_error = None
+    try:
+        lengths = lengths_builder(Path(board_path))
+    except LengthReportError as e:
+        lengths_error = str(e)
+        log.warning(f"length report skipped for {board_path}: {e}")
 
     baseline_keys = None
     if baseline_board_path is not None:
@@ -158,6 +170,7 @@ def run_diagnose_for_build(
         baseline_drc_keys=baseline_keys,
         board_totals=board_totals,
         lengths=lengths,
+        lengths_error=lengths_error,
     )
     Path(out_path).write_text(json.dumps(diag, indent=2, sort_keys=True) + "\n")
     return diag

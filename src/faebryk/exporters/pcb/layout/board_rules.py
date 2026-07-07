@@ -74,12 +74,15 @@ def generate_project_rules(
     are authored. `base_project` is merged (only `net_settings` is authored — every
     other project setting is preserved). Nets are resolved through bridge②; an
     unresolvable one is loud."""
+    from faebryk.libs.kicad.length_report import extract_pair_suffix
+
     board = plan.board
     net_classes = board.net_classes if board is not None else []
     if not net_classes and plan.rules is None:
         return None
 
     signal_nets: dict[str, str] = ir.get("signal_nets", {})
+    intra_budget = plan.rules.intra_pair_skew_max if plan.rules is not None else None
     project = base_project if base_project is not None else C_kicad_project_file()
 
     # KiCad requires a Default class; keep an existing one (or seed the model
@@ -126,9 +129,29 @@ def generate_project_rules(
                     "resolvable ato signal address (not in bridge② signal_nets) — "
                     "give an ato signal address, not a bare net name"
                 )
+            net_name = signal_nets[addr]
+            # skew-rule exclusivity (NetClass docstring / generate_dru_rules):
+            # the class `skew_max` rule is emitted AFTER the board-wide
+            # `rules.intra_pair_skew_max` rule and KiCad keeps only the LAST
+            # matching skew rule per item — for a diff-pair member the class
+            # rule would silently disable the intra-pair budget. Loud (S5a).
+            if (
+                intra_budget is not None
+                and nc.skew_max is not None
+                and extract_pair_suffix(net_name) is not None
+            ):
+                raise LayoutPlanError(
+                    f"rules.intra_pair_skew_max and net class {nc.name!r} "
+                    f"skew_max both target diff-pair net {net_name!r} "
+                    f"({addr!r}): KiCad DRC keeps only the LAST matching skew "
+                    "rule per item, so the class rule would silently disable "
+                    "the board-wide intra-pair budget for this net — drop one "
+                    "of the two (the lengths report still measures intra-pair "
+                    "skew)"
+                )
             # assign by EXACT resolved net name (a precise, non-wildcard pattern).
             patterns.append(
-                _NS.C_netclass_pattern(netclass=nc.name, pattern=signal_nets[addr])
+                _NS.C_netclass_pattern(netclass=nc.name, pattern=net_name)
             )
 
     project.net_settings.classes = classes
@@ -315,8 +338,20 @@ def generate_dru_rules(plan: LayoutPlan) -> str | None:
         `(constraint length ...)` carrying only the authored bounds
         → "length_out_of_range".
 
-    Class-name representability (no quotes) and the never-bites empty-nets case
-    are rejected at parse (NetClass validator) — this emitter never sees them."""
+    SKEW-RULE EXCLUSIVITY: KiCad has ONE skew constraint type (the
+    `(within_diff_pairs)` token is an option on it) and applies only the LAST
+    matching skew rule per item, so two skew rules over the same nets shadow
+    each other. The representable combinations are enforced upstream: one class
+    never sets both `skew_max` and `intra_pair_skew_max` (NetClass parse), and
+    `rules.intra_pair_skew_max` never coexists with a class `skew_max` over
+    diff-pair nets (generate_project_rules, always emitted alongside this dru —
+    the seam where class nets resolve to board net names). A class
+    `intra_pair_skew_max` after the board-wide intra rule is the one benign
+    overlap: same semantics, class value for class nets (a scoped override).
+
+    Class-name representability (no quotes), the never-bites empty-nets case
+    and the inverted length window are rejected at parse (NetClass validator)
+    — this emitter never sees them."""
     lines: list[str] = []
     r = plan.rules
     if r is not None:

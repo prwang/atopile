@@ -15,17 +15,22 @@ pure functions over a loaded `kicad.pcb.KicadPcb`:
             Arc length = circumcircle through start/mid/end (radius × the
             subtended angle, direction chosen so the arc passes through mid).
   pairs   — differential pairs detected by the SAME suffix conventions the
-            router uses (vendor net_queries.extract_diff_pair_base semantics
-            for `_P`/`_N`, bare `P`/`N` after a digit/underscore, and `+`/`-`,
-            reimplemented here — vendor code is not importable from
-            src/faebryk). A net pairs only WITHIN one convention: `CLK+`
-            pairs with `CLK-`, never with an unrelated `CLK_N`. Shape:
+            router uses (ALL of vendor net_queries.extract_diff_pair_base,
+            reimplemented here in the vendor's own order — vendor code is not
+            importable from src/faebryk): the DDR true/complement styles
+            `_t_X`/`_c_X` (channel-suffixed) and `_t`/`_c` first, then
+            `_P`/`_N`, bare `P`/`N` after a digit/underscore, and `+`/`-`.
+            A net pairs only WITHIN one convention: `CLK+` pairs with `CLK-`,
+            never with an unrelated `CLK_N`. Shape:
             {base: {p_net, n_net, p_track_mm, n_track_mm, skew_mm}}.
   classes — when a `.kicad_pro` project is supplied: per netclass
             {longest: {net, track_mm}, shortest: {net, track_mm}, spread_mm}
-            over the project's `netclass_patterns`, which are EXACT net names
-            (the shape board_rules.py F5 authors). A class with no patterns
-            has nothing to aggregate and is omitted.
+            over the project's `netclass_patterns`, matched with KiCad's OWN
+            pattern semantics (net_settings.cpp CTX_NETCLASS = anchored
+            wildcard + anchored regex): exact name, `fnmatch`-style wildcard,
+            or full-match regex — union of all matches. A pattern matching
+            zero nets is KiCad-normal (e.g. stale after a net rename) and is
+            skipped; a class with no matched nets is omitted.
 
 HONESTY: the field is named `track_mm` because that is exactly what it
 measures — routed track centerline length. KiCad's DRC length/skew rules
@@ -34,15 +39,19 @@ the DRC-effective length and no fabricated "total" is emitted. DRC rules
 remain the authority on length constraints; this report is iteration guidance
 for an agent tuning routed lengths.
 
-Loud-or-nothing (S5a): a degenerate (collinear start/mid/end) arc, copper
-referencing a net number absent from the net table, and a netclass pattern
-naming a net that is not on the board all raise `LengthReportError` — a
-silent zero would misguide the tuning loop. Unnamed copper (net 0 / the ""
+Loud-or-nothing (S5a): a degenerate (collinear start/mid/end) arc and copper
+referencing a net number absent from the net table raise `LengthReportError`
+— a silent zero would misguide the tuning loop. A netclass pattern matching
+no net is NOT an error: that is legal KiCad (patterns are matchers, stale
+ones normal), and raising on it used to kill the whole snapshot/diagnose
+loop over a construct KiCad itself accepts. Unnamed copper (net 0 / the ""
 net) is excluded BY DEFINITION (the report is per named net), not silently
 dropped: KiCad itself garbage-collects net-0 copper on re-save.
 """
 
+import fnmatch
 import math
+import re
 from pathlib import Path
 from typing import Any
 
@@ -89,13 +98,27 @@ def arc_length_mm(
     return radius * sweep
 
 
+_DDR_CHANNEL = re.compile(r"^(.+)_([tc])_(.+)$")
+
+
 def extract_pair_suffix(net_name: str) -> tuple[str, bool, str] | None:
     """(base, is_positive, style) when `net_name` is one half of a differential
-    pair by suffix convention, else None. Styles: `"_P"` (`X_P`/`X_N`), `"P"`
+    pair by suffix convention, else None. Styles, in the VENDOR's own check
+    order (net_queries.extract_diff_pair_base — full parity, all five
+    conventions): `"_t"` (DDR true/complement — channel-suffixed `X_t_A`/`X_c_A`
+    with base `X_X_A`, then bare `X_t`/`X_c`), `"_P"` (`X_P`/`X_N`), `"P"`
     (bare `XP`/`XN`, only after a digit or underscore so e.g. `STOP` is not a
-    pair half), `"+"` (`X+`/`X-`). Reimplements the vendor router's
-    extract_diff_pair_base semantics for these three conventions — pairing is
-    only valid within one style (the caller keys on (base, style))."""
+    pair half), `"+"` (`X+`/`X-`). Pairing is only valid within one style
+    (the caller keys on (base, style))."""
+    m = _DDR_CHANNEL.match(net_name)
+    if m:
+        # keep the channel suffix in the base (vendor: `X_X_<chan>`) so e.g.
+        # DQS0_t_A pairs with DQS0_c_A but never with DQS0_c_B.
+        return f"{m.group(1)}_X_{m.group(3)}", m.group(2) == "t", "_t"
+    if net_name.endswith("_t"):
+        return net_name[:-2], True, "_t"
+    if net_name.endswith("_c"):
+        return net_name[:-2], False, "_t"
     if net_name.endswith("_P"):
         return net_name[:-2], True, "_P"
     if net_name.endswith("_N"):
@@ -186,19 +209,37 @@ def _pairs(nets: dict[str, dict]) -> dict[str, dict]:
     return pairs
 
 
+def _pattern_matches(pattern: str, net_names: list[str]) -> list[str]:
+    """The net names a `.kicad_pro` netclass pattern matches, with KiCad's own
+    CTX_NETCLASS semantics (common/project/net_settings.cpp builds each entry
+    as EDA_COMBINED_MATCHER = anchored wildcard + anchored regex): the union
+    of the exact name, `fnmatch`-style anchored wildcard matches, and
+    full-match regex matches. An invalid regex is KiCad-tolerated (that
+    matcher simply never matches — never an error); zero matches overall is
+    KiCad-normal (a stale pattern after a net rename)."""
+    matched = {n for n in net_names if n == pattern}
+    matched.update(n for n in net_names if fnmatch.fnmatchcase(n, pattern))
+    try:
+        rx = re.compile(pattern)
+    except re.error:
+        rx = None
+    if rx is not None:
+        matched.update(n for n in net_names if rx.fullmatch(n))
+    return sorted(matched)
+
+
 def _classes(nets: dict[str, dict], project: Any) -> dict[str, dict]:
     """Per-netclass {longest, shortest, spread_mm} from the project's
-    `netclass_patterns` — exact net names (the F5-authored shape); a pattern
-    that names no net on the board is loud, not skipped."""
-    members: dict[str, list[str]] = {}
+    `netclass_patterns`, matched with KiCad's pattern semantics
+    (`_pattern_matches`). A pattern matching no net is skipped (KiCad-normal);
+    a class with no matched nets is omitted."""
+    all_names = sorted(nets)
+    members: dict[str, set[str]] = {}
     for pat in project.net_settings.netclass_patterns:
-        if pat.pattern not in nets:
-            raise LengthReportError(
-                f"netclass pattern {pat.pattern!r} (class {pat.netclass!r}) "
-                "does not name a net on the board — patterns must be exact "
-                "net names (the board_rules F5 shape)"
-            )
-        members.setdefault(pat.netclass, []).append(pat.pattern)
+        hits = _pattern_matches(pat.pattern, all_names)
+        if not hits:
+            continue
+        members.setdefault(pat.netclass, set()).update(hits)
     classes: dict[str, dict] = {}
     for cls_name, net_names in sorted(members.items()):
         ranked = sorted(net_names, key=lambda n: (nets[n]["track_mm"], n))

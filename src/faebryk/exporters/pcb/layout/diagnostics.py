@@ -69,6 +69,12 @@ _F_FIELDS_LIST = ("ato_path", "blocking_nets", "failed_endpoints", "suggestions"
 _F_FIELDS_SCALAR = ("stage", "room", "constraint", "reason")
 
 _NET_TOKEN = re.compile(r"/[A-Za-z0-9_+\-./]+")
+# kicad-cli renders the net of a copper item as "Track [NET] on ..." /
+# "Via [NET] on ..." in items[].description, and skew/length rules carry the
+# reference net as "(from NET)" in the violation description — both free text
+# (there is no structured net field, module docstring HONEST LIMITS).
+_ITEM_NET = re.compile(r"\[([^\[\]]+)\]")
+_FROM_NET = re.compile(r"\(from ([^)]+)\)")
 
 
 def make_finding(
@@ -312,10 +318,31 @@ def _multipoint_finding(item: dict, stage_name: str, resolver: LayoutResolver,
     )
 
 
+def _drc_nets(violation: dict, known_nets: set[str]) -> list[str]:
+    """The nets a DRC violation names, recovered from free text (kicad-cli has
+    no structured net field): '/'-prefixed hierarchical tokens in the
+    description, bracketed `[NET]` tokens in each item's description
+    (Track/Via renders), and the `(from NET)` reference of skew/length rules.
+    When the IR knows the board's net names, candidates are FILTERED against
+    them (honesty: bracketed free text is not always a net); with no known
+    set, only the legacy '/'-token channel is trusted."""
+    description = violation.get("description", "")
+    slash_tokens = set(_NET_TOKEN.findall(description))
+    candidates = set(slash_tokens)
+    candidates.update(_FROM_NET.findall(description))
+    for it in violation.get("items", []):
+        candidates.update(_ITEM_NET.findall(it.get("description", "") or ""))
+    if known_nets:
+        return sorted(candidates & known_nets)
+    return sorted(slash_tokens)
+
+
 def _drc_finding(violation: dict, resolver: LayoutResolver,
-                 baseline_drc_keys: set | None) -> dict:
+                 baseline_drc_keys: set | None,
+                 known_nets: set[str] | None = None) -> dict:
     """One DRC finding, correlated to components (pad/footprint uuid) + room
-    (coordinate hit-test) through F3, with new-vs-baseline tagging."""
+    (coordinate hit-test) through F3, with new-vs-baseline tagging. Nets are
+    recovered from the violation's free text (`_drc_nets`)."""
     items = violation.get("items", [])
     components: set[str] = set()
     room = None
@@ -331,7 +358,7 @@ def _drc_finding(violation: dict, resolver: LayoutResolver,
         if room is None and it.get("x") is not None:
             room = resolver.room_at(float(it["x"]), float(it["y"]))
     description = violation.get("description", "")
-    nets = sorted(set(_NET_TOKEN.findall(description)))  # best-effort (no struct field)
+    nets = _drc_nets(violation, known_nets or set())
     vtype = violation.get("type", "unknown")
     severity = _SEVERITY_MAP.get(str(violation.get("severity", "")).lower(), "warning")
     is_new = (
@@ -363,6 +390,7 @@ def build_diagnostics(
     baseline_drc_keys: set | None = None,
     board_totals: dict | None = None,
     lengths: dict | None = None,
+    lengths_error: str | None = None,
 ) -> dict:
     """Aggregate a route run + DRC into the ato-indexed diagnostics document.
 
@@ -378,7 +406,12 @@ def build_diagnostics(
     consumer reads diag["lengths"]["pairs"] without KeyError). NB the honesty
     contract lives in length_report.py: track_mm is routed track centerline
     only — KiCad DRC length rules additionally count via Z-length and
-    pad-to-die; DRC remains the authority."""
+    pad-to-die; DRC remains the authority.
+
+    `lengths_error` (the caller caught a LengthReportError computing the
+    report) surfaces as ONE warning-severity LENGTH-REPORT-FAILED finding —
+    the length lane degrading is loud inside the document, never a silently
+    empty `lengths` section."""
     resolver = LayoutResolver(ir, room_polygons=room_polygons)
     addr_room = _addr_room_index(ir)
     # designator (ref) → ato address, for multipoint failed_pads (which carry a
@@ -391,6 +424,7 @@ def build_diagnostics(
     findings: list = []
 
     route_failures = 0
+    polarity_swaps = 0
     for stage in route_report.get("stages", []):
         stage_name = stage.get("stage_name")
         diag = stage.get("diag")
@@ -418,11 +452,77 @@ def build_diagnostics(
                 _multipoint_finding(item, stage_name, resolver, addr_room, ref_addr)
             )
             route_failures += 1
+        # polarity swaps: the router REWROTE pad net assignments to avoid a
+        # physical P/N twist — the board no longer implements the netlist
+        # (bridge② and the copper disagree on pad→net). route_report records
+        # it honestly; dropping it here left a miswired board with zero
+        # findings (S5a). One warning finding per swapped pair.
+        for pair in summary.get("polarity_swapped_pairs", []) or []:
+            findings.append(
+                make_finding(
+                    rule_id="ROUTE-POLARITY-SWAPPED",
+                    category="routing",
+                    summary=(
+                        f"diff pair {pair} polarity swapped by the router in "
+                        f"stage {stage_name!r} (pad nets rewritten)"
+                    ),
+                    description=(
+                        f"The router swapped the target pad net assignments of "
+                        f"diff pair {pair} in stage {stage_name!r} instead of "
+                        "physically crossing P over N. The routed board's "
+                        "pad→net mapping now disagrees with the .ato netlist "
+                        "(bridge②) — a real miswire for fixed-pinout "
+                        "connectors, and invisible to KiCad DRC because the "
+                        "labels were rewritten consistently."
+                    ),
+                    severity="warning",
+                    confidence="deterministic",
+                    evidence_source="router",
+                    nets=[pair],
+                    stage=stage_name,
+                    recommendation=(
+                        "The runner defaults fix_polarity to false (netlist "
+                        "is authoritative); this stage opted in with "
+                        "fix_polarity: true — remove it to force a physical "
+                        "uncross, or document the accepted swap."
+                    ),
+                )
+            )
+            polarity_swaps += 1
+
+    # the board's real net names (bridge②) — the honesty filter for free-text
+    # net recovery in DRC findings (_drc_nets).
+    known_nets = set(ir.get("nets") or {})
+    known_nets.update((ir.get("signal_nets") or {}).values())
 
     drc_count = 0
     for violation in drc_violations:
-        findings.append(_drc_finding(violation, resolver, baseline_drc_keys))
+        findings.append(
+            _drc_finding(violation, resolver, baseline_drc_keys, known_nets)
+        )
         drc_count += 1
+
+    if lengths_error is not None:
+        findings.append(
+            make_finding(
+                rule_id="LENGTH-REPORT-FAILED",
+                category="metrology",
+                summary="board length report could not be computed",
+                description=(
+                    "The F2 net-length report failed on this board: "
+                    f"{lengths_error}. The `lengths` section is empty; DRC "
+                    "and route findings above are unaffected."
+                ),
+                severity="warning",
+                confidence="deterministic",
+                evidence_source="geometry",
+                recommendation=(
+                    "Fix the board construct the report names (or report it "
+                    "if the construct is legal KiCad) to restore length "
+                    "metrology for the tuning loop."
+                ),
+            )
+        )
 
     sort_findings(findings)
     # honesty guard (S5a): the router's own `failed` total must be fully accounted
@@ -436,6 +536,7 @@ def build_diagnostics(
             "route_failures": route_failures,
             "route_failures_unaccounted": max(0, reported_failed - route_failures),
             "drc_violations": drc_count,
+            "polarity_swaps": polarity_swaps,
             "total_findings": len(findings),
             "new_drc": sum(1 for f in findings if f.get("is_new") is True),
         },

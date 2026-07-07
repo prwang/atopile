@@ -16,8 +16,9 @@ SYSTEM python3, like the §C router-oracle):
     into the entry's kwargs
     (explicitly-set keys only — the router default stands otherwise; the ONE
     non-verbatim key is `length_match_groups`, whose entries resolve through
-    `_resolve_length_match_groups`: bridge② address or exact board net name,
-    else loud — F3), sources
+    `_resolve_length_match_groups`: bridge② address or the exact board net
+    name of one of the stage's own nets, membership-checked — anything else,
+    including a net another stage routes, is loud — F3), sources
     `layers` SOLELY from `stackup_layers(board.stackup)` (TS-AUTH-B: never the
     route.py 4-layer default; a per-stage `config.layers` is a loud conflict),
     resolves net names through bridge② (`resolve_nets`), and chains each stage's
@@ -162,25 +163,38 @@ def _resolve_length_match_groups(
     groups: list[list[str]],
     ir: dict[str, Any],
     stage_name: str,
+    *,
+    stage_nets: list[str],
+    all_stage_nets: dict[str, list[str]],
 ) -> list[list[str]]:
-    """Resolve each `length_match_groups` entry to a kicad net name (bridge②).
+    """Resolve each `length_match_groups` entry to a kicad net name (bridge②)
+    and require it to be a net THIS STAGE ROUTES.
 
     An entry is an ATO SIGNAL ADDRESS (`ir["signal_nets"]`, the same channel as
-    `resolve_nets` / the board_rules net_classes precedent) or, failing that, an
-    EXACT existing board net name (`ir["nets"]`, kept verbatim — matching may
-    legitimately span nets a reuse board carries that no ato address names).
-    Anything else is LOUD, naming the entry and the stage (S5a): the router
-    treats group entries as patterns and would silently match nothing."""
+    `resolve_nets` / the board_rules net_classes precedent) or, failing that,
+    the EXACT board net name of one of the stage's own nets (kept verbatim).
+    Anything else is LOUD, naming the entry and the stage (S5a).
+
+    STAGE MEMBERSHIP is part of the contract, not a nicety: the router's
+    matching universe is exclusively the current invocation's routed_results
+    (vendor routing_common.run_length_matching) — prior-stage / reuse-board
+    copper is a hard OBSTACLE, never a matching member, and a group whose
+    entries fall below 2 routed nets is silently skipped router-side. A
+    resolvable-but-not-routed entry therefore used to make the whole group a
+    silent no-op (the authored matching intent evaporated with route_report
+    reporting success). `stage_nets` = this stage's resolved nets;
+    `all_stage_nets` = every stage's, for the who-routes-it hint."""
     signal_nets: dict[str, str] = ir["signal_nets"]
     board_nets = ir.get("nets") or {}
+    stage_net_set = set(stage_nets)
     resolved: list[list[str]] = []
     for group in groups:
         names: list[str] = []
         for entry in group:
             if entry in signal_nets:
-                names.append(signal_nets[entry])
+                name = signal_nets[entry]
             elif entry in board_nets:
-                names.append(entry)
+                name = entry
             else:
                 raise LayoutPlanError(
                     f"stage {stage_name!r}: length_match_groups entry {entry!r} "
@@ -188,6 +202,26 @@ def _resolve_length_match_groups(
                     "signal_nets) nor an existing board net name — the router "
                     "would silently match nothing"
                 )
+            if name not in stage_net_set:
+                routed_by = sorted(
+                    other
+                    for other, nets in all_stage_nets.items()
+                    if other != stage_name and name in nets
+                )
+                hint = (
+                    f" (net {name!r} is routed by stage {routed_by[0]!r}: the "
+                    "router only matches nets routed in the SAME stage — route "
+                    "the whole group in one stage)"
+                    if routed_by
+                    else " (no stage routes it: prior/reuse copper is an "
+                    "obstacle for the router, never a matching member)"
+                )
+                raise LayoutPlanError(
+                    f"stage {stage_name!r}: length_match_groups entry {entry!r} "
+                    f"resolves to net {name!r}, which is not routed by this "
+                    f"stage — the group would silently match nothing{hint}"
+                )
+            names.append(name)
         resolved.append(names)
     return resolved
 
@@ -224,7 +258,10 @@ def build_invocations(
 
         if isinstance(stage, BundleStage):
             invocations.append(
-                _bundle_invocation(stage, ir, layers, input_file, output_file)
+                _bundle_invocation(
+                    stage, ir, layers, input_file, output_file,
+                    all_stage_nets=resolved,
+                )
             )
             prev_output = output_file
             continue
@@ -239,10 +276,17 @@ def build_invocations(
             )
 
         # config expanded verbatim — explicitly-set keys only (the router default
-        # stands for the rest; D2 already mode-validated these keys). The ONE
-        # non-verbatim key: length_match_groups entries are ato addresses/net
-        # names and resolve through bridge② here (the only seam with the ir).
+        # stands for the rest; D2 already mode-validated these keys). TWO
+        # non-verbatim keys: length_match_groups entries are ato addresses/net
+        # names and resolve through bridge② here (the only seam with the ir),
+        # and a diff stage defaults fix_polarity to FALSE — the router's own
+        # default (True) rewrites target pad nets to avoid a physical P/N
+        # twist, silently making the board implement a different netlist than
+        # bridge② (the .ato netlist is authoritative under atopile; a swap is
+        # an explicit opt-in, and diagnose surfaces it either way).
         kwargs = stage.config.model_dump(exclude_unset=True)
+        if stage_type == "diff":
+            kwargs.setdefault("fix_polarity", False)
         if "layers" in kwargs:
             raise LayoutPlanError(
                 f"stage {stage.name!r}: per-stage config.layers is not allowed — "
@@ -251,7 +295,11 @@ def build_invocations(
         kwargs["layers"] = list(layers)
         if kwargs.get("length_match_groups") is not None:
             kwargs["length_match_groups"] = _resolve_length_match_groups(
-                kwargs["length_match_groups"], ir, stage.name
+                kwargs["length_match_groups"],
+                ir,
+                stage.name,
+                stage_nets=resolved[stage.name],
+                all_stage_nets=resolved,
             )
 
         invocations.append(
@@ -276,6 +324,8 @@ def _bundle_invocation(
     layers,
     input_file: str,
     output_file: str,
+    *,
+    all_stage_nets: dict[str, list[str]] | None = None,
 ) -> StageInvocation:
     """A bundle stage -> a route_bundle.batch_route_bundle invocation. Expands
     bundle_artifact (segmented trunk + ordered member offset table + breakouts) and
@@ -313,9 +363,14 @@ def _bundle_invocation(
         )
     kwargs["layers"] = list(layers)
     if kwargs.get("length_match_groups") is not None:
-        # the SAME resolution path as single/diff stages (one semantics)
+        # the SAME resolution path as single/diff stages (one semantics),
+        # membership-checked against the bundle's own member nets
         kwargs["length_match_groups"] = _resolve_length_match_groups(
-            kwargs["length_match_groups"], ir, stage.name
+            kwargs["length_match_groups"],
+            ir,
+            stage.name,
+            stage_nets=list(art["resolved_nets"]),
+            all_stage_nets=all_stage_nets or {},
         )
     kwargs["trunk"] = art["trunk"]
     kwargs["members"] = members

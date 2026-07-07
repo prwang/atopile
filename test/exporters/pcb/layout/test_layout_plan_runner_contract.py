@@ -45,6 +45,9 @@ shells out to system python3.
    forwarded, so the router's own default stands and no None leaks across. E1
    does NOT re-validate config: keys are already mode-validated at D2 parse
    (RouteStage._validate_mode_kwargs); the runner trusts that partition.
+   ONE deliberate exception (R1b): a diff stage with fix_polarity unset gets
+   fix_polarity=False injected — the router's own True default rewrites pad
+   nets (netlist mutation), which under atopile must be an explicit opt-in.
 
 3. LAYERS FROM THE STACKUP AUTHORITY (TS-AUTH-B): every invocation's kwargs carry
    layers explicitly == stackup_layers(plan.board.stackup). The runner NEVER
@@ -446,6 +449,44 @@ def test_dispatch_selects_entry_by_stage_type():
     assert invs[0].stage_type == "single"
     assert invs[1].entry == "batch_route_diff_pairs" and invs[1].module == "route_diff"
     assert invs[1].stage_type == "diff"
+
+
+# ===========================================================================
+# R1b — a diff stage defaults fix_polarity to FALSE: the .ato netlist is
+# authoritative. The router's own default (True) "fixes" a crossed pair by
+# REWRITING the target pad net assignments — the manufactured board then
+# implements a different netlist than bridge② (a real miswire on fixed-pinout
+# connectors, invisible to DRC because the labels moved with the copper).
+# Under atopile a swap must be an explicit opt-in (and diagnose surfaces it as
+# ROUTE-POLARITY-SWAPPED either way). This is the ONE deliberate exception to
+# the "config expanded verbatim, E1 adds only `layers`" invariant (R3/R7).
+# ===========================================================================
+@needs_e1
+def test_diff_stage_defaults_fix_polarity_off():
+    ir = _ir({"top.a": "/A", "top.b": "/B+", "top.c": "/B-"})
+    plan = _plan(
+        [
+            RouteStage(name="s1", nets=["top.a"], mode="single"),
+            RouteStage(name="s2", nets=["top.b", "top.c"], mode="diff"),
+        ]
+    )
+    single_inv, diff_inv = _invs(plan, ir)
+    assert diff_inv.kwargs["fix_polarity"] is False
+    # single stages have no such kwarg (mode partition)
+    assert "fix_polarity" not in single_inv.kwargs
+    # the explicit opt-in is honored verbatim
+    plan_opt = _plan(
+        [
+            RouteStage(
+                name="s2",
+                nets=["top.b", "top.c"],
+                mode="diff",
+                config=GridRouteOverride(fix_polarity=True),
+            )
+        ]
+    )
+    (inv,) = _invs(plan_opt, ir)
+    assert inv.kwargs["fix_polarity"] is True
 
 
 # ===========================================================================

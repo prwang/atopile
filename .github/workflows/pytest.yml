@@ -25,6 +25,10 @@ jobs:
         with:
           fetch-depth: 100
           fetch-tags: true
+          # the router submodule carries the boards/entrypoints every router
+          # e2e test gates on — without it they all silently skip (the CI
+          # canary test_router_submodule_checked_out_in_ci fails loudly).
+          submodules: true
 
       - name: Prepare artifacts dir
         run: mkdir -p artifacts

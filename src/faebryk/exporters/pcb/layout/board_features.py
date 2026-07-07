@@ -68,11 +68,20 @@ def _stamp_stackup(pcb, stackup) -> int:
     else `core`, renamed canonically "dielectric N" and carrying the declared
     thickness/material/Er (all three are guaranteed by the Stackup model).
     Cosmetic entries of an existing section (everything above the first / below
-    the last electrical entry: silk, paste, mask) are preserved verbatim."""
+    the last electrical entry: silk, paste, mask) are preserved verbatim, and
+    so are the section's board-level flags — copper_finish,
+    dielectric_constraints, edge_connector, castellated_pads, edge_plating: a
+    declared stackup carries neither cosmetic nor fab-flag facts, so dropping
+    them (e.g. a reuse board's `(castellated_pads yes)`) would silently lose
+    fab intent."""
     existing = pcb.setup.stackup
     head: list = []
     tail: list = []
     finish = None
+    dielectric_constraints = None
+    edge_connector = None
+    castellated_pads = None
+    edge_plating = None
     if existing is not None:
         entries = list(existing.layers)
         electrical_idx = [
@@ -84,6 +93,10 @@ def _stamp_stackup(pcb, stackup) -> int:
         else:
             head = entries
         finish = existing.copper_finish
+        dielectric_constraints = existing.dielectric_constraints
+        edge_connector = existing.edge_connector
+        castellated_pads = existing.castellated_pads
+        edge_plating = existing.edge_plating
 
     stamped: list = []
     dielectric_n = 0
@@ -116,6 +129,10 @@ def _stamp_stackup(pcb, stackup) -> int:
     pcb.setup.stackup = _P.Stackup(
         layers=[*head, *stamped, *tail],
         copper_finish=finish if finish is not None else _P.E_copper_finish.ENIG,
+        dielectric_constraints=dielectric_constraints,
+        edge_connector=edge_connector,
+        castellated_pads=castellated_pads,
+        edge_plating=edge_plating,
     )
     return len(stamped)
 

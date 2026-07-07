@@ -153,6 +153,31 @@ def test_core_aggregates_and_writes_diagnostics(tmp_path):
 
 
 @needs_f4cli
+def test_lengths_builder_error_is_contained_as_finding(tmp_path):
+    """CONTAINMENT: the lengths lane is optional metrology — a board the length
+    report cannot honestly measure must not abort diagnose (pre-fix: no
+    diagnostics.json at all). The error surfaces as a warning-severity
+    LENGTH-REPORT-FAILED finding and `lengths` degrades to the empty shape."""
+    from faebryk.libs.kicad.length_report import LengthReportError
+
+    def boom(_path):
+        raise LengthReportError("degenerate arc (collinear start/mid/end)")
+
+    art = _artifacts(tmp_path)
+    art["lengths_builder"] = boom
+    diag = run_diagnose_for_build(
+        drc_runner=_fake_drc([]),
+        board_reader=_fake_board_reader,
+        **art,
+    )
+    assert art["out_path"].exists()
+    assert diag["lengths"] == {"nets": {}, "pairs": {}, "classes": {}}
+    f = next(f for f in diag["findings"] if f["rule_id"] == "LENGTH-REPORT-FAILED")
+    assert f["severity"] == "warning"
+    assert "collinear" in f["description"]
+
+
+@needs_f4cli
 def test_baseline_board_marks_existing_drc(tmp_path):
     """A baseline board whose DRC already contains the violation → is_new False."""
     art = _artifacts(tmp_path)

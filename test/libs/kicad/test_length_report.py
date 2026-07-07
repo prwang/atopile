@@ -9,13 +9,16 @@ pure functions over a loaded board:
   build_length_report(pcb, project=None) -> {"nets", "pairs", "classes"}
     nets:    {net_name: {track_mm, via_count, segment_count}}  (every NAMED net)
     pairs:   {base: {p_net, n_net, p_track_mm, n_track_mm, skew_mm}} — detected
-             by the SAME suffix conventions the router uses (`_P`/`_N`, bare
-             `P`/`N` after a digit/underscore, `+`/`-`); a net pairs only
-             WITHIN one convention (vendor net_queries.extract_diff_pair_base
-             semantics, reimplemented — vendor code is not importable here).
+             by the SAME suffix conventions the router uses, ALL FIVE, in the
+             vendor's own check order (DDR `_t_X`/`_c_X` and `_t`/`_c` first,
+             then `_P`/`_N`, bare `P`/`N` after a digit/underscore, `+`/`-`);
+             a net pairs only WITHIN one convention (vendor
+             net_queries.extract_diff_pair_base semantics, reimplemented —
+             vendor code is not importable here).
     classes: when a .kicad_pro project is supplied — per netclass
-             {longest, shortest, spread_mm} over its netclass_patterns
-             (exact net names, the F5-authored shape).
+             {longest, shortest, spread_mm} over its netclass_patterns,
+             matched with KiCad's OWN pattern semantics (exact name, anchored
+             wildcard, anchored regex — union; stale patterns skipped).
 
 What this pins (answers fixed by construction — a golden synthetic board whose
 copper lengths are hand-computed):
@@ -24,12 +27,15 @@ copper lengths are hand-computed):
   * a straight 50 mm segment reports track_mm == 50.0 EXACTLY (KiCad ground
     truth: length of (start 100 100)-(end 150 100) is 50 mm by definition);
   * per-net track_mm / via_count / segment_count on the golden board;
-  * all three pair suffix conventions pair up; an unpaired net appears in
+  * all five pair suffix conventions pair up; an unpaired net appears in
     `nets` and NOT in `pairs` (no crash, no warn-spam); conventions never
-    cross-pair (CLK_N does not pair with CLK+/CLK-);
+    cross-pair (CLK_N does not pair with CLK+/CLK-); DDR channel-suffixed
+    pairs stay channel-local (DQS0_t_A never pairs with DQS0_c_B);
   * a track referencing a net number absent from the net table is LOUD;
-  * netclass aggregation uses exact pattern names; a pattern naming a net not
-    on the board is LOUD; no project → classes == {}.
+  * netclass aggregation matches patterns like KiCad (exact / wildcard /
+    regex, all anchored); a stale pattern is skipped, not fatal (raising here
+    used to brick snapshot/diagnose on GUI-touched boards); no project →
+    classes == {}.
 
 HONESTY (pinned by the module docstring, restated here): track_mm is routed
 track centerline length ONLY — KiCad DRC length rules additionally count via
@@ -195,6 +201,45 @@ def test_extract_pair_suffix_conventions():
     assert extract_pair_suffix("LONELY") is None
 
 
+def test_extract_pair_suffix_ddr_tc_conventions():
+    """The DDR true/complement conventions the vendor oracle checks FIRST
+    (net_queries.extract_diff_pair_base): `X_t`/`X_c` and `X_t_A`/`X_c_A`
+    (channel-suffixed; the base keeps the suffix as `X_X_A` so pairing stays
+    channel-local). Without them, DDR pairs the router routes and intra-matches
+    got no skew metrology (silent divergence from the claimed router parity)."""
+    assert extract_pair_suffix("CK_t") == ("CK", True, "_t")
+    assert extract_pair_suffix("CK_c") == ("CK", False, "_t")
+    assert extract_pair_suffix("DQS0_t_A") == ("DQS0_X_A", True, "_t")
+    assert extract_pair_suffix("DQS0_c_A") == ("DQS0_X_A", False, "_t")
+    # vendor ordering: the mid `_t_`/`_c_` pattern wins over a trailing
+    # convention (e.g. `X_t_N` is the _t style with base X_X_N, not a _P half)
+    assert extract_pair_suffix("X_t_N") == ("X_X_N", True, "_t")
+
+
+def test_ddr_tc_pairs_up_and_stays_channel_local():
+    """CK_t/CK_c and DQS0_t_A/DQS0_c_A pair with correct skew; DQS0_c_B (other
+    channel) does not cross-pair; _t never pairs with a _P/+ style net."""
+    nets = ("CK_t", "CK_c", "DQS0_t_A", "DQS0_c_A", "DQS0_c_B")
+    copper = [
+        _segment(100, 100, 130, 100, 1),  # CK_t: 30.0 mm
+        _segment(100, 101, 128, 101, 2),  # CK_c: 28.0 mm
+        _segment(100, 110, 120, 110, 3),  # DQS0_t_A: 20.0 mm
+        _segment(100, 111, 119, 111, 4),  # DQS0_c_A: 19.0 mm
+        _segment(100, 120, 105, 120, 5),  # DQS0_c_B: 5.0 mm (unpaired)
+    ]
+    pcb = kicad.loads(kicad.pcb.PcbFile, _board_text(copper, nets)).kicad_pcb
+    report = build_length_report(pcb)
+    pairs = report["pairs"]
+    assert set(pairs) == {"CK", "DQS0_X_A"}
+    ck = pairs["CK"]
+    assert (ck["p_net"], ck["n_net"]) == ("CK_t", "CK_c")
+    assert ck["skew_mm"] == pytest.approx(2.0, abs=1e-6)
+    dqs = pairs["DQS0_X_A"]
+    assert (dqs["p_net"], dqs["n_net"]) == ("DQS0_t_A", "DQS0_c_A")
+    assert dqs["skew_mm"] == pytest.approx(1.0, abs=1e-6)
+    assert "DQS0_c_B" in report["nets"]
+
+
 def test_pairs_all_three_conventions_and_unpaired_net():
     report = build_length_report(_golden_pcb())
     pairs = report["pairs"]
@@ -243,10 +288,57 @@ def test_netclass_aggregation_longest_shortest_spread():
     assert fast["spread_mm"] == pytest.approx(20.8, abs=1e-6)
 
 
-def test_netclass_pattern_not_on_board_is_loud():
+# KiCad's netclass_patterns are PATTERN MATCHERS (net_settings.cpp builds each
+# entry as an anchored wildcard + anchored regex combined matcher), not exact
+# names — the exact-name shape is merely what the F5 emitter authors. A raise
+# on any non-exact/stale pattern bricked `ato snapshot` / `ato diagnose` on
+# GUI-touched and reuse boards (a stale pattern is KiCad-normal after a net
+# rename). The classes section now matches with KiCad's semantics.
+def test_netclass_wildcard_pattern_expands_like_kicad():
+    project = _project([("fast", "A_*")])
+    report = build_length_report(_golden_pcb(), project=project)
+    fast = report["classes"]["fast"]
+    assert fast["longest"]["net"] == "A_N"
+    assert fast["shortest"] == {"net": "A_P", "track_mm": 50.0}
+    assert fast["spread_mm"] == pytest.approx(0.8, abs=1e-6)
+
+
+def test_netclass_regex_pattern_expands_like_kicad():
+    # anchored regex (EDA_PATTERN_MATCH_REGEX_ANCHORED): matches whole names
+    project = _project([("fast", "LVDS0(P|N)")])
+    report = build_length_report(_golden_pcb(), project=project)
+    fast = report["classes"]["fast"]
+    assert fast["longest"]["net"] == "LVDS0P"
+    assert fast["shortest"]["net"] == "LVDS0N"
+    # anchoring: the regex must NOT have swallowed A_P etc.
+    assert fast["spread_mm"] == pytest.approx(1.0, abs=1e-6)
+
+
+def test_netclass_stale_pattern_is_skipped_not_fatal():
+    """A pattern matching zero nets is KiCad-normal (stale after a net
+    rename) — skipped; other patterns of the class still aggregate.
+    (Migrated invariant: this used to raise, which killed the whole
+    snapshot/diagnose loop over a legal KiCad construct.)"""
+    project = _project([("fast", "GHOST"), ("fast", "A_P"), ("fast", "A_N")])
+    report = build_length_report(_golden_pcb(), project=project)
+    fast = report["classes"]["fast"]
+    assert fast["spread_mm"] == pytest.approx(0.8, abs=1e-6)
+    # a class whose EVERY pattern is stale has nothing to aggregate → omitted
     project = _project([("fast", "GHOST")])
-    with pytest.raises(LengthReportError, match="GHOST"):
-        build_length_report(_golden_pcb(), project=project)
+    report = build_length_report(_golden_pcb(), project=project)
+    assert report["classes"] == {}
+
+
+def test_netclass_invalid_regex_pattern_falls_back_to_wildcard_only():
+    """A pattern that is not a valid regex (KiCad tolerates this: the regex
+    matcher simply fails to compile and never matches) must not crash the
+    report; it can still match as a wildcard/exact name."""
+    project = _project([("fast", "A_P("), ("fast", "A_N")])
+    report = build_length_report(_golden_pcb(), project=project)
+    # "A_P(" matches nothing (not a net name, invalid regex, no wildcard hit)
+    fast = report["classes"]["fast"]
+    assert fast["longest"]["net"] == "A_N"
+    assert fast["shortest"]["net"] == "A_N"
 
 
 def test_no_project_means_empty_classes():

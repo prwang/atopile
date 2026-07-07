@@ -224,7 +224,6 @@ board:
       # matched-length rules (F1) — these CANNOT live in .kicad_pro; they are
       # emitted as .kicad_dru rules scoped (condition "A.hasNetclass('PWR')"):
       skew_max: 1.0              # group skew: each class net vs the group's LONGEST
-      intra_pair_skew_max: 20mil # within each _P/_N pair only (within_diff_pairs)
       length_min: 40             # absolute per-net length window — emit only the
       length_max: 60             # bounds you set (mm numbers or mil/mm strings)
       nets: [top.pwr, top.gnd]   # ato addresses (resolved via bridge②)
@@ -233,8 +232,21 @@ kicad-cli fires `skew_out_of_range` / `length_out_of_range` on breach; KiCad
 measures track+arc+via length and pad-to-die (live pins:
 `test_matched_length_rules_contract.py`). Loud at parse: duplicate class name, a
 net in two classes, a matched-length field on a class with an EMPTY `nets` list
-(it could never bite), or a quote in the class name (unrepresentable in the dru
-condition string).
+(it could never bite), an inverted length window (`length_min` > `length_max`),
+or a quote in the class name (unrepresentable in the dru condition string).
+
+**Skew-rule exclusivity (empirically pinned on kicad-cli 10.0.3):** KiCad has
+ONE skew constraint type (`within_diff_pairs` is an option on it, not a second
+type) and DRC keeps only the LAST matching skew rule per item — two skew rules
+over the same nets silently disable each other. So a net carries at most ONE
+DRC skew budget, enforced loudly: a class may set `skew_max` OR
+`intra_pair_skew_max`, never both (parse-time); and `rules.intra_pair_skew_max`
+may not coexist with a class `skew_max` whose nets are diff-pair members
+(emit-time, where class nets resolve). A class `intra_pair_skew_max` on top of
+`rules.intra_pair_skew_max` IS allowed: same semantics, the class value is a
+scoped override for its nets. The budget you cannot express in DRC is still
+measured — read pair skews / class spread in `*.lengths.json` / diagnostics
+`lengths` (§3.1).
 
 #### pours / keepouts / silk — §F6/F7/F8  (`Pour` / `Keepout` / `SilkText`)
 ```yaml
@@ -513,10 +525,21 @@ If the net *routes* but the geometry is ugly/wrong, tune the stage `config`
 | `length_match_groups`, `length_match_tolerance`, `meander_amplitude` | both | equal-length groups (meandered — see below) |
 | `guide_corridor_*` | single | (prefer the `corridor:` polyline over raw knobs) |
 | `power_nets`, `power_nets_widths` | single | wide power routing |
-| `diff_pair_gap`, `fix_polarity`, `gnd_via_enabled` | diff | diff-pair geometry |
+| `diff_pair_gap`, `fix_polarity`, `gnd_via_enabled` | diff | diff-pair geometry (`fix_polarity` defaults **false** under atopile — see below) |
 | `diff_pair_intra_match`, `diff_pair_intra_match_tolerance` | diff | P-vs-N skew tuning (see below) |
 
 A knob valid only for the other mode is loud at parse (wrong-mode guard).
+
+**`fix_polarity` — the netlist is authoritative.** The router's own default
+(true) "fixes" a crossed pair by REWRITING the target pad net assignments: the
+routed board then implements a different netlist than the `.ato` source — a
+real miswire on fixed-pinout connectors (SATA, USB, ...), invisible to KiCad
+DRC because the labels move with the copper. The runner therefore passes
+`fix_polarity: false` to every diff stage unless the stage explicitly sets
+`fix_polarity: true` (accepting the swap deliberately). Any swap the router
+performs is surfaced by `ato diagnose` as a warning-severity
+`ROUTE-POLARITY-SWAPPED` finding (and counted in `summary.polarity_swaps`) —
+never a silent netlist mutation.
 
 **`impedance` on a diff stage that may layer-swap — honest limitation:** the
 router computes a per-copper-layer width for the target Z but keeps the pair
@@ -531,23 +554,40 @@ exists — shield vias with no plane to catch them dangle (`via_dangling` +
 
 **Length tuning is numerically authorable** (F3). `length_match_groups` is a
 list of GROUPS — `[[a, b], [c, d]]`; a flat `[a, b]` is shorthand for one
-group. Each entry is an **ato signal address** (resolved through bridge②) or
-an **exact existing board net name** (kept verbatim, for reuse-board nets no
-address names); anything else is loud, naming the entry and the stage. Within
-a group every routed net is meandered (trombone serpentines) up to the group's
-**LONGEST** member until the spread is within `length_match_tolerance` (mm);
-`meander_amplitude` (mm, > 0) caps the bump height. Diff stages tune P-vs-N
-skew separately: `diff_pair_intra_match: true` plus a numeric
-`diff_pair_intra_match_tolerance` (mm; omitted ⇒ the router's group-tolerance
-default). A **bundle** carries the same three group knobs in its `config`
-(BundleRouteConfig) — board mode only, and matched members' meanders are not
+group (each group needs ≥ 2 entries and the list ≥ 1 group — degenerate
+shapes are loud at parse). Each entry is an **ato signal address** (resolved
+through bridge②) or the **exact board net name of a net the SAME stage
+routes**; anything else — unresolvable, or resolvable but not routed by the
+stage — is loud, naming the entry and the stage.
+
+**A group lives entirely inside ONE stage.** The router's matching universe
+is exclusively the nets routed in the same invocation: copper from an earlier
+stage (or a reuse board) is an immovable OBSTACLE, never a matching member or
+a length target. To match nets against each other, route them ALL in one
+stage and put the group on that stage — e.g. two diff pairs to be inter-pair
+matched go in one `mode: diff` stage listing all four nets. (The runner
+rejects cross-stage groups loudly; before it did, they silently matched
+nothing.)
+
+Within a group every routed net is meandered (trombone serpentines) up to the
+group's **LONGEST** member until the spread is within
+`length_match_tolerance` (mm); `meander_amplitude` (mm, > 0) caps the bump
+height. Diff stages tune P-vs-N skew separately: `diff_pair_intra_match:
+true` plus a numeric `diff_pair_intra_match_tolerance` (mm; omitted ⇒ the
+router's group-tolerance default). A **bundle** carries the same three group
+knobs in its `config` (BundleRouteConfig) — board mode only, group entries
+must be bundle members, and matched members' meanders are not
 clearance-checked against non-group bundle members. Coherence gates (loud at
 parse): a tolerance or amplitude without its consumer (no groups / intra
 matching off) is a dead knob and rejected. Verify results from the snapshot's
-`*.lengths.json` / diagnostics `lengths` (§3.1); meanders are best-effort
-under clearance, so ALSO author the DRC-side `net_class` matched-length rules
-(`skew_max` / `intra_pair_skew_max` / length windows, §2.3) — kicad-cli DRC
-remains the sign-off authority.
+`*.lengths.json` / diagnostics `lengths` (§3.1) and the per-group
+`length_matching` telemetry in each `route_report.json` stage summary
+(matched nets, target, per-net before/after, termination reason — the
+difference between "knob never engaged" and "meander starved for space" is
+data, not guesswork); meanders are best-effort under clearance, so ALSO
+author the DRC-side `net_class` matched-length rules (`skew_max` / length
+windows, §2.3, minding skew-rule exclusivity) — kicad-cli DRC remains the
+sign-off authority.
 
 GUI-authored constructs — teardrops (pad/via/zone), via & pad padstacks +
 hole treatments, and length-tuned serpentine `generated` patterns — are in the

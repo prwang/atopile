@@ -17,10 +17,27 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        # the router submodule carries the boards/entrypoints the router e2e
+        # tests (marked slow+regression) gate on — without it they all skip.
+        submodules: true
 
     # Required due to a bug in the checkout action
     # https://github.com/actions/checkout/issues/1471
     - run: git fetch --prune --unshallow --tags
+
+    # the regression lane runs the LIVE kicad-cli DRC proofs (the emitted
+    # .kicad_dru condition strings must actually fire on kicad-cli 10) —
+    # mirror the pytest.yml kicad install step so they run, not skip.
+    - name: Ensure kicad-cli 10 (live matched-length DRC tests skip if absent)
+      continue-on-error: true
+      run: |
+        if ! command -v kicad-cli >/dev/null 2>&1; then
+          sudo add-apt-repository --yes ppa:kicad/kicad-10.0-releases
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends kicad
+        fi
+        kicad-cli version
 
     - name: Install uv
       uses: astral-sh/setup-uv@v6

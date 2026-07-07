@@ -305,6 +305,28 @@ def test_stackup_is_stamped_into_setup_physical_section():
 
 
 @needs_f68
+def test_stamp_preserves_board_level_stackup_flags():
+    """The KiCad stackup section carries board-level FAB flags beyond layers:
+    dielectric_constraints / edge_connector / castellated_pads / edge_plating
+    (pcb.pyi Stackup). A declared layout.yaml stackup says nothing about them,
+    so stamping must pass them through like copper_finish — silently dropping
+    a `(castellated_pads yes)` on the reuse flow loses fab intent (S5a)."""
+    pcb = _pcb()
+    st = pcb.setup.stackup
+    assert st is not None, "fixture board must carry a stackup section"
+    st.dielectric_constraints = True
+    st.edge_connector = "bevelled"
+    st.castellated_pads = True
+    st.edge_plating = True
+    generate_board_features(pcb, load_layout_plan(_STACKUP_YAML), _IR)
+    st2 = pcb.setup.stackup
+    assert st2.dielectric_constraints is True
+    assert st2.edge_connector == "bevelled"
+    assert st2.castellated_pads is True
+    assert st2.edge_plating is True
+
+
+@needs_f68
 def test_stackup_reemit_is_idempotent():
     pcb = _pcb()
     plan = load_layout_plan(_STACKUP_YAML)

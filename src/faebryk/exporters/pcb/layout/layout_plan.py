@@ -52,8 +52,11 @@ protocol; the load-bearing facts:
     always *verbatim* delegation to the IR's bridge② (`ir["signal_nets"]`),
     never a reinvented lookup: `resolve_nets` for stage nets, and the runner's
     `_resolve_length_match_groups` for length-match group entries (which ALSO
-    accept an exact existing board net name — reuse boards carry nets no
-    address names; anything else is loud). NB authoring: instance addresses
+    accept the exact board net name of a net the SAME stage routes; anything
+    else — unresolvable, or resolvable but not routed by the stage — is loud:
+    the router only matches nets routed in the same invocation, so a
+    cross-stage/reuse-net group member would silently match nothing).
+    NB authoring: instance addresses
     carry indices (`sub_chains[0]...`); the `[` makes a YAML FLOW sequence
     (`nets: [a[0], b[0]]`) unparseable, so list nets in BLOCK form
     (`nets:` / `  - a[0]`) — a flow item would need quoting.
@@ -269,11 +272,17 @@ def _wrap_flat_length_match_groups(value: Any) -> Any:
     return value
 
 
-# each entry inside a group is an ato signal address OR an exact board net name
-# — resolved (bridge②, with the exact-net fallback) in layout_plan_runner, the
-# only seam where the ir is available. See _resolve_length_match_groups there.
+# each entry inside a group is an ato signal address OR the exact board net
+# name of a net the SAME stage routes — resolved (bridge②) and stage-membership
+# -checked in layout_plan_runner, the only seam where the ir is available. See
+# _resolve_length_match_groups there. Shape is loud at the type level: at least
+# one group, and >= 2 entries per group (an empty list or a one-net group is a
+# dead knob the router would silently skip — the same S5a gate as the
+# tolerance/amplitude coherence validators below).
 LengthMatchGroups = Annotated[
-    list[list[str]], BeforeValidator(_wrap_flat_length_match_groups)
+    list[Annotated[list[str], Field(min_length=2)]],
+    Field(min_length=1),
+    BeforeValidator(_wrap_flat_length_match_groups),
 ]
 
 
@@ -601,10 +610,11 @@ class BundleRouteConfig(BaseModel):
 
     The length-matching knobs carry the same semantics as GridRouteOverride's:
     `length_match_groups` is canonically `list[list[str]]` (a flat list wraps
-    into one group), entries are ato signal addresses or exact board net names
-    (resolved in layout_plan_runner), tolerance/amplitude without groups are
-    dead knobs and loud. Bundle matching is board-mode only (route_bundle is
-    loud in geometry-only mode)."""
+    into one group), entries are ato signal addresses or the exact board net
+    names of the bundle's own members (resolved + membership-checked in
+    layout_plan_runner), tolerance/amplitude without groups are dead knobs and
+    loud. Bundle matching is board-mode only (route_bundle is loud in
+    geometry-only mode)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -841,11 +851,22 @@ class NetClass(BaseModel):
       * `intra_pair_skew_max` — the `(within_diff_pairs)` variant: P vs N only;
       * `length_min` / `length_max` — absolute per-net length window.
 
+    SKEW-RULE EXCLUSIVITY (empirically pinned on kicad-cli 10.0.3): KiCad has
+    ONE skew constraint type — `(within_diff_pairs)` is an option on it, not a
+    second type — and DRC keeps only the LAST matching skew rule per item. Two
+    skew rules over the same net population therefore silently disable each
+    other, so `skew_max` + `intra_pair_skew_max` on ONE class is rejected at
+    parse (only one DRC skew budget per class; the board-side lengths report
+    (F2) still measures the other number). The cross-object variant —
+    `rules.intra_pair_skew_max` + a class `skew_max` over diff-pair nets — is
+    rejected at emit (board_rules.generate_project_rules, the bridge② seam).
+
     Coherence: a class setting any of them with an empty `nets` list is a
-    constraint that can never bite — a lie, rejected at parse; the class name is
-    embedded in the dru condition string, so a name containing a quote is
-    unrepresentable and rejected (only when a matched-length field forces it
-    into that string)."""
+    constraint that can never bite — a lie, rejected at parse; an INVERTED
+    length window (length_min > length_max) can never be satisfied and is
+    rejected; the class name is embedded in the dru condition string, so a
+    name containing a quote is unrepresentable and rejected (only when a
+    matched-length field forces it into that string)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -882,6 +903,28 @@ class NetClass(BaseModel):
                 f"net class name {self.name!r} contains a quote — it is embedded "
                 "in the .kicad_dru condition string A.hasNetclass('<name>') and "
                 "cannot be escaped there"
+            )
+        # skew-rule exclusivity (docstring): both budgets emit the same KiCad
+        # SKEW_CONSTRAINT with the identical condition; last match wins, so the
+        # group skew_max would silently never be enforced.
+        if self.skew_max is not None and self.intra_pair_skew_max is not None:
+            raise ValueError(
+                f"net class {self.name!r} sets both skew_max and "
+                "intra_pair_skew_max — KiCad DRC applies exactly ONE skew rule "
+                "per item (last match wins), so the intra rule (emitted second) "
+                "would silently shadow the group budget; keep one DRC skew "
+                "budget per class (the lengths report still measures the other "
+                "number)"
+            )
+        if (
+            self.length_min is not None
+            and self.length_max is not None
+            and self.length_min > self.length_max
+        ):
+            raise ValueError(
+                f"net class {self.name!r} length window is inverted "
+                f"(length_min {self.length_min}mm > length_max "
+                f"{self.length_max}mm) — no routed net can ever satisfy it"
             )
         return self
 

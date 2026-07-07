@@ -133,6 +133,8 @@ def _require_router():
         pytest.skip(f"system python3 cannot import the router: {probe.stderr[-500:]}")
 
 
+@pytest.mark.slow
+@pytest.mark.regression
 def test_th_pads_source_and_target_are_distinct_connectors():
     proc = _run(_SCRIPT)
     assert proc.returncode == 0, proc.stderr

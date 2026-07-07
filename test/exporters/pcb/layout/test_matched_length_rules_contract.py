@@ -23,7 +23,20 @@ Authoring surface (this lane):
 Coherence (parse-time loud): values > 0; a class setting any matched-length
 field with an EMPTY nets list is rejected (a constraint that can never bite is
 a lie); a class name containing a quote cannot be embedded in the dru condition
-string and is rejected.
+string and is rejected; an inverted length window (length_min > length_max) can
+never be satisfied and is rejected.
+
+SKEW-RULE EXCLUSIVITY (empirically pinned on kicad-cli 10.0.3): KiCad has ONE
+skew constraint type — `(within_diff_pairs)` is an option on it, not a second
+type — and DRC keeps only the LAST matching skew rule per item, so two skew
+rules over the same nets silently disable each other. Therefore:
+  * a class setting BOTH `skew_max` and `intra_pair_skew_max` is rejected at
+    parse (the intra rule, emitted second, would shadow the group rule);
+  * `rules.intra_pair_skew_max` combined with a class `skew_max` whose nets
+    resolve to suffix-convention diff-pair members is rejected at emit
+    (`generate_project_rules`, the seam with bridge② — the class rule, emitted
+    after the board rule, would shadow the intra-pair budget).
+The board-side lengths report (F2) still measures the non-DRC-checkable number.
 """
 
 import json
@@ -42,6 +55,7 @@ from faebryk.exporters.pcb.layout.layout_plan import (
     Board,
     DesignRules,
     LayoutPlan,
+    LayoutPlanError,
     NetClass,
     load_layout_plan,
 )
@@ -85,20 +99,24 @@ def test_rules_intra_pair_skew_nonpositive_is_loud():
 
 
 def test_netclass_matched_length_fields_parse_mm_and_mil():
+    # skew_max and intra_pair_skew_max are mutually exclusive on one class
+    # (skew-rule exclusivity, module docstring) — parse them on two classes.
     nc = NetClass.model_validate(
         {
             "name": "fast",
             "skew_max": "20mil",
-            "intra_pair_skew_max": 0.25,
             "length_min": "40mm",
             "length_max": 60,
             "nets": ["top.a_p", "top.a_n"],
         }
     )
     assert nc.skew_max == pytest.approx(0.508)
-    assert nc.intra_pair_skew_max == pytest.approx(0.25)
     assert nc.length_min == pytest.approx(40.0)
     assert nc.length_max == pytest.approx(60.0)
+    nc2 = NetClass.model_validate(
+        {"name": "serdes", "intra_pair_skew_max": 0.25, "nets": ["top.a_p"]}
+    )
+    assert nc2.intra_pair_skew_max == pytest.approx(0.25)
 
 
 def test_netclass_junk_key_is_loud():
@@ -126,6 +144,105 @@ def test_netclass_matched_length_with_empty_nets_is_loud(field):
         NetClass.model_validate({"name": "fast", field: 1.0, "nets": []})
 
 
+def test_netclass_inverted_length_window_is_loud():
+    """length_min > length_max is a window no routed net can ever satisfy —
+    every class net would be length_out_of_range forever (the tune loop could
+    never converge). Same 'can never pass DRC' precedent as DesignRules'
+    diff_pair_gap < clearance."""
+    with pytest.raises(ValidationError, match="inverted"):
+        NetClass.model_validate(
+            {"name": "fast", "length_min": 60.0, "length_max": 40.0,
+             "nets": ["top.a"]}
+        )
+    # equal bounds are a (tight but satisfiable) window — not rejected
+    nc = NetClass.model_validate(
+        {"name": "fast", "length_min": 50.0, "length_max": 50.0,
+         "nets": ["top.a"]}
+    )
+    assert nc.length_min == nc.length_max == pytest.approx(50.0)
+
+
+def test_netclass_skew_and_intra_skew_together_is_loud():
+    """Skew-rule exclusivity (module docstring): both fields on one class emit
+    two SKEW_CONSTRAINT rules with the identical condition; KiCad keeps only
+    the LAST one, so `skew_max` would silently never be enforced (empirically
+    pinned: group spread 19x over budget reported ZERO violations)."""
+    with pytest.raises(ValidationError, match="skew_max"):
+        NetClass.model_validate(
+            {
+                "name": "fast",
+                "skew_max": 0.3,
+                "intra_pair_skew_max": 2.0,
+                "nets": ["top.a_p", "top.a_n"],
+            }
+        )
+
+
+def test_rules_intra_skew_plus_class_skew_over_pair_nets_is_loud():
+    """The board-wide intra-pair rule is emitted BEFORE class rules, so a class
+    `skew_max` over diff-pair nets shadows it completely (last match wins):
+    the P-vs-N budget would never be judged for any net in the class
+    (empirically pinned: 2.5x intra breach reported ZERO violations while the
+    class rule was present). Rejected at the bridge② seam, naming both rules."""
+    plan = LayoutPlan(
+        rules=DesignRules(
+            clearance=0.127, track_width=0.15, intra_pair_skew_max=0.2
+        ),
+        board=Board(
+            net_classes=[
+                NetClass(name="sata", skew_max=1.0, nets=list(_IR["signal_nets"]))
+            ]
+        ),
+    )
+    with pytest.raises(LayoutPlanError) as ei:
+        generate_project_rules(plan, _IR)
+    msg = str(ei.value)
+    assert "intra_pair_skew_max" in msg and "sata" in msg
+
+
+def test_rules_intra_skew_plus_class_skew_over_nonpair_nets_is_fine():
+    """The conflict exists only for nets the board-wide `A.inDiffPair('*')`
+    rule also matches — a skew_max class over NON-pair nets coexists."""
+    ir = {"signal_nets": {"top.d0": "D0", "top.d1": "D1"}}
+    plan = LayoutPlan(
+        rules=DesignRules(
+            clearance=0.127, track_width=0.15, intra_pair_skew_max=0.2
+        ),
+        board=Board(
+            net_classes=[
+                NetClass(name="bus", skew_max=1.0, nets=["top.d0", "top.d1"])
+            ]
+        ),
+    )
+    project = generate_project_rules(plan, ir)
+    assert project is not None
+
+
+def test_class_intra_skew_plus_rules_intra_skew_is_a_scoped_override():
+    """SAME-semantics rules: a class `intra_pair_skew_max` after the board-wide
+    one gives the class nets the class budget and everyone else the board
+    budget — a coherent scoped override, NOT shadowing; stays accepted."""
+    plan = LayoutPlan(
+        rules=DesignRules(
+            clearance=0.127, track_width=0.15, intra_pair_skew_max=0.2
+        ),
+        board=Board(
+            net_classes=[
+                NetClass(
+                    name="sata",
+                    intra_pair_skew_max=0.1,
+                    nets=list(_IR["signal_nets"]),
+                )
+            ]
+        ),
+    )
+    project = generate_project_rules(plan, _IR)
+    assert project is not None
+    dru = generate_dru_rules(plan)
+    assert '(rule "board-diffpair-intra-skew"' in dru
+    assert '(rule "class-sata-intra-skew"' in dru
+
+
 def test_netclass_quoted_name_with_matched_length_is_loud():
     """The class name is embedded in the dru condition string
     `A.hasNetclass('<name>')` — a quote cannot be escaped there."""
@@ -142,6 +259,10 @@ def test_netclass_quoted_name_with_matched_length_is_loud():
 # ---------------------------------------------------------------------------
 # golden emission: the full .kicad_dru text for a plan exercising every field
 # ---------------------------------------------------------------------------
+# NB the golden plan respects skew-rule exclusivity (module docstring): the
+# class combining a group budget with an intra budget was a shadowing lie and
+# is now rejected at parse — the group `skew_max` lives on its own class over
+# NON-pair nets, the intra budget on the pair class.
 _GOLDEN_YAML = """\
 rules:
   clearance: 0.15
@@ -152,13 +273,17 @@ rules:
 board:
   net_classes:
     - name: fast
-      skew_max: 1.5
       intra_pair_skew_max: 0.25
       length_min: 40
       length_max: 60
       nets:
         - top.a_p
         - top.a_n
+    - name: bus
+      skew_max: 1.5
+      nets:
+        - top.d0
+        - top.d1
     - name: longonly
       length_max: 55
       nets:
@@ -176,15 +301,15 @@ _GOLDEN_DRU = """\
 (rule "board-diffpair-intra-skew"
   (condition "A.inDiffPair('*')")
   (constraint skew (max 0.508mm) (within_diff_pairs)))
-(rule "class-fast-skew"
-  (condition "A.hasNetclass('fast')")
-  (constraint skew (max 1.5mm)))
 (rule "class-fast-intra-skew"
   (condition "A.hasNetclass('fast')")
   (constraint skew (max 0.25mm) (within_diff_pairs)))
 (rule "class-fast-length"
   (condition "A.hasNetclass('fast')")
   (constraint length (min 40.0mm) (max 60.0mm)))
+(rule "class-bus-skew"
+  (condition "A.hasNetclass('bus')")
+  (constraint skew (max 1.5mm)))
 (rule "class-longonly-length"
   (condition "A.hasNetclass('longonly')")
   (constraint length (max 55.0mm)))
@@ -295,6 +420,7 @@ needs_kicad = pytest.mark.skipif(not _HAS_KICAD_CLI, reason="requires kicad-cli"
 
 @needs_kicad
 @pytest.mark.slow
+@pytest.mark.regression
 def test_live_intra_pair_skew_fires_on_mismatched_pair(tmp_path):
     """`rules.intra_pair_skew_max` 0.5mm: pair A skews 0.8mm → exactly the
     intra-pair `skew_out_of_range` fires, mentioning the A pair; the matched
@@ -311,6 +437,7 @@ def test_live_intra_pair_skew_fires_on_mismatched_pair(tmp_path):
 
 @needs_kicad
 @pytest.mark.slow
+@pytest.mark.regression
 def test_live_class_skew_and_length_fire(tmp_path):
     """Class-scoped rules through the REAL chain (netclass in .kicad_pro +
     `A.hasNetclass` condition in .kicad_dru): `skew_max` 1mm — B nets sit
@@ -345,12 +472,22 @@ def test_live_class_skew_and_length_fire(tmp_path):
 
 @needs_kicad
 @pytest.mark.slow
+@pytest.mark.regression
 def test_live_control_within_tolerance_is_clean(tmp_path):
     """The control: the SAME board with every budget sized to the geometry
     (intra 2mm > 0.8mm, class skew 10mm > 5.8mm, length window 40–60mm) yields
-    ZERO matched-length violations — the rules fire on breach, not on sight."""
-    plan = LayoutPlan(
+    ZERO matched-length violations — the rules fire on breach, not on sight.
+    Two plans, because skew-rule exclusivity (module docstring) makes
+    `rules.intra_pair_skew_max` + a class `skew_max` over the same pair nets
+    unrepresentable (the combination silently disabled the intra budget)."""
+    plan_intra = LayoutPlan(
         rules=DesignRules(clearance=0.1, track_width=0.2, intra_pair_skew_max=2.0),
+    )
+    violations = _run_drc(tmp_path, "control_intra", plan_intra)
+    matched = [v for v in violations if v.get("type") in _MATCHED_LENGTH_TYPES]
+    assert matched == [], matched
+
+    plan_class = LayoutPlan(
         board=Board(
             net_classes=[
                 NetClass(
@@ -363,6 +500,6 @@ def test_live_control_within_tolerance_is_clean(tmp_path):
             ]
         ),
     )
-    violations = _run_drc(tmp_path, "control", plan)
+    violations = _run_drc(tmp_path, "control_class", plan_class)
     matched = [v for v in violations if v.get("type") in _MATCHED_LENGTH_TYPES]
     assert matched == [], matched

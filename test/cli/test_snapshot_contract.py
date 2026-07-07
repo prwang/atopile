@@ -159,3 +159,39 @@ def test_snapshot_board_writes_annotated_png_and_drc_json(tmp_path):
     # content-cropped: a blank render would crop to ~nothing, an uncropped A4 at
     # 20 px/mm would be ~5940 px wide. The board is ~100x100 mm.
     assert 200 < im.size[0] < 5000 and 200 < im.size[1] < 5000
+
+
+@pytest.mark.skipif(
+    shutil.which("kicad-cli") is None or shutil.which("rsvg-convert") is None,
+    reason="kicad-cli / rsvg-convert absent",
+)
+@pytest.mark.slow
+def test_snapshot_survives_length_report_error(tmp_path, caplog):
+    """CONTAINMENT: the lengths lane is an optional metrology rider — a board
+    the length report cannot honestly measure (here: a degenerate collinear
+    track arc) must NOT kill the snapshot's primary deliverables. The PNG and
+    drc.json still ship; the lengths.json is absent and a WARNING says why.
+    (Pre-fix, one LengthReportError aborted the loop's eyes entirely.)"""
+    import logging
+
+    from atopile.cli.snapshot import snapshot_board
+
+    board = _synthetic_board(tmp_path)
+    text = board.read_text()
+    collinear_arc = (
+        "\t(arc\n\t\t(start 100 105)\n\t\t(mid 105 105)\n\t\t(end 110 105)\n"
+        '\t\t(width 0.2)\n\t\t(layer "F.Cu")\n\t\t(net 1)\n\t)'
+    )
+    board.write_text(
+        text.replace(
+            "\t(embedded_fonts no)", collinear_arc + "\n\t(embedded_fonts no)"
+        )
+    )
+    out_base = tmp_path / "shot"
+    with caplog.at_level(logging.WARNING):
+        drc = snapshot_board(board, out_base)
+    assert (tmp_path / "shot.drc.json").exists()
+    assert (tmp_path / "shot.png").exists()
+    assert isinstance(drc, dict)
+    assert not (tmp_path / "shot.lengths.json").exists()
+    assert any("length report" in r.message for r in caplog.records)

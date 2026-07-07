@@ -271,13 +271,24 @@ def snapshot_board(
     # append, never with_suffix: out_base may carry dots ("top.snapshot.routed")
     # and with_suffix would silently eat the last segment.
     drc = run_drc(board, Path(f"{out_base}.drc.json"))
-    lengths = write_board_lengths(board, out_base)
-    log.info(
-        f"lengths: {len(lengths['nets'])} net(s), {len(lengths['pairs'])} "
-        f"pair(s) → {out_base}.lengths.json"
-    )
-    for line in lengths_table_lines(lengths):
-        log.info(line)
+    # CONTAINMENT: the lengths lane is optional metrology riding along with the
+    # snapshot — a board it cannot honestly measure (LengthReportError, e.g. a
+    # degenerate arc) must never cost the loop its EYES (the PNG + DRC summary).
+    # Loud (a WARNING naming the cause), not fatal.
+    from faebryk.libs.kicad.length_report import LengthReportError
+
+    try:
+        lengths = write_board_lengths(board, out_base)
+    except LengthReportError as e:
+        log.warning(f"length report skipped for {board.name}: {e}")
+        lengths = None
+    if lengths is not None:
+        log.info(
+            f"lengths: {len(lengths['nets'])} net(s), {len(lengths['pairs'])} "
+            f"pair(s) → {out_base}.lengths.json"
+        )
+        for line in lengths_table_lines(lengths):
+            log.info(line)
     marks = drc_violation_marks(drc)
     png = render_board_png(board, Path(f"{out_base}.png"), ppmm=ppmm, marks=marks)
     n_v = len(drc.get("violations", []))

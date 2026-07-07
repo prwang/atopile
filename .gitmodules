@@ -1,3 +1,6 @@
+# anonymous HTTPS so CI runners (checkout `submodules: true`) can fetch without
+# a deploy key; developers with push access can keep SSH via
+# `git config url."git@github.com:".insteadOf "https://github.com/"`.
 [submodule "vendor/KiCadRoutingTools"]
 	path = vendor/KiCadRoutingTools
-	url = git@github.com:prwang/KiCadRoutingTools.git
+	url = https://github.com/prwang/KiCadRoutingTools.git

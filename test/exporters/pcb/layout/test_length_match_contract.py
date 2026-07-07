@@ -24,9 +24,14 @@ at all. This module pins the repaired contract:
   RESOLUTION (venv-pure, through build_invocations — the ONLY seam where the
   bridge② ir is available; precedent = board_rules net_classes)
    * each group entry: an ato signal address resolves through
-     `ir["signal_nets"]`; else an exact existing board net name (`ir["nets"]`)
-     is kept verbatim; else LOUD, naming the entry AND the stage.
-   * the bundle invocation resolves through the SAME code path.
+     `ir["signal_nets"]`; else the exact board net name of one of the stage's
+     OWN nets is kept verbatim; else LOUD, naming the entry AND the stage.
+   * STAGE MEMBERSHIP is enforced: the router's matching universe is only the
+     invocation's routed nets (prior/reuse copper is an obstacle, never a
+     member), so a resolvable entry another stage routes — or no stage routes
+     — is LOUD, with a who-routes-it hint (it used to silently no-op).
+   * the bundle invocation resolves through the SAME code path (membership =
+     the bundle's member nets).
 
   E2E (system python3 + the real router + the F2 length_report — the proof)
    * two single nets of deliberately different routed length in one group +
@@ -86,6 +91,23 @@ needs_router_board = pytest.mark.skipif(
     not _BOARD.exists() or _SYS_PY is None,
     reason=f"router submodule board or system python3 absent ({_BOARD})",
 )
+
+
+def test_router_submodule_checked_out_in_ci():
+    """CI canary — a HARD assert, not a skip: every router e2e in this repo
+    gates on the vendor submodule's board file and SKIPS when it is absent, so
+    a checkout without `submodules: true` silently drops the whole e2e lane
+    from CI forever. On a developer machine without the submodule this test
+    skips like the others; under CI it fails loudly."""
+    import os
+
+    if not os.environ.get("CI"):
+        pytest.skip("CI canary (local runs may legitimately lack the submodule)")
+    assert _BOARD.exists(), (
+        "vendor/KiCadRoutingTools submodule is not checked out in CI — every "
+        "router e2e test is silently skipping; add `submodules: true` to the "
+        "workflow checkout"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +177,38 @@ def test_bundle_flat_group_auto_wraps_too():
 def test_junk_groups_are_loud(junk):
     with pytest.raises(ValidationError):
         GridRouteOverride(length_match_groups=junk, length_match_tolerance=0.3)
+
+
+# Degenerate SHAPES are as dead as omitted groups and must be equally loud
+# (S5a): `[]`/`[[]]` satisfied the `is None` coherence gate while the routers
+# gate matching on truthiness (`if length_match_groups:`) — tolerance/amplitude
+# became exactly the silent dead knobs the gate exists to reject; a ONE-entry
+# group survives resolution but the router silently skips any group with < 2
+# routed nets (routing_common `len(matching_nets) >= 2`, no else).
+@pytest.mark.parametrize(
+    "degenerate",
+    [
+        [],  # no groups at all
+        [[]],  # one empty group
+        [["top.a"]],  # a group of one net can never match anything
+        [["top.a", "top.b"], ["top.c"]],  # one good group does not excuse it
+    ],
+    ids=["empty_outer", "empty_inner", "single_entry", "single_entry_second"],
+)
+def test_degenerate_group_shapes_are_loud(degenerate):
+    with pytest.raises(ValidationError):
+        GridRouteOverride(
+            length_match_groups=degenerate, length_match_tolerance=0.3
+        )
+    with pytest.raises(ValidationError):
+        BundleRouteConfig(
+            length_match_groups=degenerate, meander_amplitude=1.0
+        )
+    # even WITHOUT companion knobs the shape is meaningless — still loud
+    with pytest.raises(ValidationError):
+        GridRouteOverride(length_match_groups=degenerate)
+    with pytest.raises(ValidationError):
+        BundleRouteConfig(length_match_groups=degenerate)
 
 
 @pytest.mark.parametrize("bad", [-1.0, 0.0])
@@ -285,11 +339,53 @@ def _single_stage_with_groups(groups) -> LayoutPlan:
 
 
 def test_groups_resolve_address_and_keep_board_net():
-    plan = _single_stage_with_groups([["top.a", "/RAW"]])
+    """The board-net-name channel: an entry spelled as the EXACT kicad net name
+    of a net THIS STAGE routes is kept verbatim (`N_B` == the stage's own
+    `top.b`). The old wider claim — 'matching may span reuse-board nets no
+    stage routes' — was a lie: the router's matching universe is only the
+    invocation's own routed nets (see the not-routed test below)."""
+    plan = _single_stage_with_groups([["top.a", "N_B"]])
     (inv,) = build_invocations(
         plan, _RESOLVE_IR, input_board="in.kicad_pcb", workdir="wd"
     )
-    assert inv.kwargs["length_match_groups"] == [["N_A", "/RAW"]]
+    assert inv.kwargs["length_match_groups"] == [["N_A", "N_B"]]
+
+
+def test_group_entry_not_routed_by_the_stage_is_loud():
+    """A resolvable entry the stage does NOT route used to pass the loud gate
+    and then silently evaporate in the router (its matching universe is only
+    this invocation's routed_results; a group falling below 2 members is
+    skipped with no output). Loud at the runner seam instead, naming the
+    entry and the stage."""
+    plan = _single_stage_with_groups([["top.a", "/RAW"]])
+    with pytest.raises(LayoutPlanError) as ei:
+        build_invocations(plan, _RESOLVE_IR, input_board="in.kicad_pcb", workdir="wd")
+    msg = str(ei.value)
+    assert "/RAW" in msg and "'s'" in msg and "not routed" in msg
+
+
+def test_cross_stage_group_entry_is_loud_and_names_the_routing_stage():
+    """The natural authoring mistake: a group on stage 2 listing a net stage 1
+    routes (earlier copper is an immovable obstacle, never a matching member).
+    The error must point at the stage that DOES route the net."""
+    plan = _plan(
+        [
+            RouteStage(name="first", mode="single", nets=["top.a"]),
+            RouteStage(
+                name="second",
+                mode="single",
+                nets=["top.b"],
+                config=GridRouteOverride(
+                    length_match_groups=[["top.a", "top.b"]],
+                    length_match_tolerance=0.3,
+                ),
+            ),
+        ]
+    )
+    with pytest.raises(LayoutPlanError) as ei:
+        build_invocations(plan, _RESOLVE_IR, input_board="in.kicad_pcb", workdir="wd")
+    msg = str(ei.value)
+    assert "'second'" in msg and "N_A" in msg and "'first'" in msg
 
 
 def test_flat_group_resolves_after_wrap():
@@ -336,6 +432,34 @@ def test_bundle_groups_resolve_through_same_path():
     assert inv.kwargs["length_match_groups"] == [["N_A", "N_B"]]
 
 
+def test_bundle_group_entry_not_a_member_is_loud():
+    """Same membership gate on the bundle path: a group entry that resolves
+    but is not one of the bundle's member nets is loud."""
+    stage = BundleStage.model_validate(
+        {
+            "type": "bundle",
+            "name": "b",
+            "lanes": [{"net": "top.a"}, {"net": "top.b"}],
+            "trunk": {
+                "centerline": [
+                    {"at": [0, 0], "spacing": 0.5},
+                    {"at": [10, 0], "spacing": 0.5},
+                ]
+            },
+            "breakouts": [{"at": "top"}, {"at": "top"}],
+            "config": {
+                "length_match_groups": [["top.a", "/RAW"]],
+                "length_match_tolerance": 0.3,
+            },
+        }
+    )
+    plan = _plan([stage])
+    with pytest.raises(LayoutPlanError) as ei:
+        build_invocations(plan, _RESOLVE_IR, input_board="in.kicad_pcb", workdir="wd")
+    msg = str(ei.value)
+    assert "/RAW" in msg and "'b'" in msg and "not routed" in msg
+
+
 def test_bundle_garbage_entry_is_loud():
     stage = BundleStage.model_validate(
         {
@@ -350,7 +474,7 @@ def test_bundle_garbage_entry_is_loud():
             },
             "breakouts": [{"at": "top"}, {"at": "top"}],
             "config": {
-                "length_match_groups": [["nonsense"]],
+                "length_match_groups": [["top.a", "nonsense"]],
                 "length_match_tolerance": 0.3,
             },
         }
@@ -414,6 +538,8 @@ def _run_stage(tmp_path: Path, stage: RouteStage, ir: dict) -> dict:
 
 
 @needs_router_board
+@pytest.mark.slow
+@pytest.mark.regression
 def test_e2e_single_group_matches_within_tolerance(tmp_path):
     ir = {
         "signal_nets": {"top.out_a": "/OUT_A", "top.out_b": "/OUT_B"},
@@ -517,6 +643,8 @@ _SYNTH_DIFF_BOARD = """(kicad_pcb
 
 
 @needs_router_board
+@pytest.mark.slow
+@pytest.mark.regression
 def test_e2e_diff_intra_match_tolerance_shrinks_skew(tmp_path):
     board = tmp_path / "synth_pair.kicad_pcb"
     board.write_text(_SYNTH_DIFF_BOARD)
@@ -566,6 +694,8 @@ def test_e2e_diff_intra_match_tolerance_shrinks_skew(tmp_path):
 
 
 @needs_router_board
+@pytest.mark.slow
+@pytest.mark.regression
 def test_e2e_multipoint_intra_meander_reaches_board(tmp_path):
     """The write-path sync seam: on a MULTIPOINT pair the router merges leg
     results into a new dict, so routed_results and the write-path `results`
@@ -606,6 +736,8 @@ def test_e2e_multipoint_intra_meander_reaches_board(tmp_path):
 
 
 @needs_router_board
+@pytest.mark.slow
+@pytest.mark.regression
 def test_e2e_bundle_group_matches_within_tolerance(tmp_path):
     """Bundle board mode: two single lanes fanned out to real pads, matched to
     within tolerance. Driven through system python3 (board mode pulls the kicad
@@ -678,3 +810,215 @@ def test_e2e_bundle_group_matches_within_tolerance(tmp_path):
         rep["nets"]["/OUT_A"]["segment_count"],
         rep["nets"]["/OUT_B"]["segment_count"],
     ) > 3, rep["nets"]
+
+
+# ===========================================================================
+# 5 — VENDOR SEAM: resolved group entries are EXACT net names, telemetry, and
+# per-net (not P+N-combined) diff-pair group matching.
+# ===========================================================================
+def _import_vendor(name: str):
+    import sys
+
+    sys.path.insert(0, str(_ROUTER_ROOT))
+    try:
+        return __import__(name)
+    finally:
+        sys.path.remove(str(_ROUTER_ROOT))
+
+
+def test_vendor_group_matching_treats_exact_net_names_as_exact():
+    """The runner resolves group entries to EXACT kicad net names, but the
+    vendor matcher treated every entry as a wildcard pattern where '[...]' is
+    a regex character class — an atopile array net like 'host.term[0]-
+    unnamed[1]' could never match itself (and 'D[3]' matched an unrelated
+    'D3'). Exact equality now wins before pattern semantics; wildcards keep
+    working for direct router users."""
+    lm = _import_vendor("length_matching")
+    bracketed = ["host.term[0]-unnamed[1]", "device.term[1]-unnamed[1]"]
+    got = lm.find_nets_matching_patterns(bracketed + ["plain"], list(bracketed))
+    assert got == bracketed
+    # wildcard patterns are still patterns
+    assert lm.find_nets_matching_patterns(["A_P", "A_N", "B"], ["A_*"]) == [
+        "A_P",
+        "A_N",
+    ]
+
+
+# Two straight-polarity diff pairs with manhattan lengths ~30mm (A) vs ~24mm
+# (B) BY CONSTRUCTION — the inter-pair spread (~6mm) dwarfs _TOL, so the
+# matched run below can only pass if diff-pair GROUP matching physically
+# meandered pair B up to pair A. This is the path whose iteration metric used
+# to count P+N combined copper against a per-net target (terminating after
+# one pass ~7mm short while claiming success) — and the only diff-group e2e.
+_SYNTH_TWO_PAIRS_BOARD = """(kicad_pcb
+\t(version 20241229)
+\t(generator "pcbnew")
+\t(generator_version "9.0")
+\t(general
+\t\t(thickness 1.6)
+\t\t(legacy_teardrops no)
+\t)
+\t(paper "A4")
+\t(layers
+\t\t(0 "F.Cu" signal)
+\t\t(2 "B.Cu" signal)
+\t\t(25 "Edge.Cuts" user)
+\t)
+\t(setup
+\t\t(pad_to_mask_clearance 0)
+\t)
+\t(net 0 "")
+\t(net 1 "/A_P")
+\t(net 2 "/A_N")
+\t(net 3 "/B_P")
+\t(net 4 "/B_N")
+\t(footprint "test:pair_a_src"
+\t\t(layer "F.Cu")
+\t\t(at 95 95)
+\t\t(property "Reference" "U1" (at 0 -2 0) (layer "F.SilkS")
+\t\t\t(effects (font (size 1 1) (thickness 0.15))))
+\t\t(property "Value" "ASRC" (at 0 2 0) (layer "F.Fab")
+\t\t\t(effects (font (size 1 1) (thickness 0.15))))
+\t\t(pad "1" smd rect (at 0 0) (size 0.5 0.5) (layers "F.Cu") (net 1 "/A_P"))
+\t\t(pad "2" smd rect (at 0 0.65) (size 0.5 0.5) (layers "F.Cu") (net 2 "/A_N"))
+\t)
+\t(footprint "test:pair_a_dst"
+\t\t(layer "F.Cu")
+\t\t(at 125 95)
+\t\t(property "Reference" "U2" (at 0 -2 0) (layer "F.SilkS")
+\t\t\t(effects (font (size 1 1) (thickness 0.15))))
+\t\t(property "Value" "ADST" (at 0 2 0) (layer "F.Fab")
+\t\t\t(effects (font (size 1 1) (thickness 0.15))))
+\t\t(pad "1" smd rect (at 0 0) (size 0.5 0.5) (layers "F.Cu") (net 1 "/A_P"))
+\t\t(pad "2" smd rect (at 0 0.65) (size 0.5 0.5) (layers "F.Cu") (net 2 "/A_N"))
+\t)
+\t(footprint "test:pair_b_src"
+\t\t(layer "F.Cu")
+\t\t(at 95 105)
+\t\t(property "Reference" "U3" (at 0 -2 0) (layer "F.SilkS")
+\t\t\t(effects (font (size 1 1) (thickness 0.15))))
+\t\t(property "Value" "BSRC" (at 0 2 0) (layer "F.Fab")
+\t\t\t(effects (font (size 1 1) (thickness 0.15))))
+\t\t(pad "1" smd rect (at 0 0) (size 0.5 0.5) (layers "F.Cu") (net 3 "/B_P"))
+\t\t(pad "2" smd rect (at 0 0.65) (size 0.5 0.5) (layers "F.Cu") (net 4 "/B_N"))
+\t)
+\t(footprint "test:pair_b_dst"
+\t\t(layer "F.Cu")
+\t\t(at 119 105)
+\t\t(property "Reference" "U4" (at 0 -2 0) (layer "F.SilkS")
+\t\t\t(effects (font (size 1 1) (thickness 0.15))))
+\t\t(property "Value" "BDST" (at 0 2 0) (layer "F.Fab")
+\t\t\t(effects (font (size 1 1) (thickness 0.15))))
+\t\t(pad "1" smd rect (at 0 0) (size 0.5 0.5) (layers "F.Cu") (net 3 "/B_P"))
+\t\t(pad "2" smd rect (at 0 0.65) (size 0.5 0.5) (layers "F.Cu") (net 4 "/B_N"))
+\t)
+\t(gr_rect (start 90 88) (end 130 115)
+\t\t(stroke (width 0.1) (type default)) (layer "Edge.Cuts"))
+)
+"""
+
+_TWO_PAIRS_IR = {
+    "signal_nets": {
+        "top.a.p": "/A_P",
+        "top.a.n": "/A_N",
+        "top.b.p": "/B_P",
+        "top.b.n": "/B_N",
+    },
+    "nets": {},
+}
+
+# a diff pair meanders its CENTERLINE and regenerates P/N, so its length
+# granularity is coarser than a single net's (bump quantization + parallel-
+# path regeneration) — the authored tolerance must respect that. 1.0mm is
+# granularity-honest and still 6x tighter than the unmatched ~6mm spread.
+_DIFF_TOL = 1.0
+
+
+def _pair_mean(rep: dict, base: str) -> float:
+    pair = rep["pairs"][base]
+    return (pair["p_track_mm"] + pair["n_track_mm"]) / 2.0
+
+
+@needs_router_board
+@pytest.mark.slow
+@pytest.mark.regression
+def test_e2e_diff_group_inter_pair_matches_within_tolerance(tmp_path):
+    board = tmp_path / "two_pairs.kicad_pcb"
+    board.write_text(_SYNTH_TWO_PAIRS_BOARD)
+    nets = ["top.a.p", "top.a.n", "top.b.p", "top.b.n"]
+
+    def run(tmp: Path, config: GridRouteOverride | None):
+        kw = {} if config is None else {"config": config}
+        st = RouteStage(name="s", mode="diff", nets=nets, **kw)
+        report = run_route_stages(
+            _plan([st]), _TWO_PAIRS_IR, input_board=board, workdir=tmp
+        )
+        assert report.totals["failed"] == 0, report.to_dict()
+        return report, length_report_for_board(Path(report.final_board))
+
+    _, base = run(tmp_path / "base", None)
+    la, lb = _pair_mean(base, "/A"), _pair_mean(base, "/B")
+    assert abs(la - lb) > 2 * _DIFF_TOL, (
+        f"premise broken: natural pair lengths {la:.2f}/{lb:.2f} no longer "
+        "differ — pick pair endpoints with different manhattan lengths"
+    )
+
+    report, matched = run(
+        tmp_path / "matched",
+        GridRouteOverride(
+            length_match_groups=[nets],
+            length_match_tolerance=_DIFF_TOL,
+            meander_amplitude=1.0,
+        ),
+    )
+    ma, mb = _pair_mean(matched, "/A"), _pair_mean(matched, "/B")
+    assert abs(ma - mb) <= _DIFF_TOL, (
+        f"inter-pair spread {abs(ma - mb):.3f}mm exceeds tolerance "
+        f"{_DIFF_TOL}mm (/A={ma:.3f}, /B={mb:.3f}; unmatched was "
+        f"{abs(la - lb):.3f}mm — the pre-fix combined-metric bug left "
+        "~the full deficit)"
+    )
+    # the tuner outcome is DATA in the stage summary (route_report.json):
+    # matched nets, per-net numbers, and a terminal reason — 'knob never
+    # engaged' and 'meander starved' are distinguishable without stdout.
+    telemetry = report.stages[0].summary["length_matching"]
+    assert len(telemetry) == 1
+    rec = telemetry[0]
+    assert rec["reason"] == "matched"
+    assert set(rec["matched_nets"]) == {"/A_P", "/A_N", "/B_P", "/B_N"}
+    assert rec["unmatched_entries"] == []
+    assert rec["target_mm"] > 0
+    assert any(n["bumps"] > 0 for n in rec["nets"])
+
+
+@needs_router_board
+@pytest.mark.slow
+@pytest.mark.regression
+def test_e2e_single_pair_group_skip_is_telemetry_not_silence(tmp_path):
+    """A group whose entries collapse to ONE routed result (a lone diff pair
+    dedups to a single shared dict) cannot match anything: the router skips
+    it — and that skip must be DATA (reason skipped_lt2_routed in the stage
+    summary), not a swallowed stdout line."""
+    board = tmp_path / "synth_pair.kicad_pcb"
+    board.write_text(_SYNTH_DIFF_BOARD)
+    ir = {
+        "signal_nets": {"top.d.p": "/D_P", "top.d.n": "/D_N"},
+        "nets": {},
+    }
+    st = RouteStage(
+        name="s",
+        mode="diff",
+        nets=["top.d.p", "top.d.n"],
+        config=GridRouteOverride(
+            fix_polarity=False,
+            length_match_groups=[["top.d.p", "top.d.n"]],
+            length_match_tolerance=_TOL,
+        ),
+    )
+    report = run_route_stages(
+        _plan([st]), ir, input_board=board, workdir=tmp_path
+    )
+    assert report.totals["failed"] == 0, report.to_dict()
+    telemetry = report.stages[0].summary["length_matching"]
+    assert len(telemetry) == 1
+    assert telemetry[0]["reason"] == "skipped_lt2_routed"

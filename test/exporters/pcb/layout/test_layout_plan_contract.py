@@ -447,13 +447,18 @@ def test_length_match_groups_router_shape_is_nested(fname, fn_name):
         f"{fn_name}.length_match_groups is annotated {ann!r} — no longer the "
         "nested List[List[str]] the override's canonical shape mirrors"
     )
-    # and the override side declares the matching nested canonical shape
-    field = GridRouteOverride.model_fields["length_match_groups"]
-    assert "list[list[str]]" in str(field.annotation), (
-        f"GridRouteOverride.length_match_groups is {field.annotation!r} — must "
-        "be canonically list[list[str]] (the flat authoring form is wrapped by "
-        "a validator, never passed flat to the router)"
+    # and the override side keeps the matching nested canonical shape — probed
+    # FUNCTIONALLY (the annotation now carries MinLen metadata inside Annotated,
+    # so a string match on its repr would be brittle): a nested group passes
+    # through verbatim, i.e. the canonical stored shape IS list[list[str]].
+    ov = GridRouteOverride(length_match_groups=[["top.a", "top.b"]])
+    assert ov.length_match_groups == [["top.a", "top.b"]], (
+        f"GridRouteOverride.length_match_groups stored "
+        f"{ov.length_match_groups!r} — must be canonically list[list[str]] "
+        "(the flat authoring form is wrapped by a validator, never passed "
+        "flat to the router)"
     )
+    assert isinstance(ov.length_match_groups[0], list)
 
 
 # ===========================================================================
