@@ -405,6 +405,57 @@ def test_override_fields_are_real_router_kwargs():
     )
 
 
+def _router_kwarg_annotation(fname: str, fn_name: str, arg: str) -> str | None:
+    """The declared annotation SOURCE of one entry kwarg, AST-parsed (same
+    non-importing method as _router_entry_kwargs_by_mode). None if absent."""
+    root = Path(
+        os.environ.get(
+            "KICAD_ROUTING_TOOLS", str(_repo_root() / "vendor" / "KiCadRoutingTools")
+        )
+    )
+    path = root / fname
+    if not path.exists():
+        return None
+    for node in ast.walk(ast.parse(path.read_text())):
+        if isinstance(node, ast.FunctionDef) and node.name == fn_name:
+            a = node.args
+            for p in a.posonlyargs + a.args + a.kwonlyargs:
+                if p.arg == arg and p.annotation is not None:
+                    return ast.unparse(p.annotation)
+    return None
+
+
+@needs_d2
+@pytest.mark.parametrize(
+    "fname,fn_name",
+    [("route.py", "batch_route"), ("route_diff.py", "batch_route_diff_pairs")],
+    ids=["single", "diff"],
+)
+def test_length_match_groups_router_shape_is_nested(fname, fn_name):
+    """Drift guard ③b — SHAPE, not just name: both entries declare
+    `length_match_groups: Optional[List[List[str]]]`, and the override's
+    canonical type is `list[list[str]]` to match. The historical bug this pins
+    against: the override declared a FLAT `list[str]` and passed it verbatim —
+    a shape mismatch the name-only guard above cannot see."""
+    ann = _router_kwarg_annotation(fname, fn_name, "length_match_groups")
+    if ann is None:
+        pytest.skip(
+            "KiCadRoutingTools not found; set KICAD_ROUTING_TOOLS to run the "
+            "length-match shape guard"
+        )
+    assert "List[List[str]]" in ann, (
+        f"{fn_name}.length_match_groups is annotated {ann!r} — no longer the "
+        "nested List[List[str]] the override's canonical shape mirrors"
+    )
+    # and the override side declares the matching nested canonical shape
+    field = GridRouteOverride.model_fields["length_match_groups"]
+    assert "list[list[str]]" in str(field.annotation), (
+        f"GridRouteOverride.length_match_groups is {field.annotation!r} — must "
+        "be canonically list[list[str]] (the flat authoring form is wrapped by "
+        "a validator, never passed flat to the router)"
+    )
+
+
 # ===========================================================================
 # D2.5 — MODE/ENTRY CONFORMANCE (the in-place fix for the diff↔single API
 # mismatch). The two entries accept DIFFERENT kwargs: guide_corridor_* only on

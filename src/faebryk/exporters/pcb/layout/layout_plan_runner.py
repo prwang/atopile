@@ -14,7 +14,10 @@ SYSTEM python3, like the §C router-oracle):
     expanding bundle_artifact into a geometry-driven payload with member nets
     resolved through bridge② — §E-Tier2), expands `RouteStage.config` verbatim
     into the entry's kwargs
-    (explicitly-set keys only — the router default stands otherwise), sources
+    (explicitly-set keys only — the router default stands otherwise; the ONE
+    non-verbatim key is `length_match_groups`, whose entries resolve through
+    `_resolve_length_match_groups`: bridge② address or exact board net name,
+    else loud — F3), sources
     `layers` SOLELY from `stackup_layers(board.stackup)` (TS-AUTH-B: never the
     route.py 4-layer default; a per-stage `config.layers` is a loud conflict),
     resolves net names through bridge② (`resolve_nets`), and chains each stage's
@@ -155,6 +158,40 @@ def _slice_stages(route_stages: list, up_to: str | int | None) -> list:
     return list(route_stages[: names.index(up_to) + 1])
 
 
+def _resolve_length_match_groups(
+    groups: list[list[str]],
+    ir: dict[str, Any],
+    stage_name: str,
+) -> list[list[str]]:
+    """Resolve each `length_match_groups` entry to a kicad net name (bridge②).
+
+    An entry is an ATO SIGNAL ADDRESS (`ir["signal_nets"]`, the same channel as
+    `resolve_nets` / the board_rules net_classes precedent) or, failing that, an
+    EXACT existing board net name (`ir["nets"]`, kept verbatim — matching may
+    legitimately span nets a reuse board carries that no ato address names).
+    Anything else is LOUD, naming the entry and the stage (S5a): the router
+    treats group entries as patterns and would silently match nothing."""
+    signal_nets: dict[str, str] = ir["signal_nets"]
+    board_nets = ir.get("nets") or {}
+    resolved: list[list[str]] = []
+    for group in groups:
+        names: list[str] = []
+        for entry in group:
+            if entry in signal_nets:
+                names.append(signal_nets[entry])
+            elif entry in board_nets:
+                names.append(entry)
+            else:
+                raise LayoutPlanError(
+                    f"stage {stage_name!r}: length_match_groups entry {entry!r} "
+                    "is neither a resolvable ato signal address (bridge② "
+                    "signal_nets) nor an existing board net name — the router "
+                    "would silently match nothing"
+                )
+        resolved.append(names)
+    return resolved
+
+
 def build_invocations(
     plan: LayoutPlan,
     ir: dict[str, Any],
@@ -202,7 +239,9 @@ def build_invocations(
             )
 
         # config expanded verbatim — explicitly-set keys only (the router default
-        # stands for the rest; D2 already mode-validated these keys).
+        # stands for the rest; D2 already mode-validated these keys). The ONE
+        # non-verbatim key: length_match_groups entries are ato addresses/net
+        # names and resolve through bridge② here (the only seam with the ir).
         kwargs = stage.config.model_dump(exclude_unset=True)
         if "layers" in kwargs:
             raise LayoutPlanError(
@@ -210,6 +249,10 @@ def build_invocations(
                 "the board.stackup is the single layer authority (TS-AUTH-B)"
             )
         kwargs["layers"] = list(layers)
+        if kwargs.get("length_match_groups") is not None:
+            kwargs["length_match_groups"] = _resolve_length_match_groups(
+                kwargs["length_match_groups"], ir, stage.name
+            )
 
         invocations.append(
             StageInvocation(
@@ -269,6 +312,11 @@ def _bundle_invocation(
             "the board.stackup is the single layer authority (TS-AUTH-B)"
         )
     kwargs["layers"] = list(layers)
+    if kwargs.get("length_match_groups") is not None:
+        # the SAME resolution path as single/diff stages (one semantics)
+        kwargs["length_match_groups"] = _resolve_length_match_groups(
+            kwargs["length_match_groups"], ir, stage.name
+        )
     kwargs["trunk"] = art["trunk"]
     kwargs["members"] = members
     kwargs["breakouts"] = breakouts

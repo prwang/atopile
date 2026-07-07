@@ -48,11 +48,14 @@ The contract is pinned by the D2 test module — read its docstring for the full
 protocol; the load-bearing facts:
 
   * Everything is addressed by **ato address**, never net name or designator —
-    v10 has no net table and designators are unstable. `resolve_nets` is the only
-    address→kicad-net step, and it is *verbatim* delegation to the IR's bridge②
-    (`ir["signal_nets"]`), never a reinvented lookup. NB authoring: instance
-    addresses carry indices (`sub_chains[0]...`); the `[` makes a YAML FLOW
-    sequence (`nets: [a[0], b[0]]`) unparseable, so list nets in BLOCK form
+    v10 has no net table and designators are unstable. Address→kicad-net is
+    always *verbatim* delegation to the IR's bridge② (`ir["signal_nets"]`),
+    never a reinvented lookup: `resolve_nets` for stage nets, and the runner's
+    `_resolve_length_match_groups` for length-match group entries (which ALSO
+    accept an exact existing board net name — reuse boards carry nets no
+    address names; anything else is loud). NB authoring: instance addresses
+    carry indices (`sub_chains[0]...`); the `[` makes a YAML FLOW sequence
+    (`nets: [a[0], b[0]]`) unparseable, so list nets in BLOCK form
     (`nets:` / `  - a[0]`) — a flow item would need quoting.
 
   * Loud-or-nothing (S5a): unknown keys (every level), `mode` outside
@@ -245,10 +248,33 @@ _DIFF_ONLY_KWARGS = frozenset(
     {
         "diff_pair_gap",
         "diff_pair_intra_match",
+        "diff_pair_intra_match_tolerance",
         "fix_polarity",
         "gnd_via_enabled",
     }
 )
+
+
+def _wrap_flat_length_match_groups(value: Any) -> Any:
+    """Accept the FLAT authoring shorthand for one matching group.
+
+    Canonical shape is `list[list[str]]` (the routers' own kwarg shape —
+    `List[List[str]]`, one inner list per equal-length group). A flat
+    `list[str]` is the documented shorthand for the common single-group case
+    and wraps into ONE group. Anything else (a mixed flat/nested list, a
+    non-string entry) falls through to pydantic's nested-shape validation and
+    is LOUD — never coerced."""
+    if isinstance(value, list) and value and all(isinstance(v, str) for v in value):
+        return [value]
+    return value
+
+
+# each entry inside a group is an ato signal address OR an exact board net name
+# — resolved (bridge②, with the exact-net fallback) in layout_plan_runner, the
+# only seam where the ir is available. See _resolve_length_match_groups there.
+LengthMatchGroups = Annotated[
+    list[list[str]], BeforeValidator(_wrap_flat_length_match_groups)
+]
 
 
 class GridRouteOverride(BaseModel):
@@ -264,8 +290,9 @@ class GridRouteOverride(BaseModel):
     impedance: float | None = None
     keepout_enabled: bool | None = None
     keepout_layer: str | None = None
-    length_match_groups: list[str] | None = None
-    length_match_tolerance: float | None = None
+    length_match_groups: LengthMatchGroups | None = None
+    length_match_tolerance: float | None = Field(default=None, gt=0)
+    meander_amplitude: float | None = Field(default=None, gt=0)
     layers: list[str] | None = None
 
     # --- single-only (batch_route) ---
@@ -278,8 +305,44 @@ class GridRouteOverride(BaseModel):
     # --- diff-only (batch_route_diff_pairs) ---
     diff_pair_gap: float | None = None
     diff_pair_intra_match: bool | None = None
+    diff_pair_intra_match_tolerance: float | None = Field(default=None, gt=0)
     fix_polarity: bool | None = None
     gnd_via_enabled: bool | None = None
+
+    @model_validator(mode="after")
+    def _validate_length_matching_coherence(self) -> "GridRouteOverride":
+        # a matching knob without its consumer is a DEAD knob the router would
+        # silently ignore (S5a): tolerance tunes group matching only; amplitude
+        # tunes group matching or intra-pair matching; the intra tolerance tunes
+        # intra-pair matching only.
+        if (
+            self.length_match_tolerance is not None
+            and self.length_match_groups is None
+        ):
+            raise ValueError(
+                "length_match_tolerance without length_match_groups is a dead "
+                "knob (nothing to match) — declare the group(s) or drop it"
+            )
+        if (
+            self.meander_amplitude is not None
+            and self.length_match_groups is None
+            and self.diff_pair_intra_match is not True
+        ):
+            raise ValueError(
+                "meander_amplitude without length_match_groups or "
+                "diff_pair_intra_match is a dead knob (no meander to size) — "
+                "declare a consumer or drop it"
+            )
+        if (
+            self.diff_pair_intra_match_tolerance is not None
+            and self.diff_pair_intra_match is not True
+        ):
+            raise ValueError(
+                "diff_pair_intra_match_tolerance without diff_pair_intra_match: "
+                "true is a dead knob (intra-pair matching is off) — enable it or "
+                "drop the tolerance"
+            )
+        return self
 
 
 class Room(BaseModel):
@@ -534,7 +597,14 @@ class RipUpBudget(BaseModel):
 class BundleRouteConfig(BaseModel):
     """Bundle-level router defaults. NOT GridRouteOverride: a bundle dispatches to
     `batch_route_bundle`, whose kwargs differ. Every field here must be a real
-    `batch_route_bundle` kwarg (T-B1 AST drift guard). extra='forbid' ⇒ loud."""
+    `batch_route_bundle` kwarg (T-B1 AST drift guard). extra='forbid' ⇒ loud.
+
+    The length-matching knobs carry the same semantics as GridRouteOverride's:
+    `length_match_groups` is canonically `list[list[str]]` (a flat list wraps
+    into one group), entries are ato signal addresses or exact board net names
+    (resolved in layout_plan_runner), tolerance/amplitude without groups are
+    dead knobs and loud. Bundle matching is board-mode only (route_bundle is
+    loud in geometry-only mode)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -544,6 +614,21 @@ class BundleRouteConfig(BaseModel):
     via_drill: float | None = None
     impedance: float | None = None
     layers: list[str] | None = None
+    length_match_groups: LengthMatchGroups | None = None
+    length_match_tolerance: float | None = Field(default=None, gt=0)
+    meander_amplitude: float | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def _validate_length_matching_coherence(self) -> "BundleRouteConfig":
+        # same S5a dead-knob gate as GridRouteOverride (a bundle has no
+        # intra-pair knob, so groups are the only consumer here).
+        for knob in ("length_match_tolerance", "meander_amplitude"):
+            if getattr(self, knob) is not None and self.length_match_groups is None:
+                raise ValueError(
+                    f"{knob} without length_match_groups is a dead knob "
+                    "(nothing to match) — declare the group(s) or drop it"
+                )
+        return self
 
 
 class BundleStage(BaseModel):

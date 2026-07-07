@@ -266,6 +266,14 @@ route_stages:
     mode: diff
     nets: [top.usb.p, top.usb.n]
     config: { diff_pair_gap: 0.2, impedance: 90 }
+  - name: ddr_data                # numeric length tuning — semantics in §5.4
+    mode: single
+    nets: [top.dq0, top.dq1]
+    config:
+      length_match_groups:
+        - [top.dq0, top.dq1]     # one group; matched up to its LONGEST member
+      length_match_tolerance: 0.3 # mm spread budget within the group
+      meander_amplitude: 1.0      # mm serpentine bump height cap
   - name: signals
     mode: single
     nets: [top.a, top.b, top.c]
@@ -495,19 +503,41 @@ If the net *routes* but the geometry is ugly/wrong, tune the stage `config`
 | `via_size`, `via_drill` | both | via geometry |
 | `impedance` | both | controlled-Z (requires stackup) |
 | `keepout_enabled`, `keepout_layer` | both | route-avoid a layer region |
-| `length_match_groups`, `length_match_tolerance` | both | equal-length groups |
+| `length_match_groups`, `length_match_tolerance`, `meander_amplitude` | both | equal-length groups (meandered — see below) |
 | `guide_corridor_*` | single | (prefer the `corridor:` polyline over raw knobs) |
 | `power_nets`, `power_nets_widths` | single | wide power routing |
-| `diff_pair_gap`, `diff_pair_intra_match`, `fix_polarity`, `gnd_via_enabled` | diff | diff-pair geometry |
+| `diff_pair_gap`, `fix_polarity`, `gnd_via_enabled` | diff | diff-pair geometry |
+| `diff_pair_intra_match`, `diff_pair_intra_match_tolerance` | diff | P-vs-N skew tuning (see below) |
 
 A knob valid only for the other mode is loud at parse (wrong-mode guard).
+
+**Length tuning is numerically authorable** (F3). `length_match_groups` is a
+list of GROUPS — `[[a, b], [c, d]]`; a flat `[a, b]` is shorthand for one
+group. Each entry is an **ato signal address** (resolved through bridge②) or
+an **exact existing board net name** (kept verbatim, for reuse-board nets no
+address names); anything else is loud, naming the entry and the stage. Within
+a group every routed net is meandered (trombone serpentines) up to the group's
+**LONGEST** member until the spread is within `length_match_tolerance` (mm);
+`meander_amplitude` (mm, > 0) caps the bump height. Diff stages tune P-vs-N
+skew separately: `diff_pair_intra_match: true` plus a numeric
+`diff_pair_intra_match_tolerance` (mm; omitted ⇒ the router's group-tolerance
+default). A **bundle** carries the same three group knobs in its `config`
+(BundleRouteConfig) — board mode only, and matched members' meanders are not
+clearance-checked against non-group bundle members. Coherence gates (loud at
+parse): a tolerance or amplitude without its consumer (no groups / intra
+matching off) is a dead knob and rejected. Verify results from the snapshot's
+`*.lengths.json` / diagnostics `lengths` (§3.1); meanders are best-effort
+under clearance, so ALSO author the DRC-side `net_class` matched-length rules
+(`skew_max` / `intra_pair_skew_max` / length windows, §2.3) — kicad-cli DRC
+remains the sign-off authority.
+
 GUI-authored constructs — teardrops (pad/via/zone), via & pad padstacks +
 hole treatments, and length-tuned serpentine `generated` patterns — are in the
 **fidelity set** (2026-07-03): they survive managed rewrites losslessly, room
 clean/pull keeps tuning patterns coherent (all-members-or-loud-drop), and
-`semantic_view` sees them. They are still not *authorable* from `layout.yaml`
-(author length targets via `length_match_groups`; fine-tune in the GUI — the
-edit survives rebuilds). A genuinely unknown key still emits the **loud S5a
+`semantic_view` sees them. So both tuning channels coexist: author the length
+targets numerically here, and a hand-drawn GUI serpentine fine-tune ALSO
+survives rebuilds. A genuinely unknown key still emits the **loud S5a
 warning** rather than silently mis-emitting.
 
 ### 5.5 What `layout.yaml` CANNOT fix (route these elsewhere)
