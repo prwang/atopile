@@ -24,6 +24,7 @@ import json
 import shutil
 
 import pytest
+
 from atopile.cli.snapshot import (
     board_copper_layers,
     drc_violation_marks,

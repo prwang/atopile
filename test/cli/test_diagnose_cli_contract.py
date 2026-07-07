@@ -42,7 +42,14 @@ _IR = {
     "components": {
         "top.u1": {
             "ref": "U1", "footprint_uuid": "fp-u1", "at": [10, 10, 0], "layer": "F.Cu",
-            "pads": {"3": {"uuid": "pad-clk", "net": "/CLK", "at": [10, 9, 0], "layers": ["F.Cu"]}},
+            "pads": {
+                "3": {
+                    "uuid": "pad-clk",
+                    "net": "/CLK",
+                    "at": [10, 9, 0],
+                    "layers": ["F.Cu"],
+                }
+            },
         }
     },
     "nets": {"/CLK": ["top.u1.3"]},

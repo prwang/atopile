@@ -60,14 +60,24 @@ def _ir() -> dict:
                 "ref": "U1", "footprint_uuid": "fp-u1", "at": [10, 10, 0],
                 "layer": "F.Cu",
                 "pads": {
-                    "3": {"uuid": "pad-clk", "net": "/CLK", "at": [10, 9, 0], "layers": ["F.Cu"]},
+                    "3": {
+                        "uuid": "pad-clk",
+                        "net": "/CLK",
+                        "at": [10, 9, 0],
+                        "layers": ["F.Cu"],
+                    },
                 },
             },
             "top.u2": {
                 "ref": "U2", "footprint_uuid": "fp-u2", "at": [40, 40, 0],
                 "layer": "F.Cu",
                 "pads": {
-                    "1": {"uuid": "pad-gnd", "net": "/GND", "at": [40, 39, 0], "layers": ["F.Cu"]},
+                    "1": {
+                        "uuid": "pad-gnd",
+                        "net": "/GND",
+                        "at": [40, 39, 0],
+                        "layers": ["F.Cu"],
+                    },
                 },
             },
         },
