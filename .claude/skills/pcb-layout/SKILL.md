@@ -501,7 +501,11 @@ rule) — for inter-pair matching, one diff stage carrying all pairs.
    (matched nets, target, per-net before/after/bumps, terminal reason
    `matched` | `starved` | `skipped_lt2_routed`) and
    `summary.polarity_crossover_pairs` — "knob never engaged" vs "meander
-   starved for space" is data here, not guesswork.
+   starved for space" is data here, not guesswork. In diff stages the
+   per-net `nets` entries carry ONE representative per pair (the pair
+   meanders as a unit; its length is the pair metric, max(P,N) under
+   intra-match) while `matched_nets` lists every group member — 2 entries
+   for 4 matched nets is healthy, not half-measured.
 4. kicad-cli DRC via snapshot/diagnose → the matched-length violation types:
    `skew_out_of_range`, `length_out_of_range`,
    `diff_pair_uncoupled_length_too_long`.
@@ -713,7 +717,16 @@ return-path stitch at layer transitions (§3.2b).
 **Length tuning is numerically authorable** (F3). `length_match_groups` is a
 list of GROUPS — `[[a, b], [c, d]]`; a flat `[a, b]` is shorthand for one
 group (each group needs ≥ 2 entries and the list ≥ 1 group — degenerate
-shapes are loud at parse). Each entry is an **ato signal address** (resolved
+shapes are loud at parse). In block YAML the one-group case reads either way
+— nested (`- -`, a list item that is itself a list) or flat (auto-wrapped
+into one group, `_wrap_flat_length_match_groups`):
+```yaml
+length_match_groups:          # nested form        # flat shorthand, same
+  - - top.tx.p.line           #                    #   length_match_groups:
+    - top.tx.n.line           #                    #     - top.tx.p.line
+    - top.rx.p.line           #                    #     - top.tx.n.line
+    - top.rx.n.line           #                    #     - ...
+``` Each entry is an **ato signal address** (resolved
 through bridge②) or the **exact board net name of a net the SAME stage
 routes**; anything else — unresolvable, or resolvable but not routed by the
 stage — is loud, naming the entry and the stage.
