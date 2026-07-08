@@ -137,10 +137,14 @@ def _serve_visualizer(app, port: int):
         # Fall back to serving just the temp dir with JSON
         web_dir = temp_dir
     else:
-        # Copy graph.json to the web dist directory
+        # Serve from a temp copy: the package dist dir may be read-only
+        # (shared install run by an unprivileged user)
         import shutil
 
-        shutil.copy(graph_path, web_dir / "graph.json")
+        serve_dir = temp_dir / "web"
+        shutil.copytree(web_dir, serve_dir)
+        shutil.copyfile(graph_path, serve_dir / "graph.json")
+        web_dir = serve_dir
 
     # Create a simple HTTP handler that serves from the web directory
     class GraphHandler(http.server.SimpleHTTPRequestHandler):
