@@ -1,6 +1,6 @@
 ---
 name: pcb-layout
-description: "Authoritative skill for the text-first PCB layout layer: authoring the layout.yaml sidecar (rules header, rooms, placements, board outline/stackup, net classes, pours, keepouts, silk, route_stages), running the build→route→snapshot→diagnose loop (ato snapshot = headless board PNG + DRC, the eyes), impedance geometry from the vendored 2D field solver, reading diagnostics.json, and a finding→remedy playbook (forced waypoints, stage ordering, pad-facing fanout, router tuning). Use when a board's PLACEMENT / ROUTING / BOARD RULES need authoring or a DRC / unrouted-net / router-misbehavior needs fixing. The PCB-level parallel to the `ato` (schematic) skill."
+description: "Authoritative skill for the text-first PCB layout layer: authoring the layout.yaml sidecar (rules header, rooms, placements, board outline/stackup, net classes, pours, keepouts, silk, route_stages), running the build→route→snapshot→diagnose loop (ato snapshot = headless board PNG + DRC, the eyes), the high-speed / equal-length workflow (§3.2: reference planes, field-solver impedance, polarity crossovers, matched-length DRC, length-tuning telemetry), reading diagnostics.json, and a finding→remedy playbook (forced waypoints, stage ordering, pad-facing fanout, router tuning). Use when a board's PLACEMENT / ROUTING / BOARD RULES need authoring, a high-speed interface needs impedance control or length matching, or a DRC / unrouted-net / router-misbehavior needs fixing. The PCB-level parallel to the `ato` (schematic) skill."
 ---
 
 # PCB Layout (the `layout.yaml` sidecar)
@@ -109,7 +109,8 @@ rules:
   inter_pair_clearance: 20mil
   component_spacing: 20mil   # courtyard-to-courtyard (DRC courtyard_clearance)
   uncoupled_max_length: 200mil   # see §5.6 for how to pick this honestly
-  intra_pair_skew_max: 20mil # P vs N length delta budget, EVERY _P/_N pair
+  intra_pair_skew_max: 20mil # P vs N delta budget, EVERY pair — but ONE skew
+                             # budget per net total (exclusivity, §2.3)
 ```
 `intra_pair_skew_max` becomes one `.kicad_dru` rule conditioned on
 `A.inDiffPair('*')` with `(constraint skew (max ..) (within_diff_pairs))` —
@@ -253,22 +254,36 @@ measured — read pair skews / class spread in `*.lengths.json` / diagnostics
 board:
   pours:                         # copper zone bound to a REAL net (net-0 pour is GC'd → loud)
     - net: top.gnd               # ato address (REQUIRED)
-      layer: F.Cu
+      layer: In1.Cu
       polygon: [[5,5],[55,5],[55,65],[5,65]]
       clearance: 0.2
       priority: 0
   keepouts:                      # no net, no placement (SEGFAULT footgun structurally avoided)
     - polygon: [[20,20],[30,20],[30,30],[20,30]]
       layers: [F.Cu, B.Cu]
-      tracks: true               # true = DISALLOWED. defaults: tracks/vias/copperpour off, pads/footprints on
-      vias: true
-      pads: false
+      tracks: true               # each flag: true = DISALLOWED in the region.
+      vias: true                 # DEFAULTS disallow tracks/vias/copperpour and
+      pads: false                # allow pads/footprints (Keepout, layout_plan.py)
   silk:
     - {text: "REV A", at: [25, 15], size: 1.0, layer: F.SilkS, rotation: 0.0, thickness: 0.15}
 ```
 Idempotent across rebuilds (managed pours/keepouts by name prefix; silk by exact
 text+pos+layer). HONEST LIMIT: a silk whose text/position you *change* orphans the
 old copy — needs a manual clean.
+
+**Pours as reference planes.** On a high-speed board the inner-layer GND pours
+are not decoration — they are the reference planes the §2.6 impedance model
+assumes (workflow: §3.2a). Two facts to hold together:
+- **A keepout overlapping a pour holes the pour by default** — `copperpour`
+  defaults to `true` (= disallowed) like the other copper flags. A
+  "planes are planes" keepout (ban signal `tracks` on the plane layers, keep
+  `vias: false` so layer-change barrels pass) must say **`copperpour: false`
+  explicitly**, or it knocks out the very plane it protects.
+- **Connectivity/DRC is judged on REFILLED zones**: authored pours are
+  `(fill yes)` zones without stored fill polygons, so snapshot/diagnose DRC
+  passes `--refill-zones` (`faebryk/libs/kicad/drc.py`, snapshot.py;
+  `test_drc_refill_contract.py`). A TH pad whose only connection is the plane
+  counts as CONNECTED — plane-delivered GND needs no route stage.
 
 ### 2.4 route_stages — single & diff  (`RouteStage`, layout_plan.py)
 Each stage is one router invocation over a set of nets, in a `mode`. **Stage order
@@ -332,9 +347,12 @@ node vendor/2d_fields/cli.js --h 0.176 --er 4.6 --t 0.017 --w 0.20 --s 0.15 --to
 # → JSON with Z_odd / Z_even / Z_diff; comma lists in --w/--s do cartesian sweeps
 ```
 Workflow: sweep `--w/--s` to the target Z_diff (100Ω SATA on 0.176mm 7628 er 4.6
-⇒ W=0.20 S=0.15, Z_diff 99.44Ω), write the pair into `rules:`, then
-`ato build && ato route && ato snapshot` (§2.0 change-propagation rule).
+⇒ W=0.20 S=0.15, Z_diff 99.44Ω), write the pair into `rules:` **with the solver
+invocation + output recorded as a comment above it** (§3.2a — the audit trail),
+then `ato build && ato route && ato snapshot` (§2.0 change-propagation rule).
 Reference results + a 50Ω sanity check live in `vendor/2d_fields/RESULTS.md`.
+The model assumes the reference plane EXISTS on the delivered board — author
+the §2.3 plane pours, or the geometry is fiction (§3.2a).
 
 ---
 
@@ -366,7 +384,12 @@ ato snapshot --ppmm 40          # higher resolution
 ```
 It stages the built board's `.kicad_pro` / `.kicad_dru` / `fp-lib-table` next to
 the routed board first — kicad-cli DRC only honors rule files **sitting beside
-the board**; without staging it silently judges KiCad defaults.
+the board**; without staging it silently judges KiCad defaults. DRC runs with
+`--refill-zones` (as does `ato diagnose`'s), so plane connectivity is judged on
+filled pours (§2.3), and the PNG shows the filled zones: inner (plane) copper
+is composited DIMMED (alpha 0.45) *under* opaque B.Cu/F.Cu/Edge.Cuts — the eyes
+exist to show signals, so a full-board plane never paints over the routing
+(z-order is presentation, not stackup). The input board file is never mutated.
 
 Every snapshot also writes **`<base>.lengths.json`** next to the PNG (the F2
 net-length metrology, `libs/kicad/length_report.py`) and logs a compact per-pair
@@ -379,8 +402,9 @@ when tuning routed lengths, without leaving the snapshot loop:
   "classes": { "<netclass>": { "longest": {"net", "track_mm"}, "shortest": {..}, "spread_mm": .. } }
 }
 ```
-Pairs are detected by the router's suffix conventions (`_P`/`_N`, bare `P`/`N`
-after a digit/underscore, `+`/`-`; a net pairs only within one convention);
+Pairs are detected by the router's suffix conventions, in vendor order (DDR
+`_t_X`/`_c_X` and `_t`/`_c` first, then `_P`/`_N`, bare `P`/`N` after a
+digit/underscore, `+`/`-`; a net pairs only within one convention);
 `classes` comes from the staged `.kicad_pro`'s netclass patterns (empty without
 one). **Honesty**: `track_mm` is routed track *centerline* length only — KiCad's
 DRC length/skew rules additionally count via Z-length and pad-to-die, so DRC
@@ -404,6 +428,121 @@ im.crop((int(x0*ppmm),int(y0*ppmm),int(x1*ppmm),int(y1*ppmm))).save('/tmp/zoom.p
 turned out to be the fanout entering from the wrong side of the footprint —
 invisible in the DRC text, obvious in the crop.) Do NOT rasterize KiCad SVGs
 with ImageMagick: its builtin renderer silently drops track segments.
+
+### 3.2 High-speed / equal-length workflow (the tuning loop, end to end)
+
+The complete loop for a controlled-impedance, length-matched interface
+(SATA/USB/DDR/…). Schema details live in the cross-linked sections — this is
+the ORDER, the physics, and the tool honesty. Every number below was pinned on
+a worked two-SATA demo (two facing 7-pin plugs, 4-layer, crossed + inverted
+pairs) and verified in code.
+
+**(a) Author constraints — geometry before copper.**
+1. **Reference planes are step zero.** The §2.6 impedance model is a trace
+   over a plane; with no plane the solver numbers are fiction on the real
+   board. Author `board.pours` GND planes on the inner layers plus the
+   "planes are planes" keepout — ban tracks, let via barrels pass, keep the
+   pour (`tracks: true`, `vias: false`, **`copperpour: false`**; true =
+   disallowed, §2.3; without the tracks ban the router will run
+   a pair's whole mid-span *through* the reference plane, slotting it — seen
+   live). `gnd_via_enabled` only makes sense once these planes exist: shield
+   vias need real GND copper to land on, else they dangle (§5.4).
+2. **Solve the pair geometry** with the field solver (§2.6):
+   `node vendor/2d_fields/cli.js --h <prepreg mm> --er <er> --t <cu mm> --w .. --s ..`,
+   sweep to the target Z_diff. **Record the invocation + resulting Z as a
+   comment above `rules:` in layout.yaml** — the audit trail the next agent
+   re-verifies instead of re-deriving.
+3. **Write the rules header** (§2.0): the solver's W/S into
+   `rules.diff_pair_width` / `diff_pair_gap`; `uncoupled_max_length` priced
+   from the real topology (see (b) and §5.6); `intra_pair_skew_max` only if
+   it is the skew you gate (next point).
+4. **Plan ONE DRC skew budget per net.** KiCad has a single skew constraint
+   type (`within_diff_pairs` is an option on it, not a second type) and keeps
+   only the LAST matching skew rule per item, so two skew rules over the same
+   nets silently disable each other — the schema rejects the ambiguous combos
+   loudly (§2.3 exclusivity). Decide per net class WHICH skew DRC gates:
+   group skew → `net_classes[].skew_max`; P-vs-N → `intra_pair_skew_max`
+   (class-scoped or `rules.`-wide). Absolute windows: `length_min`/
+   `length_max`. The budget you did NOT gate is still measured — watch it in
+   the lengths report (c), it just isn't a DRC error.
+
+**(b) Route.** Diff pairs route in `mode: diff` stages; nets that must
+length-match against each other must all be in the SAME stage (§5.4 group
+rule) — for inter-pair matching, one diff stage carrying all pairs.
+- **Polarity**: `fix_polarity` defaults to **false** — the `.ato` netlist is
+  authoritative and an inverted pair routes a PHYSICAL staggered-via
+  crossover (§5.4). Budget for it: a crossover needs a straight corridor
+  (else the pair fails honestly, `polarity_skip`) and its window runs
+  uncoupled by construction, ~2–4 mm each, priced against
+  `uncoupled_max_length` (§5.6). `fix_polarity: true` instead reassigns pad
+  nets — an electrically different board, surfaced as
+  `ROUTE-POLARITY-SWAPPED` findings; only choose it deliberately.
+- **Layer swaps** are fine when the swap layer has its own adjacent
+  reference plane. On the recommended symmetric 4-layer stack
+  (sig / prepreg / GND1 / core / GND2 / prepreg / sig) B.Cu over GND2 has
+  the identical h/er/t as F.Cu over GND1 — the same solver geometry is
+  controlled-Z on *both* outer layers (demo: W0.20/S0.16 ≈ 100.7Ω either
+  side, and the routed B.Cu copper keeps exactly that W and pitch). The core
+  separates the two planes, not signal from plane. The real, smaller caveat
+  at a swap is the RETURN PATH: return current must transfer GND1→GND2 near
+  the signal vias — GND stitching close by is what carries it, and the
+  crossover's `gnd_via_enabled` shield vias sit right at the transitions
+  (demo: within 0.8–1.6 mm of every swap via). On an ASYMMETRIC stack, or a
+  swap onto a layer without an adjacent plane, the span genuinely is
+  uncontrolled — keep it short. Via barrels are uncontrolled vertical
+  transitions on any stack.
+
+**(c) Read the feedback — four instruments, one board.**
+1. `ato snapshot` → `<base>.lengths.json` + the logged per-pair table (§3.1):
+   per-net `track_mm`/`via_count`, per-pair `skew_mm`, per-class `spread_mm`.
+2. `ato diagnose` → the same data as diagnostics.json's top-level `lengths`
+   (§4), correlated with findings.
+3. `route_report.json` → each stage's `summary.length_matching` telemetry
+   (matched nets, target, per-net before/after/bumps, terminal reason
+   `matched` | `starved` | `skipped_lt2_routed`) and
+   `summary.polarity_crossover_pairs` — "knob never engaged" vs "meander
+   starved for space" is data here, not guesswork.
+4. kicad-cli DRC via snapshot/diagnose → the matched-length violation types:
+   `skew_out_of_range`, `length_out_of_range`,
+   `diff_pair_uncoupled_length_too_long`.
+**Honesty:** `track_mm` is centerline copper only; KiCad DRC additionally
+counts via z-span and pad-to-die. DRC is the sign-off authority; the lengths
+report is the iteration compass.
+
+**(d) Tune.** On the stage that routes the group (§5.4 for full semantics):
+```yaml
+config:
+  length_match_groups:
+    - [top.tx.p.line, top.tx.n.line, top.rx.p.line, top.rx.n.line]
+  length_match_tolerance: 0.5   # mm, router-internal spread budget
+  meander_amplitude: 2.5        # mm bump cap — size to the free channel
+```
+plus `diff_pair_intra_match: true` (+ `diff_pair_intra_match_tolerance`) for
+P-vs-N. Then `ato build && ato route && ato snapshot` (a rules/net_classes
+edit needs the build, §2.0). That exact 0.5/2.5 config converged the demo
+(two crossed pairs, ~15 mm free channel, spread 6.3 → 0.6 mm, skew DRC
+silent, telemetry `matched`) in one pass — a verified *starting point*, not
+dogma. Watch two side effects: meander regeneration rebuilds the polarity
+crossover (never flattens it) but can REGROW its uncoupled window — if
+`diff_pair_uncoupled_length_too_long` appears after tuning, reduce
+`meander_amplitude` before touching the budget; and meanders are best-effort
+under clearance (`starved` = make space, not bigger numbers).
+
+**(e) Converge — and know the tool floor.** Done = the matched-length DRC is
+silent AND telemetry reads `matched`, on a snapshot PNG you looked at. The
+router meanders to its INTERNAL metric, which prices every via at the full
+*declared* barrel — `get_via_barrel_length(via.layers[0], via.layers[1])`
+(vendor kicad_parser.py), ≈1.5 mm per through via on a 1.6 mm 4-layer —
+while KiCad DRC narrows each via to the span of layers actually carrying
+connected copper (`optimiseVias`, `StackupHeight`): an outer→adjacent-inner
+hop measures ≈0.19 mm. So when group members differ in via count or
+traversed span, the metrics diverge ≈1.3 mm per via of difference — a 2-via
+imbalance leaves ≈2.6 mm of KiCad-measured spread the router *cannot* see
+(it already believes it is matched). **Size the gated skew budget above this
+floor** (demo: 3 mm class `skew_max` for a group whose members carry 2
+crossover vias each); when telemetry says `matched`, the residual is the
+floor — do not chase it with bigger amplitudes, and do not author a budget
+below it that can never pass.
 
 ---
 
@@ -562,10 +701,14 @@ PITCH from the entry layer, so a swap segment on a deeper layer (wider W, same
 pitch) closes the P–N gap — empirically a `clearance`/`diff_pair_gap` violation
 cluster exactly at the swap. On a multi-layer diff stage prefer fixed geometry:
 put the field-solver W/S in `rules.diff_pair_width/gap` (§2.6) and omit
-`impedance` from the stage config; the short off-reference swap segment is
-uncontrolled either way. Also `gnd_via_enabled: false` unless a real gnd pour
-exists — shield vias with no plane to catch them dangle (`via_dangling` +
-`unconnected_items`).
+`impedance` from the stage config. Whether the swap-layer copper is then
+controlled is STACK physics, not a router knob: on a symmetric stack whose
+swap layer has its own adjacent reference plane, the same W/S is controlled-Z
+there too; a swap onto a layer with no adjacent plane genuinely is
+uncontrolled — keep it short (§3.2b). Also `gnd_via_enabled: false` unless a
+real gnd pour exists — shield vias with no plane to catch them dangle
+(`via_dangling` + `unconnected_items`); WITH planes (§2.3) they double as the
+return-path stitch at layer transitions (§3.2b).
 
 **Length tuning is numerically authorable** (F3). `length_match_groups` is a
 list of GROUPS — `[[a, b], [c, d]]`; a flat `[a, b]` is shorthand for one
@@ -602,7 +745,9 @@ difference between "knob never engaged" and "meander starved for space" is
 data, not guesswork); meanders are best-effort under clearance, so ALSO
 author the DRC-side `net_class` matched-length rules (`skew_max` / length
 windows, §2.3, minding skew-rule exclusivity) — kicad-cli DRC remains the
-sign-off authority.
+sign-off authority. The router-vs-KiCad via-metric FLOOR that bounds the
+achievable KiCad-measured spread, and the full author→route→read→tune loop
+these knobs live in, are in §3.2.
 
 GUI-authored constructs — teardrops (pad/via/zone), via & pad padstacks +
 hole treatments, and length-tuned serpentine `generated` patterns — are in the
@@ -627,15 +772,24 @@ These are not sidecar failures; surface them as schematic/footprint work.
 
 ### 5.6 `diff_pair_uncoupled_length_too_long` (the rules-header uncoupled budget)
 The dru rule fires per pair; "actual" in the description is the TOTAL uncoupled
-length (both breakout ends). Remedies, in order:
+length (both breakout ends + every uncoupled window in between). Remedies, in order:
 1. **Shorten the fanout**: move the trunk's end vertices closer to the pad rows
    (leave ≥ ~1mm to the courtyards) and/or tighten the breakout pitch (§2.2).
-2. **Set an honest budget**: the geometric floor for a discrete breakout is
-   roughly `hypot(row-to-trunk distance, max lateral pad-to-lane offset)` per
-   end — for 0402 rows at 1.6mm pitch that is ~2.3mm/end, so **50mil is
-   unattainable**; `200mil` is a met-with-margin budget for that shape. Pick the
-   tightest value your geometry actually meets — the rule must keep biting on
-   regressions, so do not just crank it up until green.
+2. **Set an honest budget — price the REAL topology, per term**:
+   - *Fanout*: the geometric floor per end is roughly
+     `hypot(row-to-trunk distance, max lateral pad-to-lane offset)` — for 0402
+     rows at 1.6mm pitch that is ~2.3mm/end, so **50mil is unattainable**;
+     `200mil` is a met-with-margin budget for that shape. TH connector fanout
+     with a row stagger runs a few mm per end.
+   - *Polarity crossovers* (§5.4): each window runs uncoupled by construction,
+     ~2–4mm, and the tuning meander can regrow it (§3.2d) — a crossover
+     topology honestly costs ~2–3mm more budget per pair (demo: 400mil covered
+     fanout + two crossovers + meander regrowth with ~0.2mm margin; 300mil was
+     the pre-crossover number).
+   - **Measure, don't guess**: temporarily set `uncoupled_max_length: 1mil`,
+     run `ato build && ato snapshot`, and read the violations' "actual" values
+     — that is the floor for this exact copper; set the real budget just above
+     it. The rule must keep biting on regressions, so never crank it until green.
 
 ### 5.7 Relic / dead copper (`copper_edge_clearance` off-board + `track_dangling` + `no rippable blockers` together)
 That trio = orphaned copper from a stale build: reuse-pulled tracks whose
@@ -720,11 +874,22 @@ overwrite it.
   `test_construct_corruption.py`, `test/layout_server/test_gui_edit_roundtrip.py`.
 - `src/faebryk/exporters/pcb/layout/placement.py` — pose authority + placed-room
   copper invalidation; `test_placement_apply_contract.py`.
-- `src/atopile/cli/snapshot.py` — the headless eyes (render + DRC + marks +
-  lengths.json); `test/cli/test_snapshot_contract.py`.
+- `src/atopile/cli/snapshot.py` — the headless eyes (render with dimmed inner
+  planes + refilled-zone DRC + marks + lengths.json);
+  `test/cli/test_snapshot_contract.py`.
+- `src/faebryk/libs/kicad/drc.py` — the diagnose-side DRC runner
+  (`--refill-zones`); `test/libs/kicad/test_drc_refill_contract.py`.
 - `src/faebryk/libs/kicad/length_report.py` — the F2 net-length metrology
   (per-net track_mm/via_count/segment_count, pair skew, netclass spread);
   `test/libs/kicad/test_length_report.py`.
+- Length-tuning + polarity vendor SSOT (under `vendor/KiCadRoutingTools/`) —
+  `routing_common.py` (`run_length_matching` + telemetry records),
+  `length_matching.py` (meander pass), `kicad_parser.py`
+  (`get_via_barrel_length` — the router's via metric, §3.2e),
+  `diff_pair_routing.py` (`_attempt_polarity_crossover` + window builders);
+  repo-side `test_length_match_contract.py`,
+  `test_diff_pair_polarity_crossover_contract.py`,
+  `test_matched_length_rules_contract.py`.
 - `vendor/2d_fields/` — the field solver (`cli.js`, `RESULTS.md`, `VENDOR.md`).
 - `src/faebryk/exporters/pcb/layout/layout_plan_runner.py` — how stages dispatch to
   the router (`build_invocations`, `run_route_stages`).
